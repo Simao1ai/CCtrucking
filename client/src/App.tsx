@@ -1,11 +1,14 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { PortalSidebar } from "@/components/portal-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Faqs from "@/pages/faqs";
@@ -15,20 +18,69 @@ import Clients from "@/pages/clients";
 import Tickets from "@/pages/tickets";
 import Documents from "@/pages/documents";
 import Invoices from "@/pages/invoices";
+import PortalDashboard from "@/pages/portal/portal-dashboard";
+import PortalServices from "@/pages/portal/portal-services";
+import PortalInvoices from "@/pages/portal/portal-invoices";
+import PortalDocuments from "@/pages/portal/portal-documents";
+import PortalChat from "@/pages/portal/portal-chat";
+import AuthRedirect from "@/pages/auth-redirect";
+import AdminChat from "@/pages/admin-chat";
+import AdminUsers from "@/pages/admin-users";
 
-function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const sidebarStyle = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
+const sidebarStyle = {
+  "--sidebar-width": "16rem",
+  "--sidebar-width-icon": "3rem",
+} as React.CSSProperties;
+
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!user) {
+    window.location.href = "/api/login";
+    return null;
+  }
 
   return (
-    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+    <SidebarProvider style={sidebarStyle}>
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-2 p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function PortalLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!user) {
+    window.location.href = "/api/login";
+    return null;
+  }
+
+  return (
+    <SidebarProvider style={sidebarStyle}>
+      <div className="flex h-screen w-full">
+        <PortalSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between gap-2 p-2 border-b">
+            <SidebarTrigger data-testid="button-portal-sidebar-toggle" />
             <ThemeToggle />
           </header>
           <main className="flex-1 overflow-auto">
@@ -54,7 +106,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
           <a href="/" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-home">Home</a>
           <a href="/faqs" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-faqs">FAQs</a>
           <a href="/contact" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-contact">Contact</a>
-          <a href="/dashboard" className="text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground ml-2" data-testid="nav-portal">Client Portal</a>
+          <a href="/api/login" className="text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground ml-2" data-testid="nav-login">Sign In</a>
           <div className="ml-2">
             <ThemeToggle />
           </div>
@@ -81,21 +133,53 @@ function App() {
           <Route path="/contact">
             <PublicLayout><Contact /></PublicLayout>
           </Route>
+
+          <Route path="/auth/redirect">
+            <AuthRedirect />
+          </Route>
+
+          <Route path="/admin">
+            <AdminLayout><Dashboard /></AdminLayout>
+          </Route>
+          <Route path="/admin/clients">
+            <AdminLayout><Clients /></AdminLayout>
+          </Route>
+          <Route path="/admin/tickets">
+            <AdminLayout><Tickets /></AdminLayout>
+          </Route>
+          <Route path="/admin/documents">
+            <AdminLayout><Documents /></AdminLayout>
+          </Route>
+          <Route path="/admin/invoices">
+            <AdminLayout><Invoices /></AdminLayout>
+          </Route>
+          <Route path="/admin/chat">
+            <AdminLayout><AdminChat /></AdminLayout>
+          </Route>
+          <Route path="/admin/users">
+            <AdminLayout><AdminUsers /></AdminLayout>
+          </Route>
+
+          <Route path="/portal">
+            <PortalLayout><PortalDashboard /></PortalLayout>
+          </Route>
+          <Route path="/portal/services">
+            <PortalLayout><PortalServices /></PortalLayout>
+          </Route>
+          <Route path="/portal/invoices">
+            <PortalLayout><PortalInvoices /></PortalLayout>
+          </Route>
+          <Route path="/portal/documents">
+            <PortalLayout><PortalDocuments /></PortalLayout>
+          </Route>
+          <Route path="/portal/chat">
+            <PortalLayout><PortalChat /></PortalLayout>
+          </Route>
+
           <Route path="/dashboard">
-            <DashboardLayout><Dashboard /></DashboardLayout>
+            {() => <Redirect to="/admin" />}
           </Route>
-          <Route path="/clients">
-            <DashboardLayout><Clients /></DashboardLayout>
-          </Route>
-          <Route path="/tickets">
-            <DashboardLayout><Tickets /></DashboardLayout>
-          </Route>
-          <Route path="/documents">
-            <DashboardLayout><Documents /></DashboardLayout>
-          </Route>
-          <Route path="/invoices">
-            <DashboardLayout><Invoices /></DashboardLayout>
-          </Route>
+
           <Route>
             <PublicLayout><NotFound /></PublicLayout>
           </Route>

@@ -241,28 +241,28 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <a href="/clients" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-client">
+              <a href="/admin/clients" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-client">
                 <Users className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-sm font-medium">Add Client</p>
                   <p className="text-xs text-muted-foreground">Onboard new carrier</p>
                 </div>
               </a>
-              <a href="/tickets" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-ticket">
+              <a href="/admin/tickets" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-ticket">
                 <Ticket className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-sm font-medium">New Ticket</p>
                   <p className="text-xs text-muted-foreground">Create service request</p>
                 </div>
               </a>
-              <a href="/invoices" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-invoice">
+              <a href="/admin/invoices" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-new-invoice">
                 <Receipt className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-sm font-medium">New Invoice</p>
                   <p className="text-xs text-muted-foreground">Bill a client</p>
                 </div>
               </a>
-              <a href="/documents" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-documents">
+              <a href="/admin/documents" className="flex items-center gap-3 p-3 rounded-md bg-muted/50 hover-elevate active-elevate-2 cursor-pointer" data-testid="action-documents">
                 <FileText className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-sm font-medium">Documents</p>

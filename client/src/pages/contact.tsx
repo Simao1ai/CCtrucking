@@ -176,11 +176,11 @@ export default function Contact() {
                   <p className="text-sm text-muted-foreground mb-4">
                     Access your dashboard to view tickets, documents, and invoices.
                   </p>
-                  <Link href="/dashboard">
+                  <a href="/api/login">
                     <Button variant="outline" size="sm" className="w-full" data-testid="button-client-portal">
                       Go to Client Portal
                     </Button>
-                  </Link>
+                  </a>
                 </CardContent>
               </Card>
             </div>

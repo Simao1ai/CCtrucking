@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog } from "lucide-react";
+import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,47 +16,45 @@ import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const navItems = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
-  { title: "Clients", url: "/admin/clients", icon: Users },
-  { title: "Service Tickets", url: "/admin/tickets", icon: Ticket },
-  { title: "Documents", url: "/admin/documents", icon: FileText },
-  { title: "Invoices", url: "/admin/invoices", icon: Receipt },
-  { title: "Messages", url: "/admin/chat", icon: MessageCircle },
-  { title: "Users", url: "/admin/users", icon: UserCog },
+  { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
+  { title: "Services", url: "/portal/services", icon: Plus },
+  { title: "Documents", url: "/portal/documents", icon: FileText },
+  { title: "Invoices", url: "/portal/invoices", icon: Receipt },
+  { title: "Messages", url: "/portal/chat", icon: MessageCircle },
 ];
 
-export function AppSidebar() {
+export function PortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/admin" data-testid="link-admin-home">
+        <Link href="/portal" data-testid="link-portal-home">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
               <Truck className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold tracking-tight">CC Trucking</span>
-              <span className="text-xs text-muted-foreground">Admin Portal</span>
+              <span className="text-xs text-muted-foreground">Client Portal</span>
             </div>
           </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Management</SidebarGroupLabel>
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = item.url === "/admin"
-                  ? location === "/admin"
+                const isActive = item.url === "/portal"
+                  ? location === "/portal"
                   : location.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild data-active={isActive}>
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                      <Link href={item.url} data-testid={`portal-nav-${item.title.toLowerCase()}`}>
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -72,7 +70,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/" data-testid="nav-website">
+                  <a href="/" data-testid="portal-nav-website">
                     <Home className="w-4 h-4" />
                     <span>Back to Website</span>
                   </a>
@@ -80,7 +78,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/api/logout" data-testid="nav-logout">
+                  <a href="/api/logout" data-testid="portal-nav-logout">
                     <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
                   </a>
@@ -101,7 +99,7 @@ export function AppSidebar() {
             </Avatar>
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-medium truncate">{user.firstName} {user.lastName}</span>
-              <span className="text-xs text-muted-foreground truncate">Admin</span>
+              <span className="text-xs text-muted-foreground truncate">{user.email}</span>
             </div>
           </div>
         )}
