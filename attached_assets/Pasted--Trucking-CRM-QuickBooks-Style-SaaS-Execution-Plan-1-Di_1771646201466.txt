@@ -1,0 +1,204 @@
+# Trucking CRM + QuickBooks-Style SaaS Execution Plan
+
+## 1) Direct answer
+Yes — this platform can be evolved into a trucking-focused CRM + accounting/compliance system.
+
+You already have strong primitives for:
+- client records
+- case/workflow tracking
+- file/document handling
+- signature flows
+- protected admin APIs
+- audit logging
+
+The main gap is that accounting, billing, SMS automation, and trucking-specific compliance objects are not yet first-class domain entities.
+
+---
+
+## 2) What your current system already does well
+
+### A. CRM/workflow backbone exists
+You already have:
+- `clients`
+- `cases`
+- `tasks`
+- `documents`
+
+That is enough to run onboarding and operational workflows now, while you phase in trucking-specific entities.
+
+### B. Signature workflows already exist
+You already support:
+- signature requests
+- multi-signer tracking
+- signer tokens
+- public signing endpoints
+
+This is directly reusable for engagement letters, tax authorizations, POA forms, and DOT/IFTA paperwork acknowledgments.
+
+### C. File upload pipeline exists
+Your uploader + object-storage patterns are already suitable for collecting:
+- EIN letters
+- operating agreements
+- fuel and mileage files
+- quarterly tax backups
+- permit documents
+
+### D. Import patterns exist
+CSV/PDF import helpers are already present and can be adapted for trucking accounting/compliance feeds.
+
+### E. Push + email notification architecture exists (partially)
+You already have a notification service abstraction for push/email routing and preference-based sending.
+
+---
+
+## 3) What is missing for a “QuickBooks-type” experience
+
+## A. Accounting core (must add)
+Add accounting entities:
+- Chart of accounts
+- Journal entries
+- Transactions
+- Invoices
+- Payments
+- Credit notes
+- Reconciliation sessions
+
+Without these, you can track tasks but not produce trustworthy accounting outputs.
+
+## B. Trucking domain entities (must add)
+Add:
+- Company accounts (carrier profile)
+- Drivers
+- Fleet vehicles/equipment
+- Filing periods (monthly/quarterly/annual)
+- Permit/compliance records (DOT/IFTA/UCR/IRP as needed)
+- Service subscriptions/plans
+
+## C. Real outbound comms (must add)
+Current email utility logs output but does not integrate with production ESP delivery.
+Add:
+- Email provider (Postmark/SendGrid/SES)
+- SMS provider (Twilio / MessageBird / Telnyx)
+- Queue + retry + dead-letter handling
+
+## D. Automation engine (must add)
+Create a rule-based automation layer:
+- Trigger: status change / due date approaching / missing docs
+- Conditions: service type, state, filing period, risk score
+- Actions: create task, send email/SMS/push, assign owner, escalate
+
+## E. Tenant and permission hardening (recommended)
+If serving multiple trucking companies at scale:
+- add tenantId scoping
+- role matrix (Owner, Ops Manager, Tax Specialist, Reviewer, Client)
+- immutable audit trails for financial records
+
+---
+
+## 4) Recommended target modules
+
+## Module 1: CRM + CAM (Client Account Management)
+- 360 client profile
+- all files by account and period
+- activity timeline
+- communication history (email/SMS/push)
+- next actions queue
+
+## Module 2: Accounting (QuickBooks-like MVP)
+- chart of accounts
+- invoice creation + payment posting
+- expense capture
+- transaction categorization
+- month-end reconciliation
+- P&L + cashflow report
+
+## Module 3: Trucking Compliance Ops
+- DOT/IFTA permit workflows
+- quarterly/annual tax filing workpacks
+- deadlines + renewals calendar
+- filing proof/document retention
+
+## Module 4: Comms + Automation
+- templates (email/SMS/push)
+- campaign/sequence builder
+- event-driven workflows
+- delivery analytics + bounce/failed-SMS visibility
+
+## Module 5: Client Portal
+- upload required docs
+- e-sign requests
+- status visibility per service ticket
+- secure messaging with your team
+
+---
+
+## 5) Suggested build order (fastest path)
+
+### Phase 1 (Weeks 1–3): Domain remap + communication foundations
+1. Rename "case" semantics to "service tickets" in UI/API language.
+2. Add trucking service types:
+   - Business setup
+   - Quarterly tax
+   - Annual tax
+   - DOT/IFTA permit
+3. Implement production email + SMS adapters.
+4. Add communication log table (`channel`, `provider`, `deliveryStatus`, `externalId`).
+
+### Phase 2 (Weeks 4–7): CAM + file intelligence
+1. Build account workspace (files, tasks, filings, conversations).
+2. Add required-document checklists by service type.
+3. Add recurring reminders for filing windows and permit renewals.
+4. Add SLA dashboard (overdue items, blocked filings, waiting-on-client).
+
+### Phase 3 (Weeks 8–12): QuickBooks-style accounting MVP
+1. Chart of accounts + journal model.
+2. Invoicing + payments + aging.
+3. Expense ledger + categorization.
+4. Basic financial statements (P&L, AR aging, service-line revenue).
+
+### Phase 4 (Weeks 13+): automation and scale
+1. Rule engine for auto-tasking/escalations.
+2. Client-facing portal enhancements.
+3. AI-assisted document extraction/classification.
+4. KPI scorecards (retention, margin by service line, filing success rate).
+
+---
+
+## 6) Additional recommendations to make your system better
+
+1. **Adopt an event bus pattern early**
+   - Emit domain events (`invoice.created`, `filing.submitted`, `permit.expiring_30d`).
+   - Keep automations loosely coupled.
+
+2. **Make every workflow template-driven**
+   - Avoid hardcoded routes for each filing type.
+   - Use `service_type + state + frequency` templates to generate tasks/checklists.
+
+3. **Implement a “missing docs risk score”**
+   - Score accounts by overdue docs, upcoming deadlines, and communication inactivity.
+   - Drive proactive outreach before penalties occur.
+
+4. **Create a unified inbox**
+   - Combine email/SMS/push logs in one timeline.
+   - Store both outbound and inbound interactions.
+
+5. **Add finance-grade controls where money is involved**
+   - Non-destructive edits (append-only journal where required)
+   - role-based approval for invoice voids/refunds
+   - exported audit report per account/period
+
+6. **Prioritize observability**
+   - Track job failures for reminders, imports, and messaging.
+   - Add dashboards for delivery rate, bounce rate, and missed deadlines.
+
+---
+
+## 7) MVP definition for your trucking niche
+Launch MVP when these are all true:
+- Team can onboard a trucking client in one workspace.
+- Team can collect files and signatures end-to-end.
+- Team can send automated email/SMS/push reminders.
+- Team can run quarterly/annual tax + DOT/IFTA workflows with due dates.
+- Team can invoice clients and track payment status.
+
+That gives you a monetizable, niche-specific operating system — then you iterate toward deeper accounting automation.
