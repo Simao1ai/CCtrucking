@@ -1,7 +1,74 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  dotNumber: text("dot_number"),
+  mcNumber: text("mc_number"),
+  einNumber: text("ein_number"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  status: text("status").notNull().default("active"),
+  notes: text("notes"),
+});
+
+export const serviceTickets = pgTable("service_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  title: text("title").notNull(),
+  serviceType: text("service_type").notNull(),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("medium"),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  assignedTo: text("assigned_to"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  ticketId: varchar("ticket_id").references(() => serviceTickets.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("pending"),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  ticketId: varchar("ticket_id").references(() => serviceTickets.id),
+  invoiceNumber: text("invoice_number").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").notNull().default("draft"),
+  dueDate: timestamp("due_date"),
+  paidDate: timestamp("paid_date"),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
+export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, uploadedAt: true });
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });
+
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type ServiceTicket = typeof serviceTickets.$inferSelect;
+export type InsertServiceTicket = z.infer<typeof insertServiceTicketSchema>;
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
