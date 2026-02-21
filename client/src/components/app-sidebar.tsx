@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Clients", url: "/clients", icon: Users },
   { title: "Service Tickets", url: "/tickets", icon: Ticket },
   { title: "Documents", url: "/documents", icon: FileText },
@@ -27,7 +27,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/" data-testid="link-home">
+        <Link href="/dashboard" data-testid="link-home">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
               <Truck className="w-5 h-5 text-primary-foreground" />
@@ -45,7 +45,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
+                const isActive = location === item.url || (item.url !== "/dashboard" && location.startsWith(item.url));
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild data-active={isActive}>
