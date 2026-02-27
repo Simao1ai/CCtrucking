@@ -1,29 +1,50 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Shield, Building2, UserCog } from "lucide-react";
+import { Users, Shield, Building2, UserCog, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { User } from "@shared/models/auth";
 import type { Client } from "@shared/schema";
+
+type SafeUser = Omit<User, "password">;
 
 export default function AdminUsers() {
   const { toast } = useToast();
   const [assignDialog, setAssignDialog] = useState<{ open: boolean; userId: string; userName: string }>({ open: false, userId: "", userName: "" });
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [createDialog, setCreateDialog] = useState(false);
+  const [newUser, setNewUser] = useState({ username: "", password: "", firstName: "", lastName: "", email: "", role: "client", clientId: "" });
 
-  const { data: userList = [], isLoading } = useQuery<User[]>({
+  const { data: userList = [], isLoading } = useQuery<SafeUser[]>({
     queryKey: ["/api/admin/users"],
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: typeof newUser) => {
+      await apiRequest("POST", "/api/admin/create-user", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setCreateDialog(false);
+      setNewUser({ username: "", password: "", firstName: "", lastName: "", email: "", role: "client", clientId: "" });
+      toast({ title: "Success", description: "Account created successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message.includes("Username already exists") ? "Username already exists" : "Failed to create account", variant: "destructive" });
+    },
   });
 
   const setAdminMutation = useMutation({
@@ -54,6 +75,19 @@ export default function AdminUsers() {
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      await apiRequest("DELETE", `/api/admin/users/${userId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Success", description: "User deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message.includes("Cannot delete") ? "Cannot delete your own account" : "Failed to delete user", variant: "destructive" });
+    },
+  });
+
   return (
     <div className="p-6 space-y-6" data-testid="page-admin-users">
       <div className="flex items-center justify-between">
@@ -62,9 +96,15 @@ export default function AdminUsers() {
             <UserCog className="w-6 h-6" />
             User Management
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage user roles and client account assignments</p>
+          <p className="text-muted-foreground text-sm mt-1">Create and manage user accounts</p>
         </div>
-        <Badge variant="outline" className="text-sm">{userList.length} users</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-sm">{userList.length} users</Badge>
+          <Button onClick={() => setCreateDialog(true)} data-testid="button-create-user">
+            <Plus className="w-4 h-4 mr-1" />
+            Create Account
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -75,7 +115,7 @@ export default function AdminUsers() {
         <Card>
           <CardContent className="py-12 text-center">
             <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground">No users have signed up yet.</p>
+            <p className="text-muted-foreground">No users yet. Create the first account above.</p>
           </CardContent>
         </Card>
       ) : (
@@ -96,9 +136,14 @@ export default function AdminUsers() {
                       </div>
                       <div>
                         <p className="font-medium text-sm">
-                          {user.firstName} {user.lastName}
+                          {user.firstName || user.lastName
+                            ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                            : user.username || 'Unknown'}
                         </p>
-                        <p className="text-xs text-muted-foreground">{user.email || "No email"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {user.username && <span className="mr-2">@{user.username}</span>}
+                          {user.email || ""}
+                        </p>
                         {linkedClient && (
                           <p className="text-xs text-primary flex items-center gap-1 mt-0.5">
                             <Building2 className="w-3 h-3" />
@@ -120,7 +165,7 @@ export default function AdminUsers() {
                               setAssignDialog({
                                 open: true,
                                 userId: user.id,
-                                userName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                                userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
                               });
                             }}
                             data-testid={`button-assign-client-${user.id}`}
@@ -140,6 +185,19 @@ export default function AdminUsers() {
                           </Button>
                         </>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this user?")) {
+                            deleteUserMutation.mutate(user.id);
+                          }
+                        }}
+                        className="text-destructive hover:text-destructive"
+                        data-testid={`button-delete-user-${user.id}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
                   </div>
                   {user.createdAt && (
@@ -186,6 +244,115 @@ export default function AdminUsers() {
               Assign
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createDialog} onOpenChange={setCreateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Account</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              createUserMutation.mutate(newUser);
+            }}
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="create-firstName">First Name</Label>
+                <Input
+                  id="create-firstName"
+                  value={newUser.firstName}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="First name"
+                  data-testid="input-create-firstname"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="create-lastName">Last Name</Label>
+                <Input
+                  id="create-lastName"
+                  value={newUser.lastName}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  data-testid="input-create-lastname"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-email">Email</Label>
+              <Input
+                id="create-email"
+                type="email"
+                value={newUser.email}
+                onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="email@example.com"
+                data-testid="input-create-email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-username">Username *</Label>
+              <Input
+                id="create-username"
+                value={newUser.username}
+                onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
+                placeholder="Username for login"
+                required
+                data-testid="input-create-username"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-password">Password *</Label>
+              <Input
+                id="create-password"
+                type="password"
+                value={newUser.password}
+                onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="Initial password"
+                required
+                data-testid="input-create-password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-role">Role *</Label>
+              <Select value={newUser.role} onValueChange={(val) => setNewUser(prev => ({ ...prev, role: val }))}>
+                <SelectTrigger data-testid="select-create-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newUser.role === "client" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="create-client">Client Company</Label>
+                <Select value={newUser.clientId} onValueChange={(val) => setNewUser(prev => ({ ...prev, clientId: val }))}>
+                  <SelectTrigger data-testid="select-create-client">
+                    <SelectValue placeholder="Select a company (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(client => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setCreateDialog(false)} data-testid="button-cancel-create">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-confirm-create">
+                {createUserMutation.isPending ? "Creating..." : "Create Account"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

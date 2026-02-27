@@ -150,7 +150,7 @@ export default function Home() {
                 <Link href="/" className="block text-sm text-muted-foreground hover:text-foreground">Home</Link>
                 <Link href="/faqs" className="block text-sm text-muted-foreground hover:text-foreground">FAQs</Link>
                 <Link href="/contact" className="block text-sm text-muted-foreground hover:text-foreground">Contact</Link>
-                <a href="/api/login" className="block text-sm text-muted-foreground hover:text-foreground">Client Portal</a>
+                <Link href="/login" className="block text-sm text-muted-foreground hover:text-foreground">Client Portal</Link>
               </div>
             </div>
             <div>

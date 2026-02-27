@@ -5,29 +5,31 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 
 ## Tech Stack
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter routing, Shadcn UI, Tailwind CSS
-- **Backend**: Express.js, Drizzle ORM, PostgreSQL
-- **Auth**: Replit Auth (OAuth via OpenID Connect) with role-based access control
+- **Backend**: Express.js, Drizzle ORM, PostgreSQL, bcryptjs
+- **Auth**: Custom username/password authentication with session-based auth (no OAuth)
 - **Styling**: Inter font, navy/steel blue theme (HSL 215)
 
 ## Project Structure
-- `client/src/pages/` - Public pages (Home, FAQs, Contact), Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users), AuthRedirect
+- `client/src/pages/` - Public pages (Home, FAQs, Contact), Login, Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users)
 - `client/src/pages/portal/` - Client portal pages (Dashboard, Services, Invoices, Documents, Chat)
 - `client/src/components/` - AppSidebar (admin), PortalSidebar (client), ThemeToggle, Shadcn UI components
 - `server/` - Express API, DatabaseStorage, seed data
-- `server/replit_integrations/auth/` - Replit Auth OIDC integration (sessions, user upsert, login/logout/callback)
+- `server/replit_integrations/auth/` - Session-based auth (login, logout, user management)
 - `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages
-- `shared/models/auth.ts` - Users and sessions tables (Replit Auth)
+- `shared/models/auth.ts` - Users and sessions tables
 
 ## Authentication & Authorization
-- **Replit Auth** handles OAuth login (Google, GitHub, email)
-- Users table has `role` field ("admin" or "client") and optional `clientId` linking to a client company
-- After login, `/auth/redirect` page checks user role and redirects to `/admin` or `/portal`
-- Admin middleware (`isAdmin`) checks role === "admin"
-- Client middleware (`isClient`) checks clientId exists and attaches it to request
-- First user defaults to "client" role; admins are promoted via `/api/auth/set-admin`
+- **Custom auth**: Username/password login with bcrypt password hashing
+- **Admin-created accounts**: Admins create all user accounts (both admin and client accounts)
+- Users table has `username`, `password` (hashed), `role` ("admin"/"client"), and optional `clientId`
+- Session-based auth stored in PostgreSQL sessions table
+- Login page at `/login` with username/password form
+- Admin middleware (`isAdmin`) checks session userId and role === "admin"
+- Client middleware (`isClient`) checks session userId and clientId exists
+- Default admin account: username `admin`, password `admin123`
 
 ## Key Entities
-- **Users**: Auth users with role (admin/client) and optional clientId link
+- **Users**: Auth users with username/password, role (admin/client), and optional clientId link
 - **Clients**: Trucking company accounts with DOT/MC/EIN numbers
 - **Service Tickets**: Workflow items (DOT Permit, IFTA, Tax Filing, Business Setup, etc.)
 - **Documents**: Compliance documents per client (EIN letters, fuel records, permits)
@@ -37,16 +39,17 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 ## API Routes
 
 ### Auth Routes
-- `GET /api/login` - Initiate OAuth login
-- `GET /api/callback` - OAuth callback (redirects to /auth/redirect)
-- `GET /api/logout` - Logout and end session
+- `POST /api/auth/login` - Login with username/password
+- `POST /api/auth/logout` - Logout and destroy session
 - `GET /api/auth/user` - Get current authenticated user
 - `GET /api/auth/me` - Get user with role info
-- `PATCH /api/auth/assign-client` - Assign user to client account (admin only)
-- `PATCH /api/auth/set-admin` - Promote user to admin (admin only)
 
 ### Admin Routes (protected by isAdmin)
+- `POST /api/admin/create-user` - Create new user account (admin or client)
+- `DELETE /api/admin/users/:id` - Delete a user account
 - `GET /api/admin/users` - List all users
+- `PATCH /api/auth/assign-client` - Assign user to client account
+- `PATCH /api/auth/set-admin` - Promote user to admin
 - `GET/POST /api/clients`, `GET/PATCH/DELETE /api/clients/:id`
 - `GET/POST /api/tickets`, `GET/PATCH /api/tickets/:id`
 - `GET/POST /api/documents`, `GET/PATCH /api/documents/:id`
@@ -66,14 +69,14 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/` - Public home page
 - `/faqs` - Public FAQs page
 - `/contact` - Public contact page
-- `/auth/redirect` - Post-login role-based redirect
+- `/login` - Login page (username/password)
 - `/admin` - Admin dashboard
 - `/admin/clients` - Client management
 - `/admin/tickets` - Service ticket management
 - `/admin/documents` - Document management
 - `/admin/invoices` - Invoice management
 - `/admin/chat` - Client messaging (admin side)
-- `/admin/users` - User role management
+- `/admin/users` - User management (create accounts, assign roles)
 - `/portal` - Client dashboard
 - `/portal/services` - Request new services
 - `/portal/invoices` - View/approve invoices
@@ -84,7 +87,9 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `npm run dev` starts Express + Vite on port 5000
 - `npm run db:push` syncs database schema
 - Seed data is auto-inserted on first run
+- Default admin: username `admin`, password `admin123`
 
 ## Recent Changes
-- Feb 2026: Added dual portal system (Admin + Client), Replit Auth with role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging
+- Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts (both admin and client); added login page, user creation dialog, user deletion
+- Feb 2026: Added dual portal system (Admin + Client), role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging
 - Feb 2026: Initial MVP build - Dashboard, Clients, Service Tickets, Documents, Invoices with full CRUD, sidebar navigation, dark mode toggle, and seeded demo data

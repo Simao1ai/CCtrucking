@@ -78,10 +78,17 @@ export function PortalSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/api/logout" data-testid="portal-nav-logout">
+                  <button
+                    onClick={() => {
+                      fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => {
+                        window.location.href = "/login";
+                      });
+                    }}
+                    data-testid="portal-nav-logout"
+                  >
                     <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
-                  </a>
+                  </button>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -98,8 +105,8 @@ export function PortalSidebar() {
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium truncate">{user.firstName} {user.lastName}</span>
-              <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+              <span className="text-xs font-medium truncate">{user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username}</span>
+              <span className="text-xs text-muted-foreground truncate">{user.email || user.username}</span>
             </div>
           </div>
         )}

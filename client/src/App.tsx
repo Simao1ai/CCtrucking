@@ -13,6 +13,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Faqs from "@/pages/faqs";
 import Contact from "@/pages/contact";
+import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Clients from "@/pages/clients";
 import Tickets from "@/pages/tickets";
@@ -23,7 +24,6 @@ import PortalServices from "@/pages/portal/portal-services";
 import PortalInvoices from "@/pages/portal/portal-invoices";
 import PortalDocuments from "@/pages/portal/portal-documents";
 import PortalChat from "@/pages/portal/portal-chat";
-import AuthRedirect from "@/pages/auth-redirect";
 import AdminChat from "@/pages/admin-chat";
 import AdminUsers from "@/pages/admin-users";
 
@@ -40,7 +40,12 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    window.location.href = "/api/login";
+    window.location.href = "/login";
+    return null;
+  }
+
+  if (user.role !== "admin") {
+    window.location.href = "/portal";
     return null;
   }
 
@@ -70,7 +75,7 @@ function PortalLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    window.location.href = "/api/login";
+    window.location.href = "/login";
     return null;
   }
 
@@ -106,7 +111,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
           <a href="/" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-home">Home</a>
           <a href="/faqs" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-faqs">FAQs</a>
           <a href="/contact" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-contact">Contact</a>
-          <a href="/api/login" className="text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground ml-2" data-testid="nav-login">Sign In</a>
+          <a href="/login" className="text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground ml-2" data-testid="nav-login">Sign In</a>
           <div className="ml-2">
             <ThemeToggle />
           </div>
@@ -133,9 +138,8 @@ function App() {
           <Route path="/contact">
             <PublicLayout><Contact /></PublicLayout>
           </Route>
-
-          <Route path="/auth/redirect">
-            <AuthRedirect />
+          <Route path="/login">
+            <Login />
           </Route>
 
           <Route path="/admin">
@@ -178,6 +182,9 @@ function App() {
 
           <Route path="/dashboard">
             {() => <Redirect to="/admin" />}
+          </Route>
+          <Route path="/auth/redirect">
+            {() => <Redirect to="/login" />}
           </Route>
 
           <Route>

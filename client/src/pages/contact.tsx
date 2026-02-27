@@ -176,7 +176,7 @@ export default function Contact() {
                   <p className="text-sm text-muted-foreground mb-4">
                     Access your dashboard to view tickets, documents, and invoices.
                   </p>
-                  <a href="/api/login">
+                  <a href="/login">
                     <Button variant="outline" size="sm" className="w-full" data-testid="button-client-portal">
                       Go to Client Portal
                     </Button>

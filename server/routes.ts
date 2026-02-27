@@ -3,31 +3,34 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 function param(req: Request, name: string): string {
   return req.params[name] as string;
 }
 
 function isAdmin(req: Request, res: Response, next: NextFunction) {
-  const user = req.user as any;
-  if (!user?.claims?.sub) return res.status(401).json({ message: "Unauthorized" });
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-  db.select().from(users).where(eq(users.id, user.claims.sub)).then(([dbUser]) => {
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
     if (!dbUser || dbUser.role !== "admin") {
       return res.status(403).json({ message: "Admin access required" });
     }
+    (req as any).dbUser = dbUser;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
 }
 
 function isClient(req: Request, res: Response, next: NextFunction) {
-  const user = req.user as any;
-  if (!user?.claims?.sub) return res.status(401).json({ message: "Unauthorized" });
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-  db.select().from(users).where(eq(users.id, user.claims.sub)).then(([dbUser]) => {
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
     if (!dbUser || !dbUser.clientId) {
       return res.status(403).json({ message: "Client access required" });
     }
@@ -47,11 +50,47 @@ export async function registerRoutes(
 
   app.get("/api/auth/me", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
-      res.json(dbUser);
+      if (!dbUser) return res.status(404).json({ message: "User not found" });
+      const { password: _, ...safeUser } = dbUser;
+      res.json(safeUser);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.post("/api/admin/create-user", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { username, password, firstName, lastName, email, role, clientId } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+      if (!["admin", "client"].includes(role)) {
+        return res.status(400).json({ message: "Role must be admin or client" });
+      }
+
+      const existing = await authStorage.getUserByUsername(username);
+      if (existing) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await authStorage.createUser({
+        username,
+        password: hashedPassword,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        email: email || null,
+        role,
+        clientId: clientId || null,
+      });
+
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (error) {
+      console.error("Create user error:", error);
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
@@ -60,7 +99,8 @@ export async function registerRoutes(
     if (!userId || !clientId) return res.status(400).json({ message: "userId and clientId required" });
     const [updated] = await db.update(users).set({ clientId, role: "client" }).where(eq(users.id, userId)).returning();
     if (!updated) return res.status(404).json({ message: "User not found" });
-    res.json(updated);
+    const { password: _, ...safeUser } = updated;
+    res.json(safeUser);
   });
 
   app.patch("/api/auth/set-admin", isAuthenticated, isAdmin, async (req, res) => {
@@ -68,15 +108,26 @@ export async function registerRoutes(
     if (!userId) return res.status(400).json({ message: "userId required" });
     const [updated] = await db.update(users).set({ role: "admin" }).where(eq(users.id, userId)).returning();
     if (!updated) return res.status(404).json({ message: "User not found" });
-    res.json(updated);
+    const { password: _, ...safeUser } = updated;
+    res.json(safeUser);
+  });
+
+  app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const targetId = param(req, "id");
+    const currentUserId = (req.session as any).userId;
+    if (targetId === currentUserId) {
+      return res.status(400).json({ message: "Cannot delete your own account" });
+    }
+    await db.delete(users).where(eq(users.id, targetId));
+    res.status(204).send();
   });
 
   app.get("/api/admin/users", isAuthenticated, isAdmin, async (_req, res) => {
     const allUsers = await db.select().from(users);
-    res.json(allUsers);
+    const safeUsers = allUsers.map(({ password: _, ...u }) => u);
+    res.json(safeUsers);
   });
 
-  // ===== ADMIN ROUTES (existing CRUD - now protected) =====
   app.get("/api/clients", isAuthenticated, isAdmin, async (_req, res) => {
     const clientList = await storage.getClients();
     res.json(clientList);
@@ -178,7 +229,6 @@ export async function registerRoutes(
     res.json(invoice);
   });
 
-  // ===== ADMIN CHAT (view all client chats) =====
   app.get("/api/admin/chats", isAuthenticated, isAdmin, async (_req, res) => {
     const clientList = await storage.getClients();
     res.json(clientList);
@@ -190,12 +240,11 @@ export async function registerRoutes(
   });
 
   app.post("/api/admin/chats/:clientId", isAuthenticated, isAdmin, async (req: any, res) => {
-    const userId = req.user.claims.sub;
-    const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+    const dbUser = (req as any).dbUser;
     const parsed = insertChatMessageSchema.safeParse({
       clientId: param(req, "clientId"),
-      senderId: userId,
-      senderName: dbUser ? `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || 'Admin' : 'Admin',
+      senderId: dbUser.id,
+      senderName: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || 'Admin',
       senderRole: "admin",
       message: req.body.message,
     });
@@ -204,7 +253,6 @@ export async function registerRoutes(
     res.status(201).json(msg);
   });
 
-  // ===== CLIENT PORTAL ROUTES =====
   app.get("/api/portal/account", isAuthenticated, isClient, async (req: any, res) => {
     const client = await storage.getClient(req.clientId);
     if (!client) return res.status(404).json({ message: "Client account not found" });
@@ -252,10 +300,11 @@ export async function registerRoutes(
   });
 
   app.post("/api/portal/chat", isAuthenticated, isClient, async (req: any, res) => {
+    const dbUser = (req as any).dbUser;
     const parsed = insertChatMessageSchema.safeParse({
       clientId: req.clientId,
-      senderId: req.dbUser.id,
-      senderName: `${req.dbUser.firstName || ''} ${req.dbUser.lastName || ''}`.trim() || 'Client',
+      senderId: dbUser.id,
+      senderName: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || 'Client',
       senderRole: "client",
       message: req.body.message,
     });
