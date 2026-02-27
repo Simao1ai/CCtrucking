@@ -15,7 +15,7 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `client/src/components/` - AppSidebar (admin), PortalSidebar (client), ThemeToggle, Shadcn UI components
 - `server/` - Express API, DatabaseStorage, seed data
 - `server/replit_integrations/auth/` - Session-based auth (login, logout, user management)
-- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages, signatureRequests
+- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications
 - `shared/models/auth.ts` - Users and sessions tables
 
 ## Authentication & Authorization
@@ -59,6 +59,12 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET/POST /api/admin/signatures` - List/create signature requests
 - `GET /api/admin/signatures/:id` - View a signature request
 - `POST /api/admin/signatures/:id/remind` - Send email/SMS reminder
+
+### Notification Routes (authenticated)
+- `GET /api/notifications` - List notifications for current user
+- `GET /api/notifications/unread-count` - Get unread count
+- `PATCH /api/notifications/:id/read` - Mark single notification read
+- `POST /api/notifications/mark-all-read` - Mark all read
 
 ### Client Portal Routes (protected by isClient)
 - `GET /api/portal/account` - Get linked client company info
@@ -105,6 +111,7 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - Dependencies: `googleapis` npm package
 
 ## Recent Changes
+- Feb 2026: Added notification system with bell icon in both portals; auto-generates notifications for new invoices, messages, signature requests, document signings, service requests, and invoice approvals; supports mark-as-read and mark-all-read
 - Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts (both admin and client); added login page, user creation dialog, user deletion
 - Feb 2026: Added dual portal system (Admin + Client), role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging
 - Feb 2026: Initial MVP build - Dashboard, Clients, Service Tickets, Documents, Invoices with full CRUD, sidebar navigation, dark mode toggle, and seeded demo data

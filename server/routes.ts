@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema, clients } from "@shared/schema";
+import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema, clients, notifications } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
@@ -38,6 +38,38 @@ function isClient(req: Request, res: Response, next: NextFunction) {
     (req as any).dbUser = dbUser;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
+}
+
+async function notifyUser(userId: string, title: string, message: string, type: string, link?: string) {
+  try {
+    await storage.createNotification({ userId, title, message, type, link: link || null, read: "false" });
+  } catch (e) {
+    console.error("Failed to create notification:", e);
+  }
+}
+
+async function notifyAllAdmins(title: string, message: string, type: string, link?: string) {
+  try {
+    const allUsers = await db.select().from(users);
+    const admins = allUsers.filter(u => u.role === "admin");
+    for (const admin of admins) {
+      await notifyUser(admin.id, title, message, type, link);
+    }
+  } catch (e) {
+    console.error("Failed to notify admins:", e);
+  }
+}
+
+async function notifyClientUsers(clientId: string, title: string, message: string, type: string, link?: string) {
+  try {
+    const allUsers = await db.select().from(users);
+    const clientUsers = allUsers.filter(u => u.clientId === clientId);
+    for (const user of clientUsers) {
+      await notifyUser(user.id, title, message, type, link);
+    }
+  } catch (e) {
+    console.error("Failed to notify client users:", e);
+  }
 }
 
 export async function registerRoutes(
@@ -220,6 +252,7 @@ export async function registerRoutes(
     const parsed = insertInvoiceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
+    notifyClientUsers(invoice.clientId, "New Invoice", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been created.`, "invoice", "/portal/invoices");
     res.status(201).json(invoice);
   });
 
@@ -250,6 +283,7 @@ export async function registerRoutes(
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
+    notifyClientUsers(param(req, "clientId"), "New Message", "You have a new message from CC Trucking Services.", "chat", "/portal/chat");
     res.status(201).json(msg);
   });
 
@@ -273,6 +307,8 @@ export async function registerRoutes(
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
+    const client = await storage.getClient(req.clientId);
+    notifyAllAdmins("New Service Request", `${client?.companyName || "A client"} submitted a new ${ticket.serviceType} request.`, "ticket", "/admin/tickets");
     res.status(201).json(ticket);
   });
 
@@ -291,6 +327,7 @@ export async function registerRoutes(
     const invoice = await storage.getInvoice(invoiceId);
     if (!invoice || invoice.clientId !== req.clientId) return res.status(404).json({ message: "Invoice not found" });
     const updated = await storage.updateInvoice(invoiceId, { status: "approved" });
+    notifyAllAdmins("Invoice Approved", `Invoice #${invoice.invoiceNumber} has been approved by the client.`, "invoice", "/admin/invoices");
     res.json(updated);
   });
 
@@ -310,6 +347,8 @@ export async function registerRoutes(
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
+    const client = await storage.getClient(req.clientId);
+    notifyAllAdmins("New Client Message", `New message from ${client?.companyName || "a client"}.`, "chat", "/admin/chat");
     res.status(201).json(msg);
   });
 
@@ -335,6 +374,7 @@ export async function registerRoutes(
       });
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const sigReq = await storage.createSignatureRequest(parsed.data);
+      notifyClientUsers(sigReq.clientId, "Document to Sign", `"${sigReq.documentName}" needs your signature.`, "signature", "/portal/signatures");
       res.status(201).json(sigReq);
     } catch (error) {
       console.error("Create signature request error:", error);
@@ -433,11 +473,38 @@ export async function registerRoutes(
         signerName: trimmedName,
         signatureData,
       });
+      notifyAllAdmins("Document Signed", `"${sigReq.documentName}" was signed by ${trimmedName}.`, "signature", "/admin/signatures");
       res.json(updated);
     } catch (error) {
       console.error("Sign document error:", error);
       res.status(500).json({ message: "Failed to sign document" });
     }
+  });
+
+  // ===== NOTIFICATION ROUTES =====
+  app.get("/api/notifications", isAuthenticated, async (req: any, res) => {
+    const userId = (req.session as any).userId;
+    const notifs = await storage.getNotificationsByUser(userId);
+    res.json(notifs);
+  });
+
+  app.get("/api/notifications/unread-count", isAuthenticated, async (req: any, res) => {
+    const userId = (req.session as any).userId;
+    const count = await storage.getUnreadCountByUser(userId);
+    res.json({ count });
+  });
+
+  app.patch("/api/notifications/:id/read", isAuthenticated, async (req: any, res) => {
+    const userId = (req.session as any).userId;
+    const notif = await storage.markNotificationRead(param(req, "id"), userId);
+    if (!notif) return res.status(404).json({ message: "Not found" });
+    res.json(notif);
+  });
+
+  app.post("/api/notifications/mark-all-read", isAuthenticated, async (req: any, res) => {
+    const userId = (req.session as any).userId;
+    await storage.markAllNotificationsRead(userId);
+    res.json({ success: true });
   });
 
   // ===== GOOGLE SHEETS ROUTES (admin only) =====

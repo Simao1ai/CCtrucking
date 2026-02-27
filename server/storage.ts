@@ -1,13 +1,14 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  clients, serviceTickets, documents, invoices, chatMessages, signatureRequests,
+  clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
   type Invoice, type InsertInvoice,
   type ChatMessage, type InsertChatMessage,
   type SignatureRequest, type InsertSignatureRequest,
+  type Notification, type InsertNotification,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -43,6 +44,12 @@ export interface IStorage {
   getSignatureRequestsByClient(clientId: string): Promise<SignatureRequest[]>;
   createSignatureRequest(data: InsertSignatureRequest): Promise<SignatureRequest>;
   updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined>;
+
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getUnreadCountByUser(userId: string): Promise<number>;
+  createNotification(data: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -168,6 +175,31 @@ export class DatabaseStorage implements IStorage {
   async updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined> {
     const [req] = await db.update(signatureRequests).set(data).where(eq(signatureRequests.id, id)).returning();
     return req;
+  }
+
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadCountByUser(userId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)::int` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.read, "false")));
+    return result[0]?.count ?? 0;
+  }
+
+  async createNotification(data: InsertNotification): Promise<Notification> {
+    const [notif] = await db.insert(notifications).values(data).returning();
+    return notif;
+  }
+
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
+    const [notif] = await db.select().from(notifications).where(eq(notifications.id, id));
+    if (!notif || notif.userId !== userId) return undefined;
+    const [updated] = await db.update(notifications).set({ read: "true" }).where(eq(notifications.id, id)).returning();
+    return updated;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications).set({ read: "true" }).where(eq(notifications.userId, userId));
   }
 }
 
