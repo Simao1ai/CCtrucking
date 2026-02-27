@@ -171,6 +171,20 @@ export async function registerRoutes(
     res.json(client);
   });
 
+  app.get("/api/clients/:id/summary", isAuthenticated, isAdmin, async (req, res) => {
+    const clientId = param(req, "id");
+    const client = await storage.getClient(clientId);
+    if (!client) return res.status(404).json({ message: "Client not found" });
+    const [tickets, documents, invoices, messages, signatures] = await Promise.all([
+      storage.getTicketsByClient(clientId),
+      storage.getDocumentsByClient(clientId),
+      storage.getInvoicesByClient(clientId),
+      storage.getChatMessages(clientId),
+      storage.getSignatureRequestsByClient(clientId),
+    ]);
+    res.json({ client, tickets, documents, invoices, messages, signatures });
+  });
+
   app.post("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
     const parsed = insertClientSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });

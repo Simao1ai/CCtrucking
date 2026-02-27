@@ -56,6 +56,7 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET/POST /api/invoices`, `GET/PATCH /api/invoices/:id`
 - `GET /api/admin/chats` - List all clients for chat
 - `GET/POST /api/admin/chats/:clientId` - View/send messages for a client
+- `GET /api/clients/:id/summary` - Get all client data (tickets, docs, invoices, messages, signatures)
 - `GET/POST /api/admin/signatures` - List/create signature requests
 - `GET /api/admin/signatures/:id` - View a signature request
 - `POST /api/admin/signatures/:id/remind` - Send email/SMS reminder
@@ -83,7 +84,8 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/contact` - Public contact page
 - `/login` - Login page (username/password)
 - `/admin` - Admin dashboard
-- `/admin/clients` - Client management
+- `/admin/clients` - Client management (list view)
+- `/admin/clients/:id` - Client detail page (all info, tickets, invoices, docs, signatures, chat)
 - `/admin/tickets` - Service ticket management
 - `/admin/documents` - Document management
 - `/admin/invoices` - Invoice management
@@ -111,6 +113,7 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - Dependencies: `googleapis` npm package
 
 ## Recent Changes
+- Feb 2026: Added client detail page at /admin/clients/:id with consolidated view of all client data (company info, regulatory numbers, service tickets, invoices, documents, signature requests, chat messages) in a tabbed layout with summary stats
 - Feb 2026: Added notification system with bell icon in both portals; auto-generates notifications for new invoices, messages, signature requests, document signings, service requests, and invoice approvals; supports mark-as-read and mark-all-read
 - Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts (both admin and client); added login page, user creation dialog, user deletion
 - Feb 2026: Added dual portal system (Admin + Client), role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging

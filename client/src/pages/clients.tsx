@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertClientSchema, type Client, type InsertClient } from "@shared/schema";
-import { Plus, Search, Building2, Phone, Mail, MapPin, Hash } from "lucide-react";
+import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Eye } from "lucide-react";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -191,6 +192,7 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
 }
 
 export default function Clients() {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | undefined>();
@@ -271,7 +273,7 @@ export default function Clients() {
             <Card
               key={client.id}
               className="hover-elevate active-elevate-2 cursor-pointer"
-              onClick={() => handleOpenEdit(client)}
+              onClick={() => navigate(`/admin/clients/${client.id}`)}
               data-testid={`card-client-${client.id}`}
             >
               <CardContent className="p-5">

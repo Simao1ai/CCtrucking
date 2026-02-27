@@ -29,6 +29,7 @@ import AdminChat from "@/pages/admin-chat";
 import AdminUsers from "@/pages/admin-users";
 import AdminSheets from "@/pages/admin-sheets";
 import AdminSignatures from "@/pages/admin-signatures";
+import AdminClientDetail from "@/pages/admin-client-detail";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 
 const sidebarStyle = {
@@ -154,6 +155,9 @@ function App() {
 
           <Route path="/admin">
             <AdminLayout><Dashboard /></AdminLayout>
+          </Route>
+          <Route path="/admin/clients/:id">
+            <AdminLayout><AdminClientDetail /></AdminLayout>
           </Route>
           <Route path="/admin/clients">
             <AdminLayout><Clients /></AdminLayout>
