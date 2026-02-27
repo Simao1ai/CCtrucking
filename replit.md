@@ -89,6 +89,13 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - Seed data is auto-inserted on first run
 - Default admin: username `admin`, password `admin123`
 
+## Google Sheets Integration
+- Uses Google Service Account for authentication (requires `GOOGLE_SERVICE_ACCOUNT_KEY` secret)
+- Admin can connect spreadsheets by URL or ID at `/admin/sheets`
+- API routes: `GET /api/admin/sheets/info`, `GET /api/admin/sheets/data`
+- Spreadsheets must be shared with the service account email for access
+- Dependencies: `googleapis` npm package
+
 ## Recent Changes
 - Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts (both admin and client); added login page, user creation dialog, user deletion
 - Feb 2026: Added dual portal system (Admin + Client), role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging

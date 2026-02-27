@@ -313,5 +313,47 @@ export async function registerRoutes(
     res.status(201).json(msg);
   });
 
+  // ===== GOOGLE SHEETS ROUTES (admin only) =====
+  app.get("/api/admin/sheets/info", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { spreadsheetId } = req.query;
+      if (!spreadsheetId || typeof spreadsheetId !== "string") {
+        return res.status(400).json({ message: "spreadsheetId query parameter is required" });
+      }
+      const { getSpreadsheetInfo } = await import("./googleSheets");
+      const info = await getSpreadsheetInfo(spreadsheetId);
+      res.json(info);
+    } catch (error: any) {
+      console.error("Sheets info error:", error.message);
+      if (error.message.includes("GOOGLE_SERVICE_ACCOUNT_KEY")) {
+        return res.status(400).json({ message: "Google Sheets is not configured. Add the service account key in settings." });
+      }
+      res.status(500).json({ message: "Failed to fetch spreadsheet info" });
+    }
+  });
+
+  app.get("/api/admin/sheets/data", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { spreadsheetId, range } = req.query;
+      if (!spreadsheetId || typeof spreadsheetId !== "string") {
+        return res.status(400).json({ message: "spreadsheetId query parameter is required" });
+      }
+      const { getSpreadsheetData, listAllSheetData } = await import("./googleSheets");
+      if (range && typeof range === "string") {
+        const data = await getSpreadsheetData(spreadsheetId, range);
+        res.json({ data });
+      } else {
+        const allData = await listAllSheetData(spreadsheetId);
+        res.json(allData);
+      }
+    } catch (error: any) {
+      console.error("Sheets data error:", error.message);
+      if (error.message.includes("GOOGLE_SERVICE_ACCOUNT_KEY")) {
+        return res.status(400).json({ message: "Google Sheets is not configured. Add the service account key in settings." });
+      }
+      res.status(500).json({ message: "Failed to fetch spreadsheet data" });
+    }
+  });
+
   return httpServer;
 }

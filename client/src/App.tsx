@@ -26,6 +26,7 @@ import PortalDocuments from "@/pages/portal/portal-documents";
 import PortalChat from "@/pages/portal/portal-chat";
 import AdminChat from "@/pages/admin-chat";
 import AdminUsers from "@/pages/admin-users";
+import AdminSheets from "@/pages/admin-sheets";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -162,6 +163,9 @@ function App() {
           </Route>
           <Route path="/admin/users">
             <AdminLayout><AdminUsers /></AdminLayout>
+          </Route>
+          <Route path="/admin/sheets">
+            <AdminLayout><AdminSheets /></AdminLayout>
           </Route>
 
           <Route path="/portal">
