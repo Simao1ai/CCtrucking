@@ -1,12 +1,13 @@
 import { eq, desc } from "drizzle-orm";
 import { db } from "./db";
 import {
-  clients, serviceTickets, documents, invoices, chatMessages,
+  clients, serviceTickets, documents, invoices, chatMessages, signatureRequests,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
   type Invoice, type InsertInvoice,
   type ChatMessage, type InsertChatMessage,
+  type SignatureRequest, type InsertSignatureRequest,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -36,6 +37,12 @@ export interface IStorage {
 
   getChatMessages(clientId: string): Promise<ChatMessage[]>;
   createChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
+
+  getSignatureRequests(): Promise<SignatureRequest[]>;
+  getSignatureRequest(id: string): Promise<SignatureRequest | undefined>;
+  getSignatureRequestsByClient(clientId: string): Promise<SignatureRequest[]>;
+  createSignatureRequest(data: InsertSignatureRequest): Promise<SignatureRequest>;
+  updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -138,6 +145,29 @@ export class DatabaseStorage implements IStorage {
   async createChatMessage(data: InsertChatMessage): Promise<ChatMessage> {
     const [msg] = await db.insert(chatMessages).values(data).returning();
     return msg;
+  }
+
+  async getSignatureRequests(): Promise<SignatureRequest[]> {
+    return db.select().from(signatureRequests).orderBy(desc(signatureRequests.sentAt));
+  }
+
+  async getSignatureRequest(id: string): Promise<SignatureRequest | undefined> {
+    const [req] = await db.select().from(signatureRequests).where(eq(signatureRequests.id, id));
+    return req;
+  }
+
+  async getSignatureRequestsByClient(clientId: string): Promise<SignatureRequest[]> {
+    return db.select().from(signatureRequests).where(eq(signatureRequests.clientId, clientId)).orderBy(desc(signatureRequests.sentAt));
+  }
+
+  async createSignatureRequest(data: InsertSignatureRequest): Promise<SignatureRequest> {
+    const [req] = await db.insert(signatureRequests).values(data).returning();
+    return req;
+  }
+
+  async updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined> {
+    const [req] = await db.update(signatureRequests).set(data).where(eq(signatureRequests.id, id)).returning();
+    return req;
   }
 }
 

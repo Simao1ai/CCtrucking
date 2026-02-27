@@ -10,12 +10,12 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - **Styling**: Inter font, navy/steel blue theme (HSL 215)
 
 ## Project Structure
-- `client/src/pages/` - Public pages (Home, FAQs, Contact), Login, Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users)
-- `client/src/pages/portal/` - Client portal pages (Dashboard, Services, Invoices, Documents, Chat)
+- `client/src/pages/` - Public pages (Home, FAQs, Contact), Login, Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users, Signatures)
+- `client/src/pages/portal/` - Client portal pages (Dashboard, Services, Invoices, Documents, Chat, Sign Documents)
 - `client/src/components/` - AppSidebar (admin), PortalSidebar (client), ThemeToggle, Shadcn UI components
 - `server/` - Express API, DatabaseStorage, seed data
 - `server/replit_integrations/auth/` - Session-based auth (login, logout, user management)
-- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages
+- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages, signatureRequests
 - `shared/models/auth.ts` - Users and sessions tables
 
 ## Authentication & Authorization
@@ -56,6 +56,9 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET/POST /api/invoices`, `GET/PATCH /api/invoices/:id`
 - `GET /api/admin/chats` - List all clients for chat
 - `GET/POST /api/admin/chats/:clientId` - View/send messages for a client
+- `GET/POST /api/admin/signatures` - List/create signature requests
+- `GET /api/admin/signatures/:id` - View a signature request
+- `POST /api/admin/signatures/:id/remind` - Send email/SMS reminder
 
 ### Client Portal Routes (protected by isClient)
 - `GET /api/portal/account` - Get linked client company info
@@ -64,6 +67,9 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET /api/portal/invoices` - View invoices
 - `PATCH /api/portal/invoices/:id/approve` - Approve an invoice
 - `GET/POST /api/portal/chat` - View/send messages to admin
+- `GET /api/portal/signatures` - List signature requests for client
+- `GET /api/portal/signatures/:id` - View a signature request
+- `POST /api/portal/signatures/:id/sign` - Sign a document (with canvas signature)
 
 ## Frontend Routes
 - `/` - Public home page
@@ -77,11 +83,13 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/admin/invoices` - Invoice management
 - `/admin/chat` - Client messaging (admin side)
 - `/admin/users` - User management (create accounts, assign roles)
+- `/admin/signatures` - Document signing management (send, track, remind)
 - `/portal` - Client dashboard
 - `/portal/services` - Request new services
 - `/portal/invoices` - View/approve invoices
 - `/portal/documents` - View compliance documents
 - `/portal/chat` - Message admin team
+- `/portal/signatures` - View & sign documents (truck-driver-friendly UI with canvas signature pad)
 
 ## Running
 - `npm run dev` starts Express + Vite on port 5000

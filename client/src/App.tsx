@@ -27,6 +27,8 @@ import PortalChat from "@/pages/portal/portal-chat";
 import AdminChat from "@/pages/admin-chat";
 import AdminUsers from "@/pages/admin-users";
 import AdminSheets from "@/pages/admin-sheets";
+import AdminSignatures from "@/pages/admin-signatures";
+import PortalSignatures from "@/pages/portal/portal-signatures";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -167,6 +169,9 @@ function App() {
           <Route path="/admin/sheets">
             <AdminLayout><AdminSheets /></AdminLayout>
           </Route>
+          <Route path="/admin/signatures">
+            <AdminLayout><AdminSignatures /></AdminLayout>
+          </Route>
 
           <Route path="/portal">
             <PortalLayout><PortalDashboard /></PortalLayout>
@@ -182,6 +187,9 @@ function App() {
           </Route>
           <Route path="/portal/chat">
             <PortalLayout><PortalChat /></PortalLayout>
+          </Route>
+          <Route path="/portal/signatures">
+            <PortalLayout><PortalSignatures /></PortalLayout>
           </Route>
 
           <Route path="/dashboard">

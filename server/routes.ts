@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema } from "@shared/schema";
+import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema, clients } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
@@ -311,6 +311,133 @@ export async function registerRoutes(
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
     res.status(201).json(msg);
+  });
+
+  // ===== SIGNATURE REQUEST ROUTES (admin) =====
+  app.get("/api/admin/signatures", isAuthenticated, isAdmin, async (_req, res) => {
+    const requests = await storage.getSignatureRequests();
+    res.json(requests);
+  });
+
+  app.post("/api/admin/signatures", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const parsed = insertSignatureRequestSchema.safeParse({
+        clientId: req.body.clientId,
+        documentName: req.body.documentName,
+        documentDescription: req.body.documentDescription || null,
+        documentContent: req.body.documentContent,
+        createdBy: dbUser.id,
+        status: "pending",
+        signatureData: null,
+        signerName: null,
+        reminderMethod: null,
+      });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const sigReq = await storage.createSignatureRequest(parsed.data);
+      res.status(201).json(sigReq);
+    } catch (error) {
+      console.error("Create signature request error:", error);
+      res.status(500).json({ message: "Failed to create signature request" });
+    }
+  });
+
+  app.get("/api/admin/signatures/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const sigReq = await storage.getSignatureRequest(param(req, "id"));
+    if (!sigReq) return res.status(404).json({ message: "Not found" });
+    res.json(sigReq);
+  });
+
+  app.post("/api/admin/signatures/:id/remind", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const sigReq = await storage.getSignatureRequest(param(req, "id"));
+      if (!sigReq) return res.status(404).json({ message: "Not found" });
+      if (sigReq.status === "signed") return res.status(400).json({ message: "Document already signed" });
+
+      const client = await storage.getClient(sigReq.clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+
+      const { method } = req.body;
+      const validMethods = ["email", "sms", "both"];
+      let reminderMethod = validMethods.includes(method) ? method : "email";
+      let reminderSent = false;
+
+      if (reminderMethod === "email" && client.email) {
+        console.log(`[REMINDER] Email sent to ${client.email} for document "${sigReq.documentName}"`);
+        reminderSent = true;
+      } else if (reminderMethod === "sms" && client.phone) {
+        console.log(`[REMINDER] SMS sent to ${client.phone} for document "${sigReq.documentName}"`);
+        reminderSent = true;
+      } else if (reminderMethod === "both") {
+        if (client.email) console.log(`[REMINDER] Email sent to ${client.email} for document "${sigReq.documentName}"`);
+        if (client.phone) console.log(`[REMINDER] SMS sent to ${client.phone} for document "${sigReq.documentName}"`);
+        reminderSent = !!(client.email || client.phone);
+      }
+
+      if (reminderSent) {
+        await storage.updateSignatureRequest(sigReq.id, {
+          reminderSentAt: new Date(),
+          reminderMethod,
+        });
+      }
+
+      res.json({
+        sent: reminderSent,
+        method: reminderMethod,
+        email: client.email,
+        phone: client.phone,
+        message: reminderSent
+          ? `Reminder sent via ${reminderMethod}`
+          : "No contact info available for this method",
+      });
+    } catch (error) {
+      console.error("Send reminder error:", error);
+      res.status(500).json({ message: "Failed to send reminder" });
+    }
+  });
+
+  // ===== CLIENT PORTAL SIGNATURE ROUTES =====
+  app.get("/api/portal/signatures", isAuthenticated, isClient, async (req: any, res) => {
+    const requests = await storage.getSignatureRequestsByClient(req.clientId);
+    res.json(requests);
+  });
+
+  app.get("/api/portal/signatures/:id", isAuthenticated, isClient, async (req: any, res) => {
+    const sigReq = await storage.getSignatureRequest(param(req, "id"));
+    if (!sigReq || sigReq.clientId !== req.clientId) return res.status(404).json({ message: "Not found" });
+    res.json(sigReq);
+  });
+
+  app.post("/api/portal/signatures/:id/sign", isAuthenticated, isClient, async (req: any, res) => {
+    try {
+      const sigReq = await storage.getSignatureRequest(param(req, "id"));
+      if (!sigReq || sigReq.clientId !== req.clientId) return res.status(404).json({ message: "Not found" });
+      if (sigReq.status === "signed") return res.status(400).json({ message: "Already signed" });
+
+      const { signerName, signatureData } = req.body;
+      const trimmedName = typeof signerName === "string" ? signerName.trim() : "";
+      if (!trimmedName || trimmedName.length < 2) {
+        return res.status(400).json({ message: "Please enter your full name (at least 2 characters)" });
+      }
+      if (!signatureData || typeof signatureData !== "string" || !signatureData.startsWith("data:image/")) {
+        return res.status(400).json({ message: "A valid signature image is required" });
+      }
+      const MAX_SIG_SIZE = 500_000;
+      if (signatureData.length > MAX_SIG_SIZE) {
+        return res.status(400).json({ message: "Signature data is too large" });
+      }
+
+      const updated = await storage.updateSignatureRequest(sigReq.id, {
+        status: "signed",
+        signedAt: new Date(),
+        signerName: trimmedName,
+        signatureData,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Sign document error:", error);
+      res.status(500).json({ message: "Failed to sign document" });
+    }
   });
 
   // ===== GOOGLE SHEETS ROUTES (admin only) =====

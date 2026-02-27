@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home } from "lucide-react";
+import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home, PenLine } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,7 @@ const navItems = [
   { title: "Services", url: "/portal/services", icon: Plus },
   { title: "Documents", url: "/portal/documents", icon: FileText },
   { title: "Invoices", url: "/portal/invoices", icon: Receipt },
+  { title: "Sign Documents", url: "/portal/signatures", icon: PenLine },
   { title: "Messages", url: "/portal/chat", icon: MessageCircle },
 ];
 

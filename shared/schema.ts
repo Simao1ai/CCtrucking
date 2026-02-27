@@ -68,11 +68,28 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const signatureRequests = pgTable("signature_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  documentName: text("document_name").notNull(),
+  documentDescription: text("document_description"),
+  documentContent: text("document_content").notNull(),
+  status: text("status").notNull().default("pending"),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+  signedAt: timestamp("signed_at"),
+  signerName: text("signer_name"),
+  signatureData: text("signature_data"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderMethod: text("reminder_method"),
+  createdBy: varchar("created_by"),
+});
+
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, uploadedAt: true });
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({ id: true, sentAt: true, signedAt: true, reminderSentAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -84,3 +101,5 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
