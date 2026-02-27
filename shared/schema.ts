@@ -95,6 +95,55 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const formTemplates = pgTable("form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  content: text("content").notNull(),
+  category: text("category").notNull().default("General"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const filledForms = pgTable("filled_forms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => formTemplates.id),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  name: text("name").notNull(),
+  filledContent: text("filled_content").notNull(),
+  status: text("status").notNull().default("draft"),
+  filledBy: varchar("filled_by"),
+  signatureRequestId: varchar("signature_request_id").references(() => signatureRequests.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const notarizations = pgTable("notarizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  documentName: text("document_name").notNull(),
+  documentDescription: text("document_description"),
+  notaryName: text("notary_name").notNull(),
+  notaryCommission: text("notary_commission"),
+  notarizationDate: timestamp("notarization_date"),
+  expirationDate: timestamp("expiration_date"),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  performedBy: varchar("performed_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  userName: text("user_name"),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: varchar("entity_id"),
+  details: text("details"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, uploadedAt: true });
@@ -102,6 +151,10 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true,
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({ id: true, sentAt: true, signedAt: true, reminderSentAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertFormTemplateSchema = createInsertSchema(formTemplates).omit({ id: true, createdAt: true });
+export const insertFilledFormSchema = createInsertSchema(filledForms).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNotarizationSchema = createInsertSchema(notarizations).omit({ id: true, createdAt: true });
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -117,3 +170,11 @@ export type SignatureRequest = typeof signatureRequests.$inferSelect;
 export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type FormTemplate = typeof formTemplates.$inferSelect;
+export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
+export type FilledForm = typeof filledForms.$inferSelect;
+export type InsertFilledForm = z.infer<typeof insertFilledFormSchema>;
+export type Notarization = typeof notarizations.$inferSelect;
+export type InsertNotarization = z.infer<typeof insertNotarizationSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

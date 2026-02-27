@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine } from "lucide-react";
+import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine, ClipboardList, Stamp, History } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,10 +19,13 @@ const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Clients", url: "/admin/clients", icon: Users },
   { title: "Service Tickets", url: "/admin/tickets", icon: Ticket },
+  { title: "Forms", url: "/admin/forms", icon: ClipboardList },
   { title: "Documents", url: "/admin/documents", icon: FileText },
   { title: "Invoices", url: "/admin/invoices", icon: Receipt },
-  { title: "Messages", url: "/admin/chat", icon: MessageCircle },
   { title: "Signatures", url: "/admin/signatures", icon: PenLine },
+  { title: "Notarizations", url: "/admin/notarizations", icon: Stamp },
+  { title: "Messages", url: "/admin/chat", icon: MessageCircle },
+  { title: "Audit Log", url: "/admin/audit", icon: History },
   { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
   { title: "Users", url: "/admin/users", icon: UserCog },
 ];

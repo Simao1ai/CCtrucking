@@ -1,7 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClientSchema, insertServiceTicketSchema, insertDocumentSchema, insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema, clients, notifications } from "@shared/schema";
+import {
+  insertClientSchema, insertServiceTicketSchema, insertDocumentSchema,
+  insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema,
+  insertFormTemplateSchema, insertFilledFormSchema, insertNotarizationSchema,
+  clients, notifications
+} from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
@@ -38,6 +43,22 @@ function isClient(req: Request, res: Response, next: NextFunction) {
     (req as any).dbUser = dbUser;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
+}
+
+async function audit(req: Request, action: string, entityType: string, entityId?: string, details?: string) {
+  try {
+    const dbUser = (req as any).dbUser;
+    await storage.createAuditLog({
+      userId: dbUser?.id || (req.session as any).userId || null,
+      userName: dbUser ? (dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username) : null,
+      action,
+      entityType,
+      entityId: entityId || null,
+      details: details || null,
+    });
+  } catch (e) {
+    console.error("Failed to create audit log:", e);
+  }
 }
 
 async function notifyUser(userId: string, title: string, message: string, type: string, link?: string) {
@@ -175,30 +196,35 @@ export async function registerRoutes(
     const clientId = param(req, "id");
     const client = await storage.getClient(clientId);
     if (!client) return res.status(404).json({ message: "Client not found" });
-    const [tickets, documents, invoices, messages, signatures] = await Promise.all([
+    const [tickets, documents, invoices, messages, signatures, forms, notarizationRecords] = await Promise.all([
       storage.getTicketsByClient(clientId),
       storage.getDocumentsByClient(clientId),
       storage.getInvoicesByClient(clientId),
       storage.getChatMessages(clientId),
       storage.getSignatureRequestsByClient(clientId),
+      storage.getFilledFormsByClient(clientId),
+      storage.getNotarizationsByClient(clientId),
     ]);
-    res.json({ client, tickets, documents, invoices, messages, signatures });
+    res.json({ client, tickets, documents, invoices, messages, signatures, forms, notarizations: notarizationRecords });
   });
 
   app.post("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
     const parsed = insertClientSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const client = await storage.createClient(parsed.data);
+    await audit(req, "created", "client", client.id, `Created client "${client.companyName}"`);
     res.status(201).json(client);
   });
 
   app.patch("/api/clients/:id", isAuthenticated, isAdmin, async (req, res) => {
     const client = await storage.updateClient(param(req, "id"), req.body);
     if (!client) return res.status(404).json({ message: "Client not found" });
+    await audit(req, "updated", "client", client.id, `Updated client "${client.companyName}"`);
     res.json(client);
   });
 
   app.delete("/api/clients/:id", isAuthenticated, isAdmin, async (req, res) => {
+    await audit(req, "deleted", "client", param(req, "id"), `Deleted client`);
     await storage.deleteClient(param(req, "id"));
     res.status(204).send();
   });
@@ -218,12 +244,14 @@ export async function registerRoutes(
     const parsed = insertServiceTicketSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
+    await audit(req, "created", "ticket", ticket.id, `Created ticket "${ticket.title}" (${ticket.serviceType})`);
     res.status(201).json(ticket);
   });
 
   app.patch("/api/tickets/:id", isAuthenticated, isAdmin, async (req, res) => {
     const ticket = await storage.updateTicket(param(req, "id"), req.body);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    await audit(req, "updated", "ticket", ticket.id, `Updated ticket "${ticket.title}" — status: ${ticket.status}`);
     res.json(ticket);
   });
 
@@ -242,12 +270,14 @@ export async function registerRoutes(
     const parsed = insertDocumentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const doc = await storage.createDocument(parsed.data);
+    await audit(req, "created", "document", doc.id, `Created document "${doc.name}" (${doc.type})`);
     res.status(201).json(doc);
   });
 
   app.patch("/api/documents/:id", isAuthenticated, isAdmin, async (req, res) => {
     const doc = await storage.updateDocument(param(req, "id"), req.body);
     if (!doc) return res.status(404).json({ message: "Document not found" });
+    await audit(req, "updated", "document", doc.id, `Updated document "${doc.name}" — status: ${doc.status}`);
     res.json(doc);
   });
 
@@ -266,6 +296,7 @@ export async function registerRoutes(
     const parsed = insertInvoiceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
+    await audit(req, "created", "invoice", invoice.id, `Created invoice #${invoice.invoiceNumber} — $${invoice.amount}`);
     notifyClientUsers(invoice.clientId, "New Invoice", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been created.`, "invoice", "/portal/invoices");
     res.status(201).json(invoice);
   });
@@ -273,6 +304,7 @@ export async function registerRoutes(
   app.patch("/api/invoices/:id", isAuthenticated, isAdmin, async (req, res) => {
     const invoice = await storage.updateInvoice(param(req, "id"), req.body);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    await audit(req, "updated", "invoice", invoice.id, `Updated invoice #${invoice.invoiceNumber} — status: ${invoice.status}`);
     res.json(invoice);
   });
 
@@ -519,6 +551,125 @@ export async function registerRoutes(
     const userId = (req.session as any).userId;
     await storage.markAllNotificationsRead(userId);
     res.json({ success: true });
+  });
+
+  app.get("/api/admin/form-templates", isAuthenticated, isAdmin, async (_req, res) => {
+    const templates = await storage.getFormTemplates();
+    res.json(templates);
+  });
+
+  app.get("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const template = await storage.getFormTemplate(param(req, "id"));
+    if (!template) return res.status(404).json({ message: "Template not found" });
+    res.json(template);
+  });
+
+  app.post("/api/admin/form-templates", isAuthenticated, isAdmin, async (req, res) => {
+    const parsed = insertFormTemplateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const template = await storage.createFormTemplate(parsed.data);
+    await audit(req, "created", "form_template", template.id, `Created form template "${template.name}"`);
+    res.status(201).json(template);
+  });
+
+  app.patch("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const template = await storage.updateFormTemplate(param(req, "id"), req.body);
+    if (!template) return res.status(404).json({ message: "Template not found" });
+    await audit(req, "updated", "form_template", template.id, `Updated form template "${template.name}"`);
+    res.json(template);
+  });
+
+  app.delete("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const id = param(req, "id");
+    const template = await storage.getFormTemplate(id);
+    await storage.deleteFormTemplate(id);
+    await audit(req, "deleted", "form_template", id, `Deleted form template "${template?.name || id}"`);
+    res.status(204).send();
+  });
+
+  app.get("/api/admin/filled-forms", isAuthenticated, isAdmin, async (_req, res) => {
+    const forms = await storage.getFilledForms();
+    res.json(forms);
+  });
+
+  app.get("/api/admin/filled-forms/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const form = await storage.getFilledForm(param(req, "id"));
+    if (!form) return res.status(404).json({ message: "Form not found" });
+    res.json(form);
+  });
+
+  app.post("/api/admin/filled-forms", isAuthenticated, isAdmin, async (req, res) => {
+    const parsed = insertFilledFormSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const form = await storage.createFilledForm(parsed.data);
+    await audit(req, "created", "filled_form", form.id, `Created filled form "${form.name}" for client ${form.clientId}`);
+    res.status(201).json(form);
+  });
+
+  app.patch("/api/admin/filled-forms/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const form = await storage.updateFilledForm(param(req, "id"), req.body);
+    if (!form) return res.status(404).json({ message: "Form not found" });
+    await audit(req, "updated", "filled_form", form.id, `Updated filled form "${form.name}" — status: ${form.status}`);
+    res.json(form);
+  });
+
+  app.post("/api/admin/filled-forms/:id/send-for-signature", isAuthenticated, isAdmin, async (req, res) => {
+    const form = await storage.getFilledForm(param(req, "id"));
+    if (!form) return res.status(404).json({ message: "Form not found" });
+    const sigReq = await storage.createSignatureRequest({
+      clientId: form.clientId,
+      documentName: form.name,
+      documentDescription: `Filled form requiring signature`,
+      documentContent: form.filledContent,
+      createdBy: (req as any).dbUser?.id || null,
+      status: "pending",
+      signerName: null,
+      signatureData: null,
+      reminderMethod: null,
+    });
+    await storage.updateFilledForm(form.id, { status: "sent_for_signature", signatureRequestId: sigReq.id });
+    await notifyClientUsers(form.clientId, "Document Ready for Signature", `"${form.name}" is ready for your signature.`, "signature", "/portal/signatures");
+    await audit(req, "sent_for_signature", "filled_form", form.id, `Sent "${form.name}" for signature (sig request ${sigReq.id})`);
+    res.json({ signatureRequest: sigReq });
+  });
+
+  app.get("/api/admin/notarizations", isAuthenticated, isAdmin, async (_req, res) => {
+    const notarizations = await storage.getNotarizations();
+    res.json(notarizations);
+  });
+
+  app.get("/api/admin/notarizations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const n = await storage.getNotarization(param(req, "id"));
+    if (!n) return res.status(404).json({ message: "Notarization not found" });
+    res.json(n);
+  });
+
+  app.post("/api/admin/notarizations", isAuthenticated, isAdmin, async (req, res) => {
+    const parsed = insertNotarizationSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const n = await storage.createNotarization(parsed.data);
+    await audit(req, "created", "notarization", n.id, `Created notarization "${n.documentName}" for client ${n.clientId}, notary: ${n.notaryName}`);
+    res.status(201).json(n);
+  });
+
+  app.patch("/api/admin/notarizations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const n = await storage.updateNotarization(param(req, "id"), req.body);
+    if (!n) return res.status(404).json({ message: "Notarization not found" });
+    await audit(req, "updated", "notarization", n.id, `Updated notarization "${n.documentName}" — status: ${n.status}`);
+    res.json(n);
+  });
+
+  app.get("/api/admin/audit-logs", isAuthenticated, isAdmin, async (req, res) => {
+    const limit = parseInt(req.query.limit as string) || 100;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const entityType = req.query.entityType as string;
+    if (entityType) {
+      const logs = await storage.getAuditLogsByEntity(entityType);
+      res.json(logs);
+    } else {
+      const logs = await storage.getAuditLogs(limit, offset);
+      res.json(logs);
+    }
   });
 
   // ===== GOOGLE SHEETS ROUTES (admin only) =====

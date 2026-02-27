@@ -10,11 +10,11 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest } from "@shared/schema";
+import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest, FilledForm, Notarization } from "@shared/schema";
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
-  Calendar, User, Send
+  Calendar, User, Send, ClipboardList, Stamp
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -25,6 +25,8 @@ interface ClientSummary {
   invoices: Invoice[];
   messages: ChatMessage[];
   signatures: SignatureRequest[];
+  forms: FilledForm[];
+  notarizations: Notarization[];
 }
 
 function statusColor(status: string) {
@@ -102,7 +104,7 @@ export default function AdminClientDetail() {
 
   if (!data) return null;
 
-  const { client, tickets, documents, invoices, messages, signatures } = data;
+  const { client, tickets, documents, invoices, messages, signatures, forms, notarizations } = data;
 
   const totalInvoiced = invoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
   const totalPaid = invoices.filter(i => i.status === "paid").reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
@@ -261,24 +263,32 @@ export default function AdminClientDetail() {
 
         <div className="lg:col-span-2">
           <Tabs defaultValue="tickets" className="w-full">
-            <TabsList className="w-full grid grid-cols-5" data-testid="tabs-client-detail">
-              <TabsTrigger value="tickets" data-testid="tab-tickets">
+            <TabsList className="w-full flex flex-wrap" data-testid="tabs-client-detail">
+              <TabsTrigger value="tickets" data-testid="tab-tickets" className="flex-1">
                 <Ticket className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
                 Tickets
               </TabsTrigger>
-              <TabsTrigger value="invoices" data-testid="tab-invoices">
+              <TabsTrigger value="invoices" data-testid="tab-invoices" className="flex-1">
                 <Receipt className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
                 Invoices
               </TabsTrigger>
-              <TabsTrigger value="documents" data-testid="tab-documents">
+              <TabsTrigger value="documents" data-testid="tab-documents" className="flex-1">
                 <FileText className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
                 Docs
               </TabsTrigger>
-              <TabsTrigger value="signatures" data-testid="tab-signatures">
+              <TabsTrigger value="forms" data-testid="tab-forms" className="flex-1">
+                <ClipboardList className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
+                Forms
+              </TabsTrigger>
+              <TabsTrigger value="signatures" data-testid="tab-signatures" className="flex-1">
                 <PenLine className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
                 Signing
               </TabsTrigger>
-              <TabsTrigger value="messages" data-testid="tab-messages">
+              <TabsTrigger value="notarizations" data-testid="tab-notarizations" className="flex-1">
+                <Stamp className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
+                Notary
+              </TabsTrigger>
+              <TabsTrigger value="messages" data-testid="tab-messages" className="flex-1">
                 <MessageCircle className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
                 Chat
               </TabsTrigger>
@@ -442,6 +452,73 @@ export default function AdminClientDetail() {
                               <p className="text-xs text-muted-foreground mt-1">By: {sig.signerName}</p>
                             )}
                           </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="forms" className="mt-4">
+              {forms.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-muted-foreground">
+                    <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No filled forms yet</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {forms.map(form => (
+                    <Card key={form.id} data-testid={`card-form-${form.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="min-w-0">
+                            <h4 className="font-medium text-sm">{form.name}</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {form.createdAt && format(new Date(form.createdAt), "MMM d, yyyy")}
+                              {form.updatedAt && form.updatedAt !== form.createdAt && ` · Updated ${format(new Date(form.updatedAt), "MMM d, yyyy")}`}
+                            </p>
+                          </div>
+                          <Badge variant={form.status === "complete" ? "default" : form.status === "sent_for_signature" ? "outline" : "secondary"} className="text-xs">
+                            {form.status === "draft" && <><Clock className="w-3 h-3 mr-1" />Draft</>}
+                            {form.status === "complete" && <><CheckCircle className="w-3 h-3 mr-1" />Complete</>}
+                            {form.status === "sent_for_signature" && <><Send className="w-3 h-3 mr-1" />Sent for Signature</>}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="notarizations" className="mt-4">
+              {notarizations.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-muted-foreground">
+                    <Stamp className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No notarization records</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {notarizations.map(n => (
+                    <Card key={n.id} data-testid={`card-notary-${n.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-medium text-sm">{n.documentName}</h4>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                              <span>Notary: {n.notaryName}</span>
+                              {n.notaryCommission && <span>#{n.notaryCommission}</span>}
+                              {n.notarizationDate && <span>{format(new Date(n.notarizationDate), "MMM d, yyyy")}</span>}
+                            </div>
+                          </div>
+                          <Badge variant={n.status === "notarized" ? "default" : n.status === "rejected" ? "destructive" : "secondary"} className="text-xs">
+                            {n.status}
+                          </Badge>
                         </div>
                       </CardContent>
                     </Card>

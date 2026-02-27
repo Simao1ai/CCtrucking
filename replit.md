@@ -1,7 +1,7 @@
 # CC Trucking Services - Operations Platform
 
 ## Overview
-A trucking-focused CRM and operations management SaaS platform for CC Trucking Services. Features dual portals: an Admin Portal for managing all operations and a Client Portal for trucking companies to request services, view documents/invoices, and chat with staff. Manages client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), document tracking, invoicing, and client-admin messaging.
+A trucking-focused CRM and operations management SaaS platform for CC Trucking Services. Features dual portals: an Admin Portal for managing all operations and a Client Portal for trucking companies to request services, view documents/invoices, and chat with staff. Manages client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), document tracking, invoicing, form templates with client auto-fill, notarization tracking, audit logging, and client-admin messaging.
 
 ## Tech Stack
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter routing, Shadcn UI, Tailwind CSS
@@ -10,12 +10,12 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - **Styling**: Inter font, navy/steel blue theme (HSL 215)
 
 ## Project Structure
-- `client/src/pages/` - Public pages (Home, FAQs, Contact), Login, Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users, Signatures)
+- `client/src/pages/` - Public pages (Home, FAQs, Contact), Login, Admin pages (Dashboard, Clients, Tickets, Documents, Invoices, Chat, Users, Signatures, Forms, Notarizations, Audit)
 - `client/src/pages/portal/` - Client portal pages (Dashboard, Services, Invoices, Documents, Chat, Sign Documents)
 - `client/src/components/` - AppSidebar (admin), PortalSidebar (client), ThemeToggle, Shadcn UI components
 - `server/` - Express API, DatabaseStorage, seed data
 - `server/replit_integrations/auth/` - Session-based auth (login, logout, user management)
-- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications
+- `shared/schema.ts` - Drizzle schemas for clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications, formTemplates, filledForms, notarizations, auditLogs
 - `shared/models/auth.ts` - Users and sessions tables
 
 ## Authentication & Authorization
@@ -35,6 +35,10 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - **Documents**: Compliance documents per client (EIN letters, fuel records, permits)
 - **Invoices**: Billing with draft/sent/paid/overdue/approved statuses
 - **Chat Messages**: Client-admin messaging scoped by clientId
+- **Form Templates**: Reusable form templates with placeholders ({{client_name}}, {{dot_number}}, etc.)
+- **Filled Forms**: Completed forms per client, statuses: draft/complete/sent_for_signature, linkable to signature requests
+- **Notarizations**: In-house notarization records with notary details, commission info, status tracking
+- **Audit Logs**: System-wide action tracking (creates/updates/deletes) with user, entity, and detail info
 
 ## API Routes
 
@@ -56,10 +60,24 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET/POST /api/invoices`, `GET/PATCH /api/invoices/:id`
 - `GET /api/admin/chats` - List all clients for chat
 - `GET/POST /api/admin/chats/:clientId` - View/send messages for a client
-- `GET /api/clients/:id/summary` - Get all client data (tickets, docs, invoices, messages, signatures)
+- `GET /api/clients/:id/summary` - Get all client data (tickets, docs, invoices, messages, signatures, forms, notarizations)
 - `GET/POST /api/admin/signatures` - List/create signature requests
 - `GET /api/admin/signatures/:id` - View a signature request
 - `POST /api/admin/signatures/:id/remind` - Send email/SMS reminder
+
+### Form Routes (admin)
+- `GET/POST /api/admin/form-templates` - List/create form templates
+- `GET/PATCH/DELETE /api/admin/form-templates/:id` - View/update/delete template
+- `GET/POST /api/admin/filled-forms` - List/create filled forms
+- `GET/PATCH /api/admin/filled-forms/:id` - View/update filled form
+- `POST /api/admin/filled-forms/:id/send-for-signature` - Send filled form for client signature
+
+### Notarization Routes (admin)
+- `GET/POST /api/admin/notarizations` - List/create notarization records
+- `GET/PATCH /api/admin/notarizations/:id` - View/update notarization
+
+### Audit Log Routes (admin)
+- `GET /api/admin/audit-logs` - List audit entries (filterable by entityType, searchable)
 
 ### Notification Routes (authenticated)
 - `GET /api/notifications` - List notifications for current user
@@ -85,13 +103,16 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/login` - Login page (username/password)
 - `/admin` - Admin dashboard
 - `/admin/clients` - Client management (list view)
-- `/admin/clients/:id` - Client detail page (all info, tickets, invoices, docs, signatures, chat)
+- `/admin/clients/:id` - Client detail page (all info, tickets, invoices, docs, signatures, forms, notarizations, chat)
 - `/admin/tickets` - Service ticket management
 - `/admin/documents` - Document management
 - `/admin/invoices` - Invoice management
 - `/admin/chat` - Client messaging (admin side)
 - `/admin/users` - User management (create accounts, assign roles)
 - `/admin/signatures` - Document signing management (send, track, remind)
+- `/admin/forms` - Form templates and filled forms management
+- `/admin/notarizations` - Notarization tracking
+- `/admin/audit` - System audit log (read-only)
 - `/portal` - Client dashboard
 - `/portal/services` - Request new services
 - `/portal/invoices` - View/approve invoices
@@ -99,11 +120,19 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/portal/chat` - Message admin team
 - `/portal/signatures` - View & sign documents (truck-driver-friendly UI with canvas signature pad)
 
+## Form Template Placeholders
+Templates support these auto-fill placeholders from client data:
+- `{{client_name}}`, `{{contact_name}}`, `{{email}}`, `{{phone}}`
+- `{{dot_number}}`, `{{mc_number}}`, `{{ein_number}}`
+- `{{address}}`, `{{city}}`, `{{state}}`, `{{zip_code}}`
+- `{{date}}` (auto-fills current date)
+
 ## Running
 - `npm run dev` starts Express + Vite on port 5000
 - `npm run db:push` syncs database schema
 - Seed data is auto-inserted on first run
 - Default admin: username `admin`, password `admin123`
+- New tables (form_templates, filled_forms, notarizations, audit_logs) created via raw SQL on startup
 
 ## Google Sheets Integration
 - Uses Google Service Account for authentication (requires `GOOGLE_SERVICE_ACCOUNT_KEY` secret)
@@ -113,8 +142,12 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - Dependencies: `googleapis` npm package
 
 ## Recent Changes
-- Feb 2026: Added client detail page at /admin/clients/:id with consolidated view of all client data (company info, regulatory numbers, service tickets, invoices, documents, signature requests, chat messages) in a tabbed layout with summary stats
-- Feb 2026: Added notification system with bell icon in both portals; auto-generates notifications for new invoices, messages, signature requests, document signings, service requests, and invoice approvals; supports mark-as-read and mark-all-read
-- Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts (both admin and client); added login page, user creation dialog, user deletion
+- Feb 2026: Added form templates system with placeholder-based auto-fill, filled forms with draft/complete/sent_for_signature statuses, send-for-signature integration with existing e-signing system
+- Feb 2026: Added notarization tracking for in-house notarization records (notary name, commission, dates, status)
+- Feb 2026: Added system-wide audit logging — tracks all creates/updates/deletes on clients, tickets, invoices, documents, forms, notarizations, signatures; filterable by entity type and searchable
+- Feb 2026: Updated client detail page with Forms and Notarizations tabs
+- Feb 2026: Added client detail page at /admin/clients/:id with consolidated view of all client data in a tabbed layout with summary stats
+- Feb 2026: Added notification system with bell icon in both portals; auto-generates notifications for new invoices, messages, signature requests, document signings, service requests, and invoice approvals
+- Feb 2026: Replaced Replit Auth OAuth with custom username/password authentication; admins now create all accounts
 - Feb 2026: Added dual portal system (Admin + Client), role-based access, admin chat & user management, client portal with service requests, invoicing, documents, and messaging
 - Feb 2026: Initial MVP build - Dashboard, Clients, Service Tickets, Documents, Invoices with full CRUD, sidebar navigation, dark mode toggle, and seeded demo data

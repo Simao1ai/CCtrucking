@@ -2,6 +2,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
+  formTemplates, filledForms, notarizations, auditLogs,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -9,6 +10,10 @@ import {
   type ChatMessage, type InsertChatMessage,
   type SignatureRequest, type InsertSignatureRequest,
   type Notification, type InsertNotification,
+  type FormTemplate, type InsertFormTemplate,
+  type FilledForm, type InsertFilledForm,
+  type Notarization, type InsertNotarization,
+  type AuditLog, type InsertAuditLog,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -50,6 +55,28 @@ export interface IStorage {
   createNotification(data: InsertNotification): Promise<Notification>;
   markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string): Promise<void>;
+
+  getFormTemplates(): Promise<FormTemplate[]>;
+  getFormTemplate(id: string): Promise<FormTemplate | undefined>;
+  createFormTemplate(data: InsertFormTemplate): Promise<FormTemplate>;
+  updateFormTemplate(id: string, data: Partial<InsertFormTemplate>): Promise<FormTemplate | undefined>;
+  deleteFormTemplate(id: string): Promise<void>;
+
+  getFilledForms(): Promise<FilledForm[]>;
+  getFilledForm(id: string): Promise<FilledForm | undefined>;
+  getFilledFormsByClient(clientId: string): Promise<FilledForm[]>;
+  createFilledForm(data: InsertFilledForm): Promise<FilledForm>;
+  updateFilledForm(id: string, data: Partial<InsertFilledForm>): Promise<FilledForm | undefined>;
+
+  getNotarizations(): Promise<Notarization[]>;
+  getNotarization(id: string): Promise<Notarization | undefined>;
+  getNotarizationsByClient(clientId: string): Promise<Notarization[]>;
+  createNotarization(data: InsertNotarization): Promise<Notarization>;
+  updateNotarization(id: string, data: Partial<InsertNotarization>): Promise<Notarization | undefined>;
+
+  getAuditLogs(limit?: number, offset?: number): Promise<AuditLog[]>;
+  getAuditLogsByEntity(entityType: string, entityId?: string): Promise<AuditLog[]>;
+  createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -200,6 +227,91 @@ export class DatabaseStorage implements IStorage {
 
   async markAllNotificationsRead(userId: string): Promise<void> {
     await db.update(notifications).set({ read: "true" }).where(eq(notifications.userId, userId));
+  }
+
+  async getFormTemplates(): Promise<FormTemplate[]> {
+    return db.select().from(formTemplates).orderBy(desc(formTemplates.createdAt));
+  }
+
+  async getFormTemplate(id: string): Promise<FormTemplate | undefined> {
+    const [t] = await db.select().from(formTemplates).where(eq(formTemplates.id, id));
+    return t;
+  }
+
+  async createFormTemplate(data: InsertFormTemplate): Promise<FormTemplate> {
+    const [t] = await db.insert(formTemplates).values(data).returning();
+    return t;
+  }
+
+  async updateFormTemplate(id: string, data: Partial<InsertFormTemplate>): Promise<FormTemplate | undefined> {
+    const [t] = await db.update(formTemplates).set(data).where(eq(formTemplates.id, id)).returning();
+    return t;
+  }
+
+  async deleteFormTemplate(id: string): Promise<void> {
+    await db.delete(formTemplates).where(eq(formTemplates.id, id));
+  }
+
+  async getFilledForms(): Promise<FilledForm[]> {
+    return db.select().from(filledForms).orderBy(desc(filledForms.createdAt));
+  }
+
+  async getFilledForm(id: string): Promise<FilledForm | undefined> {
+    const [f] = await db.select().from(filledForms).where(eq(filledForms.id, id));
+    return f;
+  }
+
+  async getFilledFormsByClient(clientId: string): Promise<FilledForm[]> {
+    return db.select().from(filledForms).where(eq(filledForms.clientId, clientId)).orderBy(desc(filledForms.createdAt));
+  }
+
+  async createFilledForm(data: InsertFilledForm): Promise<FilledForm> {
+    const [f] = await db.insert(filledForms).values(data).returning();
+    return f;
+  }
+
+  async updateFilledForm(id: string, data: Partial<InsertFilledForm>): Promise<FilledForm | undefined> {
+    const [f] = await db.update(filledForms).set({ ...data, updatedAt: new Date() }).where(eq(filledForms.id, id)).returning();
+    return f;
+  }
+
+  async getNotarizations(): Promise<Notarization[]> {
+    return db.select().from(notarizations).orderBy(desc(notarizations.createdAt));
+  }
+
+  async getNotarization(id: string): Promise<Notarization | undefined> {
+    const [n] = await db.select().from(notarizations).where(eq(notarizations.id, id));
+    return n;
+  }
+
+  async getNotarizationsByClient(clientId: string): Promise<Notarization[]> {
+    return db.select().from(notarizations).where(eq(notarizations.clientId, clientId)).orderBy(desc(notarizations.createdAt));
+  }
+
+  async createNotarization(data: InsertNotarization): Promise<Notarization> {
+    const [n] = await db.insert(notarizations).values(data).returning();
+    return n;
+  }
+
+  async updateNotarization(id: string, data: Partial<InsertNotarization>): Promise<Notarization | undefined> {
+    const [n] = await db.update(notarizations).set(data).where(eq(notarizations.id, id)).returning();
+    return n;
+  }
+
+  async getAuditLogs(limit = 100, offset = 0): Promise<AuditLog[]> {
+    return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset);
+  }
+
+  async getAuditLogsByEntity(entityType: string, entityId?: string): Promise<AuditLog[]> {
+    if (entityId) {
+      return db.select().from(auditLogs).where(and(eq(auditLogs.entityType, entityId ? entityType : entityType), eq(auditLogs.entityId, entityId))).orderBy(desc(auditLogs.createdAt));
+    }
+    return db.select().from(auditLogs).where(eq(auditLogs.entityType, entityType)).orderBy(desc(auditLogs.createdAt));
+  }
+
+  async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await db.insert(auditLogs).values(data).returning();
+    return log;
   }
 }
 

@@ -30,6 +30,9 @@ import AdminUsers from "@/pages/admin-users";
 import AdminSheets from "@/pages/admin-sheets";
 import AdminSignatures from "@/pages/admin-signatures";
 import AdminClientDetail from "@/pages/admin-client-detail";
+import AdminForms from "@/pages/admin-forms";
+import AdminNotarizations from "@/pages/admin-notarizations";
+import AdminAudit from "@/pages/admin-audit";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 
 const sidebarStyle = {
@@ -182,6 +185,15 @@ function App() {
           </Route>
           <Route path="/admin/signatures">
             <AdminLayout><AdminSignatures /></AdminLayout>
+          </Route>
+          <Route path="/admin/forms">
+            <AdminLayout><AdminForms /></AdminLayout>
+          </Route>
+          <Route path="/admin/notarizations">
+            <AdminLayout><AdminNotarizations /></AdminLayout>
+          </Route>
+          <Route path="/admin/audit">
+            <AdminLayout><AdminAudit /></AdminLayout>
           </Route>
 
           <Route path="/portal">
