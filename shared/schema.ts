@@ -177,8 +177,31 @@ export const insertFormTemplateSchema = createInsertSchema(formTemplates).omit({
 export const insertFilledFormSchema = createInsertSchema(filledForms).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNotarizationSchema = createInsertSchema(notarizations).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export const taxDocuments = pgTable("tax_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  taxYear: integer("tax_year").notNull(),
+  documentType: text("document_type").notNull(),
+  payerName: text("payer_name"),
+  documentContent: text("document_content"),
+  extractedData: text("extracted_data"),
+  totalIncome: decimal("total_income", { precision: 12, scale: 2 }),
+  federalWithholding: decimal("federal_withholding", { precision: 12, scale: 2 }),
+  stateWithholding: decimal("state_withholding", { precision: 12, scale: 2 }),
+  ssnLastFour: text("ssn_last_four"),
+  einNumber: text("ein_number"),
+  riskFlags: text("risk_flags"),
+  confidenceLevel: text("confidence_level"),
+  notes: text("notes"),
+  status: text("status").notNull().default("pending"),
+  analyzedAt: timestamp("analyzed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
+export const insertTaxDocumentSchema = createInsertSchema(taxDocuments).omit({ id: true, createdAt: true, updatedAt: true, analyzedAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -206,3 +229,5 @@ export type ServiceItem = typeof serviceItems.$inferSelect;
 export type InsertServiceItem = z.infer<typeof insertServiceItemSchema>;
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
+export type TaxDocument = typeof taxDocuments.$inferSelect;
+export type InsertTaxDocument = z.infer<typeof insertTaxDocumentSchema>;

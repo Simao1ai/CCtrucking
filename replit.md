@@ -92,6 +92,16 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `GET/POST /api/admin/notarizations` - List/create notarization records
 - `GET/PATCH /api/admin/notarizations/:id` - View/update notarization
 
+### Tax Prep Routes (admin)
+- `GET /api/admin/tax-documents` - List tax documents (filterable by clientId, taxYear)
+- `GET /api/admin/tax-documents/export/csv` - Export tax documents to CSV
+- `GET /api/admin/tax-documents/:id` - View a tax document
+- `POST /api/admin/tax-documents` - Create a tax document
+- `PATCH /api/admin/tax-documents/:id` - Update a tax document
+- `DELETE /api/admin/tax-documents/:id` - Delete a tax document
+- `POST /api/admin/tax-documents/:id/analyze` - Run AI analysis on a tax document
+- `GET /api/admin/tax-summary/:clientId` - Get tax summary for a client (by year)
+
 ### Audit Log Routes (admin)
 - `GET /api/admin/audit-logs` - List audit entries (filterable by entityType, searchable)
 
@@ -138,6 +148,7 @@ A trucking-focused CRM and operations management SaaS platform for CC Trucking S
 - `/admin/signatures` - Document signing management (send, track, remind)
 - `/admin/forms` - Form templates and filled forms management
 - `/admin/notarizations` - Notarization tracking
+- `/admin/tax-prep` - Tax preparation intake (document collection, AI analysis, CSV export)
 - `/admin/audit` - System audit log (read-only)
 - `/portal` - Client dashboard
 - `/portal/services` - Request new services
@@ -179,6 +190,7 @@ Templates support these auto-fill placeholders from client data:
 - Service items can be selected when adding invoice line items (auto-fills description and price)
 
 ## Recent Changes
+- Feb 2026: Added tax preparation intake system — tax_documents table for collecting W-2s, 1099s, Schedule C, and other tax forms; AI-powered analysis using OpenAI to extract structured data (income, withholding, EIN, risk flags); CSV export for tax software; SSN masking; audit-logged access; per-client tax summaries
 - Feb 2026: Added service fee line items system — service_items table with predefined pricing, invoice_line_items table for itemized invoicing, auto-computed totals
 - Feb 2026: Added "owner" role — main admin with access to business analytics; regular admins cannot see analytics
 - Feb 2026: Added business analytics dashboard (owner-only) with revenue charts, client metrics, service breakdown, invoice aging, top clients

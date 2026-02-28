@@ -36,6 +36,7 @@ import AdminAudit from "@/pages/admin-audit";
 import AdminServiceItems from "@/pages/admin-service-items";
 import AdminAnalytics from "@/pages/admin-analytics";
 import AdminAiChat from "@/pages/admin-ai-chat";
+import AdminTaxPrep from "@/pages/admin-tax-prep";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 
 const sidebarStyle = {
@@ -206,6 +207,9 @@ function App() {
           </Route>
           <Route path="/admin/ai-chat">
             <AdminLayout><AdminAiChat /></AdminLayout>
+          </Route>
+          <Route path="/admin/tax-prep">
+            <AdminLayout><AdminTaxPrep /></AdminLayout>
           </Route>
 
           <Route path="/portal">

@@ -5,8 +5,8 @@ import {
   insertClientSchema, insertServiceTicketSchema, insertDocumentSchema,
   insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema,
   insertFormTemplateSchema, insertFilledFormSchema, insertNotarizationSchema,
-  insertServiceItemSchema, insertInvoiceLineItemSchema,
-  clients, notifications, invoices, invoiceLineItems, serviceItems
+  insertServiceItemSchema, insertInvoiceLineItemSchema, insertTaxDocumentSchema,
+  clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments
 } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -967,6 +967,255 @@ You can answer questions about clients, invoices, tickets, documents, revenue, a
     if (!invoice || invoice.clientId !== req.clientId) return res.status(404).json({ message: "Invoice not found" });
     const items = await storage.getInvoiceLineItems(param(req, "id"));
     res.json(items);
+  });
+
+  // ===== TAX PREP ROUTES (admin only) =====
+  app.get("/api/admin/tax-documents", isAuthenticated, isAdmin, async (req, res) => {
+    const { clientId, taxYear } = req.query;
+    let docs;
+    if (clientId) {
+      docs = await storage.getTaxDocumentsByClient(clientId as string);
+    } else if (taxYear) {
+      docs = await storage.getTaxDocumentsByYear(parseInt(taxYear as string));
+    } else {
+      docs = await storage.getTaxDocuments();
+    }
+    await audit(req, "viewed", "tax_document", "", "Accessed tax documents list");
+    res.json(docs);
+  });
+
+  app.get("/api/admin/tax-documents/export/csv", isAuthenticated, isAdmin, async (req, res) => {
+    const { clientId: csvClientId, taxYear: csvTaxYear } = req.query;
+    let csvDocs;
+    if (csvClientId) {
+      csvDocs = await storage.getTaxDocumentsByClient(csvClientId as string);
+    } else if (csvTaxYear) {
+      csvDocs = await storage.getTaxDocumentsByYear(parseInt(csvTaxYear as string));
+    } else {
+      csvDocs = await storage.getTaxDocuments();
+    }
+
+    const allClients = await storage.getClients();
+    const csvClientMap = new Map(allClients.map(c => [c.id, c]));
+
+    const headers = ["Tax Year", "Client Name", "EIN", "Document Type", "Payer/Employer", "Total Income", "Federal Withholding", "State Withholding", "SSN Last 4", "Confidence", "Status", "Risk Flags", "Notes"];
+    const rows = csvDocs.map(d => {
+      const client = csvClientMap.get(d.clientId);
+      return [
+        d.taxYear,
+        client?.companyName || "",
+        d.einNumber || client?.einNumber || "",
+        d.documentType,
+        d.payerName || "",
+        d.totalIncome || "0.00",
+        d.federalWithholding || "0.00",
+        d.stateWithholding || "0.00",
+        d.ssnLastFour || "",
+        d.confidenceLevel || "",
+        d.status,
+        d.riskFlags || "",
+        d.notes || "",
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    });
+
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    await audit(req, "exported", "tax_document", "", `Exported ${csvDocs.length} tax documents to CSV`);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="tax-documents-${csvTaxYear || 'all'}.csv"`);
+    res.send(csv);
+  });
+
+  app.get("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const doc = await storage.getTaxDocument(param(req, "id"));
+    if (!doc) return res.status(404).json({ message: "Tax document not found" });
+    await audit(req, "viewed", "tax_document", doc.id, `Viewed tax document — ${doc.documentType}`);
+    res.json(doc);
+  });
+
+  app.post("/api/admin/tax-documents", isAuthenticated, isAdmin, async (req, res) => {
+    const parsed = insertTaxDocumentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const data = { ...parsed.data };
+    if (data.ssnLastFour && data.ssnLastFour.length > 4) {
+      data.ssnLastFour = data.ssnLastFour.replace(/\D/g, "").slice(-4);
+    }
+    const doc = await storage.createTaxDocument(data);
+    await audit(req, "created", "tax_document", doc.id, `Created tax document — ${doc.documentType} for tax year ${doc.taxYear}`);
+    res.status(201).json(doc);
+  });
+
+  app.patch("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const allowedFields = ["clientId", "taxYear", "documentType", "payerName", "documentContent", "notes", "status", "ssnLastFour"];
+    const updateData: Record<string, any> = {};
+    for (const key of allowedFields) {
+      if (key in req.body) {
+        updateData[key] = req.body[key];
+      }
+    }
+    if (updateData.ssnLastFour && updateData.ssnLastFour.length > 4) {
+      updateData.ssnLastFour = updateData.ssnLastFour.replace(/\D/g, "").slice(-4);
+    }
+    if (updateData.status && !["pending", "analyzed", "review", "exported"].includes(updateData.status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+    const doc = await storage.updateTaxDocument(param(req, "id"), updateData);
+    if (!doc) return res.status(404).json({ message: "Tax document not found" });
+    await audit(req, "updated", "tax_document", doc.id, `Updated tax document — ${doc.documentType}`);
+    res.json(doc);
+  });
+
+  app.delete("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const id = param(req, "id");
+    await storage.deleteTaxDocument(id);
+    await audit(req, "deleted", "tax_document", id, "Deleted tax document");
+    res.status(204).send();
+  });
+
+  app.post("/api/admin/tax-documents/:id/analyze", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const doc = await storage.getTaxDocument(param(req, "id"));
+      if (!doc) return res.status(404).json({ message: "Tax document not found" });
+
+      const client = await storage.getClient(doc.clientId);
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const systemPrompt = `You are a professional tax intake analyst for a U.S.-based tax preparation firm specializing in trucking companies. Your job is to analyze tax document information and extract structured data.
+
+IMPORTANT: This is an intake analysis, not tax advice.
+
+For the document provided, you must:
+1. Identify the document type and validate it
+2. Extract all key tax fields
+3. Note any missing or unreadable data
+4. Flag potential issues or inconsistencies
+
+Risk detection rules:
+- Flag SSN/EIN mismatches between documents
+- Flag unusually high deductions relative to income
+- Flag missing common forms for the filing type
+- Flag self-employment indicators
+- Flag income inconsistencies across documents
+
+Respond in this exact JSON format:
+{
+  "documentType": "W-2 | 1099-NEC | 1099-INT | 1099-MISC | 1099-K | 1099-DIV | Schedule C | Schedule SE | Other",
+  "payerName": "employer or payer name",
+  "totalIncome": 0.00,
+  "federalWithholding": 0.00,
+  "stateWithholding": 0.00,
+  "ssnLastFour": "last 4 digits only or null",
+  "einNumber": "EIN if found or null",
+  "extractedFields": {
+    "field_name": "value"
+  },
+  "missingFields": ["list of expected but missing fields"],
+  "riskFlags": ["list of any risk flags or concerns"],
+  "confidenceLevel": "high | medium | low",
+  "notes": "any additional observations"
+}
+
+Only return valid JSON. No markdown formatting.`;
+
+      const userContent = `Analyze this tax document for client: ${client?.companyName || 'Unknown'}
+Document Type: ${doc.documentType}
+Tax Year: ${doc.taxYear}
+Payer/Employer: ${doc.payerName || 'Not specified'}
+
+Document Content/Details:
+${doc.documentContent || doc.notes || 'No content provided'}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        max_completion_tokens: 2048,
+      });
+
+      const responseText = completion.choices[0]?.message?.content || "";
+      let parsed2: any = {};
+      try {
+        const jsonStr = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed2 = JSON.parse(jsonStr);
+      } catch {
+        parsed2 = { notes: responseText, confidenceLevel: "low", riskFlags: ["Failed to parse AI response"] };
+      }
+
+      let ssnLast4 = parsed2.ssnLastFour || doc.ssnLastFour;
+      if (ssnLast4 && ssnLast4.length > 4) {
+        ssnLast4 = ssnLast4.replace(/\D/g, "").slice(-4);
+      }
+
+      const updated = await storage.updateTaxDocument(doc.id, {
+        extractedData: JSON.stringify(parsed2),
+        totalIncome: parsed2.totalIncome?.toString() || doc.totalIncome,
+        federalWithholding: parsed2.federalWithholding?.toString() || doc.federalWithholding,
+        stateWithholding: parsed2.stateWithholding?.toString() || doc.stateWithholding,
+        ssnLastFour: ssnLast4,
+        einNumber: parsed2.einNumber || doc.einNumber,
+        payerName: parsed2.payerName || doc.payerName,
+        riskFlags: parsed2.riskFlags ? JSON.stringify(parsed2.riskFlags) : null,
+        confidenceLevel: parsed2.confidenceLevel || "medium",
+        status: "analyzed",
+        analyzedAt: new Date(),
+      } as any);
+
+      await audit(req, "analyzed", "tax_document", doc.id, `AI analyzed tax document — ${doc.documentType}, confidence: ${parsed2.confidenceLevel || 'unknown'}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Tax document analysis error:", error);
+      res.status(500).json({ message: "Failed to analyze document" });
+    }
+  });
+
+  app.get("/api/admin/tax-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+    const clientId = param(req, "clientId");
+    const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
+    const docs = await storage.getTaxDocumentsByClient(clientId);
+    const yearDocs = docs.filter(d => d.taxYear === taxYear);
+
+    const totalIncome = yearDocs.reduce((s, d) => s + parseFloat(d.totalIncome || "0"), 0);
+    const totalFederal = yearDocs.reduce((s, d) => s + parseFloat(d.federalWithholding || "0"), 0);
+    const totalState = yearDocs.reduce((s, d) => s + parseFloat(d.stateWithholding || "0"), 0);
+
+    const allRisks: string[] = [];
+    for (const d of yearDocs) {
+      if (d.riskFlags) {
+        try {
+          const flags = JSON.parse(d.riskFlags);
+          if (Array.isArray(flags)) allRisks.push(...flags);
+        } catch {
+          allRisks.push(d.riskFlags);
+        }
+      }
+    }
+
+    const docTypes: Record<string, number> = {};
+    for (const d of yearDocs) {
+      docTypes[d.documentType] = (docTypes[d.documentType] || 0) + 1;
+    }
+
+    const analyzed = yearDocs.filter(d => d.status === "analyzed").length;
+    const pending = yearDocs.filter(d => d.status === "pending").length;
+
+    res.json({
+      taxYear,
+      totalDocuments: yearDocs.length,
+      analyzedCount: analyzed,
+      pendingCount: pending,
+      totalIncome,
+      totalFederalWithholding: totalFederal,
+      totalStateWithholding: totalState,
+      documentTypes: docTypes,
+      riskFlags: [...new Set(allRisks)],
+    });
   });
 
   // ===== GOOGLE SHEETS ROUTES (admin only) =====

@@ -2,7 +2,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
-  formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems,
+  formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -16,6 +16,7 @@ import {
   type AuditLog, type InsertAuditLog,
   type ServiceItem, type InsertServiceItem,
   type InvoiceLineItem, type InsertInvoiceLineItem,
+  type TaxDocument, type InsertTaxDocument,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -90,6 +91,14 @@ export interface IStorage {
   createInvoiceLineItem(data: InsertInvoiceLineItem): Promise<InvoiceLineItem>;
   updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined>;
   deleteInvoiceLineItem(id: string): Promise<void>;
+
+  getTaxDocuments(): Promise<TaxDocument[]>;
+  getTaxDocumentsByClient(clientId: string): Promise<TaxDocument[]>;
+  getTaxDocumentsByYear(taxYear: number): Promise<TaxDocument[]>;
+  getTaxDocument(id: string): Promise<TaxDocument | undefined>;
+  createTaxDocument(data: InsertTaxDocument): Promise<TaxDocument>;
+  updateTaxDocument(id: string, data: Partial<InsertTaxDocument>): Promise<TaxDocument | undefined>;
+  deleteTaxDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -366,6 +375,37 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvoiceLineItem(id: string): Promise<void> {
     await db.delete(invoiceLineItems).where(eq(invoiceLineItems.id, id));
+  }
+
+  async getTaxDocuments(): Promise<TaxDocument[]> {
+    return db.select().from(taxDocuments).orderBy(desc(taxDocuments.createdAt));
+  }
+
+  async getTaxDocumentsByClient(clientId: string): Promise<TaxDocument[]> {
+    return db.select().from(taxDocuments).where(eq(taxDocuments.clientId, clientId)).orderBy(desc(taxDocuments.createdAt));
+  }
+
+  async getTaxDocumentsByYear(taxYear: number): Promise<TaxDocument[]> {
+    return db.select().from(taxDocuments).where(eq(taxDocuments.taxYear, taxYear)).orderBy(desc(taxDocuments.createdAt));
+  }
+
+  async getTaxDocument(id: string): Promise<TaxDocument | undefined> {
+    const [doc] = await db.select().from(taxDocuments).where(eq(taxDocuments.id, id));
+    return doc;
+  }
+
+  async createTaxDocument(data: InsertTaxDocument): Promise<TaxDocument> {
+    const [doc] = await db.insert(taxDocuments).values(data).returning();
+    return doc;
+  }
+
+  async updateTaxDocument(id: string, data: Partial<InsertTaxDocument>): Promise<TaxDocument | undefined> {
+    const [doc] = await db.update(taxDocuments).set({ ...data, updatedAt: new Date() }).where(eq(taxDocuments.id, id)).returning();
+    return doc;
+  }
+
+  async deleteTaxDocument(id: string): Promise<void> {
+    await db.delete(taxDocuments).where(eq(taxDocuments.id, id));
   }
 }
 
