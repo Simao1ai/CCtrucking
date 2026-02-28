@@ -15,6 +15,42 @@ import { db } from "./db";
 import { eq, sql, desc, gte, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import OpenAI from "openai";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const uploadDir = path.join(process.cwd(), "uploads", "tax-documents");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const taxDocUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = path.extname(file.originalname);
+      cb(null, `${uniqueSuffix}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      "application/pdf",
+      "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv", "text/plain",
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed: ${file.mimetype}`));
+    }
+  },
+});
 
 function param(req: Request, name: string): string {
   return req.params[name] as string;
@@ -1046,6 +1082,82 @@ You can answer questions about clients, invoices, tickets, documents, revenue, a
     res.status(201).json(doc);
   });
 
+  app.post("/api/admin/tax-documents/upload", isAuthenticated, isAdmin, (req, res, next) => {
+    taxDocUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ message: "File too large. Maximum size is 10 MB." });
+          }
+          return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        return res.status(400).json({ message: err.message || "Invalid file" });
+      }
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const { clientId, taxYear, documentType, payerName, notes } = req.body;
+      if (!clientId || !documentType) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "clientId and documentType are required" });
+      }
+
+      const parsedYear = parseInt(taxYear);
+      if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "taxYear must be a valid year between 2000 and 2099" });
+      }
+
+      const allowedExts = [".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt"];
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (!allowedExts.includes(ext)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: `File extension ${ext} is not allowed` });
+      }
+
+      const doc = await storage.createTaxDocument({
+        clientId,
+        taxYear: parsedYear,
+        documentType,
+        payerName: payerName || null,
+        notes: notes || null,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
+        filePath: `uploads/tax-documents/${req.file.filename}`,
+        fileSize: req.file.size,
+        status: "pending",
+      });
+
+      await audit(req, "created", "tax_document", doc.id, `Uploaded tax document — ${req.file.originalname} (${doc.documentType}) for tax year ${taxYear}`);
+      res.status(201).json(doc);
+    } catch (error: any) {
+      if (req.file) {
+        try { fs.unlinkSync(req.file.path); } catch {}
+      }
+      console.error("Tax document upload error:", error);
+      res.status(500).json({ message: error.message || "Upload failed" });
+    }
+  });
+
+  app.get("/api/admin/tax-documents/:id/download", isAuthenticated, isAdmin, async (req, res) => {
+    const doc = await storage.getTaxDocument(param(req, "id"));
+    if (!doc || !doc.filePath) {
+      return res.status(404).json({ message: "File not found" });
+    }
+    const sanitizedPath = doc.filePath.replace(/^\/+/, "");
+    const fullPath = path.join(process.cwd(), sanitizedPath);
+    if (!fullPath.startsWith(uploadDir) || !fs.existsSync(fullPath)) {
+      return res.status(404).json({ message: "File not found on disk" });
+    }
+    await audit(req, "downloaded", "tax_document", doc.id, `Downloaded tax document file — ${doc.fileName}`);
+    res.download(fullPath, doc.fileName || "document");
+  });
+
   app.patch("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
     const allowedFields = ["clientId", "taxYear", "documentType", "payerName", "documentContent", "notes", "status", "ssnLastFour"];
     const updateData: Record<string, any> = {};
@@ -1068,6 +1180,14 @@ You can answer questions about clients, invoices, tickets, documents, revenue, a
 
   app.delete("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
     const id = param(req, "id");
+    const doc = await storage.getTaxDocument(id);
+    if (doc?.filePath) {
+      const sanitizedPath = doc.filePath.replace(/^\/+/, "");
+      const fullPath = path.join(process.cwd(), sanitizedPath);
+      if (fullPath.startsWith(uploadDir) && fs.existsSync(fullPath)) {
+        try { fs.unlinkSync(fullPath); } catch {}
+      }
+    }
     await storage.deleteTaxDocument(id);
     await audit(req, "deleted", "tax_document", id, "Deleted tax document");
     res.status(204).send();

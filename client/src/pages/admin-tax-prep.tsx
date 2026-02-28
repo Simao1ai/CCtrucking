@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,13 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TaxDocument, Client } from "@shared/schema";
 import { insertTaxDocumentSchema } from "@shared/schema";
 import {
   Plus, Search, FileText, Download, Brain, AlertTriangle, CheckCircle,
-  Clock, Shield, Trash2, ChevronDown, ChevronUp
+  Clock, Shield, Trash2, ChevronDown, ChevronUp, Upload, File, X, Paperclip
 } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -60,8 +61,95 @@ const taxDocFormSchema = insertTaxDocumentSchema.extend({
 
 type TaxDocFormValues = z.infer<typeof taxDocFormSchema>;
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileDropZone({ file, onFileSelect, onRemove }: {
+  file: globalThis.File | null;
+  onFileSelect: (f: globalThis.File) => void;
+  onRemove: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) onFileSelect(dropped);
+  }, [onFileSelect]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  if (file) {
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30" data-testid="file-preview">
+        <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary/10 flex-shrink-0">
+          <Paperclip className="w-5 h-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate" data-testid="text-file-name">{file.name}</p>
+          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={onRemove} data-testid="button-remove-file">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+        isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+      }`}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onClick={() => fileInputRef.current?.click()}
+      data-testid="file-dropzone"
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFileSelect(f);
+          e.target.value = "";
+        }}
+        data-testid="input-file-upload"
+      />
+      <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+      <p className="text-sm font-medium">Drop file here or click to browse</p>
+      <p className="text-xs text-muted-foreground mt-1">
+        PDF, images, Word, Excel, CSV, or text — up to 10 MB
+      </p>
+    </div>
+  );
+}
+
 function TaxDocForm({ onSuccess, clients }: { onSuccess: () => void; clients: Client[] }) {
   const { toast } = useToast();
+  const [entryMode, setEntryMode] = useState<"upload" | "manual">("upload");
+  const [uploadFile, setUploadFile] = useState<globalThis.File | null>(null);
+  const [uploadClientId, setUploadClientId] = useState("");
+  const [uploadTaxYear, setUploadTaxYear] = useState(String(new Date().getFullYear()));
+  const [uploadDocType, setUploadDocType] = useState("");
+  const [uploadPayerName, setUploadPayerName] = useState("");
+  const [uploadNotes, setUploadNotes] = useState("");
+
   const form = useForm<TaxDocFormValues>({
     resolver: zodResolver(taxDocFormSchema),
     defaultValues: {
@@ -75,7 +163,7 @@ function TaxDocForm({ onSuccess, clients }: { onSuccess: () => void; clients: Cl
     },
   });
 
-  const mutation = useMutation({
+  const manualMutation = useMutation({
     mutationFn: async (data: TaxDocFormValues) => {
       const res = await apiRequest("POST", "/api/admin/tax-documents", data);
       return res.json();
@@ -91,106 +179,246 @@ function TaxDocForm({ onSuccess, clients }: { onSuccess: () => void; clients: Cl
     },
   });
 
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-        <FormField control={form.control} name="clientId" render={({ field }) => (
-          <FormItem>
-            <FormLabel>Client</FormLabel>
-            <Select onValueChange={field.onChange} value={field.value}>
-              <FormControl>
-                <SelectTrigger data-testid="select-tax-client">
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {clients.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )} />
-        <div className="grid grid-cols-2 gap-4">
-          <FormField control={form.control} name="taxYear" render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tax Year</FormLabel>
-              <Select onValueChange={(v) => field.onChange(parseInt(v))} value={String(field.value)}>
-                <FormControl>
-                  <SelectTrigger data-testid="select-tax-year">
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {TAX_YEARS.map(y => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="documentType" render={({ field }) => (
-            <FormItem>
-              <FormLabel>Document Type</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger data-testid="select-doc-type">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {DOC_TYPES.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )} />
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!uploadFile) throw new Error("No file selected");
+      if (!uploadClientId) throw new Error("Please select a client");
+      if (!uploadDocType) throw new Error("Please select a document type");
+
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("clientId", uploadClientId);
+      formData.append("taxYear", uploadTaxYear);
+      formData.append("documentType", uploadDocType);
+      if (uploadPayerName) formData.append("payerName", uploadPayerName);
+      if (uploadNotes) formData.append("notes", uploadNotes);
+
+      const res = await fetch("/api/admin/tax-documents/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tax-documents"] });
+      toast({ title: "Document uploaded", description: "File has been uploaded successfully. You can now run AI analysis." });
+      setUploadFile(null);
+      setUploadClientId("");
+      setUploadTaxYear(String(new Date().getFullYear()));
+      setUploadDocType("");
+      setUploadPayerName("");
+      setUploadNotes("");
+      onSuccess();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sharedFields = (
+    mode: "upload" | "manual",
+    clientVal: string, setClient: (v: string) => void,
+    yearVal: string, setYear: (v: string) => void,
+    docTypeVal: string, setDocType: (v: string) => void,
+    payerVal: string, setPayer: (v: string) => void,
+    notesVal: string, setNotes: (v: string) => void,
+  ) => (
+    <>
+      <div>
+        <label className="text-sm font-medium">Client</label>
+        <Select onValueChange={setClient} value={clientVal}>
+          <SelectTrigger className="mt-1.5" data-testid={`select-tax-client-${mode}`}>
+            <SelectValue placeholder="Select client" />
+          </SelectTrigger>
+          <SelectContent>
+            {clients.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium">Tax Year</label>
+          <Select onValueChange={setYear} value={yearVal}>
+            <SelectTrigger className="mt-1.5" data-testid={`select-tax-year-${mode}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TAX_YEARS.map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <FormField control={form.control} name="payerName" render={({ field }) => (
-          <FormItem>
-            <FormLabel>Payer / Employer Name</FormLabel>
-            <FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter payer or employer name" data-testid="input-payer-name" /></FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
-        <FormField control={form.control} name="documentContent" render={({ field }) => (
-          <FormItem>
-            <FormLabel>Document Details</FormLabel>
-            <FormControl>
-              <Textarea
-                {...field}
-                value={field.value ?? ""}
-                placeholder="Enter or paste the document information here. Include all amounts, box numbers, names, addresses, and identification numbers from the tax form. The AI will analyze this content to extract structured data.&#10;&#10;Example: Box 1 Wages: $45,000 / Box 2 Federal Tax Withheld: $6,750 / Box 17 State Tax: $2,250..."
-                className="min-h-[120px]"
-                data-testid="input-doc-content"
-              />
-            </FormControl>
-            <p className="text-xs text-muted-foreground">Enter all information from the tax document. Do not include full SSN — only last 4 digits if needed.</p>
-            <FormMessage />
-          </FormItem>
-        )} />
-        <FormField control={form.control} name="notes" render={({ field }) => (
-          <FormItem>
-            <FormLabel>Internal Notes</FormLabel>
-            <FormControl><Textarea {...field} value={field.value ?? ""} placeholder="Any notes about this document..." className="min-h-[60px]" data-testid="input-tax-notes" /></FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
+        <div>
+          <label className="text-sm font-medium">Document Type</label>
+          <Select onValueChange={setDocType} value={docTypeVal}>
+            <SelectTrigger className="mt-1.5" data-testid={`select-doc-type-${mode}`}>
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {DOC_TYPES.map(t => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div>
+        <label className="text-sm font-medium">Payer / Employer Name</label>
+        <Input value={payerVal} onChange={(e) => setPayer(e.target.value)} placeholder="Enter payer or employer name" className="mt-1.5" data-testid={`input-payer-name-${mode}`} />
+      </div>
+      <div>
+        <label className="text-sm font-medium">Internal Notes</label>
+        <Textarea value={notesVal} onChange={(e) => setNotes(e.target.value)} placeholder="Any notes about this document..." className="mt-1.5 min-h-[60px]" data-testid={`input-tax-notes-${mode}`} />
+      </div>
+    </>
+  );
+
+  return (
+    <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as "upload" | "manual")} className="w-full">
+      <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsTrigger value="upload" data-testid="tab-upload">
+          <Upload className="w-3.5 h-3.5 mr-1.5" />
+          Upload File
+        </TabsTrigger>
+        <TabsTrigger value="manual" data-testid="tab-manual">
+          <FileText className="w-3.5 h-3.5 mr-1.5" />
+          Manual Entry
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="upload" className="space-y-4 mt-0">
+        <FileDropZone
+          file={uploadFile}
+          onFileSelect={setUploadFile}
+          onRemove={() => setUploadFile(null)}
+        />
+        {sharedFields("upload", uploadClientId, setUploadClientId, uploadTaxYear, setUploadTaxYear, uploadDocType, setUploadDocType, uploadPayerName, setUploadPayerName, uploadNotes, setUploadNotes)}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
           <Shield className="w-4 h-4 flex-shrink-0" />
-          <span>Sensitive tax data is stored securely. SSNs are masked — only the last 4 digits are displayed. All access is audit-logged.</span>
+          <span>Uploaded files are stored securely. SSNs are masked — only the last 4 digits are displayed. All access is audit-logged.</span>
         </div>
         <div className="flex justify-end pt-2">
-          <Button type="submit" disabled={mutation.isPending} data-testid="button-create-tax-doc">
-            {mutation.isPending ? "Adding..." : "Add Document"}
+          <Button
+            type="button"
+            disabled={uploadMutation.isPending || !uploadFile || !uploadClientId || !uploadDocType}
+            onClick={() => uploadMutation.mutate()}
+            data-testid="button-upload-tax-doc"
+          >
+            {uploadMutation.isPending ? "Uploading..." : "Upload Document"}
           </Button>
         </div>
-      </form>
-    </Form>
+      </TabsContent>
+
+      <TabsContent value="manual" className="mt-0">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => manualMutation.mutate(data))} className="space-y-4">
+            <FormField control={form.control} name="clientId" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Client</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-tax-client">
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {clients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="taxYear" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax Year</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(parseInt(v))} value={String(field.value)}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-tax-year">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TAX_YEARS.map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="documentType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Document Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-doc-type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {DOC_TYPES.map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="payerName" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payer / Employer Name</FormLabel>
+                <FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter payer or employer name" data-testid="input-payer-name" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="documentContent" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Document Details</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ""}
+                    placeholder="Enter or paste the document information here. Include all amounts, box numbers, names, addresses, and identification numbers from the tax form. The AI will analyze this content to extract structured data.&#10;&#10;Example: Box 1 Wages: $45,000 / Box 2 Federal Tax Withheld: $6,750 / Box 17 State Tax: $2,250..."
+                    className="min-h-[120px]"
+                    data-testid="input-doc-content"
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Enter all information from the tax document. Do not include full SSN — only last 4 digits if needed.</p>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Internal Notes</FormLabel>
+                <FormControl><Textarea {...field} value={field.value ?? ""} placeholder="Any notes about this document..." className="min-h-[60px]" data-testid="input-tax-notes" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+              <Shield className="w-4 h-4 flex-shrink-0" />
+              <span>Sensitive tax data is stored securely. SSNs are masked — only the last 4 digits are displayed. All access is audit-logged.</span>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={manualMutation.isPending} data-testid="button-create-tax-doc">
+                {manualMutation.isPending ? "Adding..." : "Add Document"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -509,6 +737,11 @@ export default function AdminTaxPrep() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold">{doc.documentType}</p>
                           {statusBadge(doc.status)}
+                          {doc.fileName && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <Paperclip className="w-3 h-3" />File
+                            </Badge>
+                          )}
                           {riskCount > 0 && (
                             <Badge variant="destructive" className="text-xs">
                               <AlertTriangle className="w-3 h-3 mr-1" />{riskCount} risk{riskCount > 1 ? "s" : ""}
@@ -587,6 +820,28 @@ export default function AdminTaxPrep() {
                   </div>
                   {expandedId === doc.id && (
                     <div className="mt-4 pt-4 border-t">
+                      {doc.fileName && (
+                        <div className="mb-4 flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary/10 flex-shrink-0">
+                            <Paperclip className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate" data-testid="text-attached-file">{doc.fileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.fileType}{doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(`/api/admin/tax-documents/${doc.id}/download`, "_blank")}
+                            data-testid={`button-download-file-${doc.id}`}
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download
+                          </Button>
+                        </div>
+                      )}
                       {doc.documentContent && (
                         <div className="mb-4">
                           <p className="text-xs font-medium mb-1">Document Content</p>
