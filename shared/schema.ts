@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export * from "./models/auth";
+export * from "./models/chat";
 
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -144,6 +145,27 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const serviceItems = pgTable("service_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("General"),
+  defaultPrice: decimal("default_price", { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const invoiceLineItems = pgTable("invoice_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => invoices.id),
+  serviceItemId: varchar("service_item_id").references(() => serviceItems.id),
+  description: text("description").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, uploadedAt: true });
@@ -155,6 +177,8 @@ export const insertFormTemplateSchema = createInsertSchema(formTemplates).omit({
 export const insertFilledFormSchema = createInsertSchema(filledForms).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNotarizationSchema = createInsertSchema(notarizations).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
+export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -178,3 +202,7 @@ export type Notarization = typeof notarizations.$inferSelect;
 export type InsertNotarization = z.infer<typeof insertNotarizationSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type ServiceItem = typeof serviceItems.$inferSelect;
+export type InsertServiceItem = z.infer<typeof insertServiceItemSchema>;
+export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
+export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;

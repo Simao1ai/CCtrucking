@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -5,12 +6,52 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Receipt, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { Receipt, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
-import type { Invoice } from "@shared/schema";
+import type { Invoice, InvoiceLineItem } from "@shared/schema";
+
+function InvoiceLineItems({ invoiceId }: { invoiceId: string }) {
+  const { data: lineItems, isLoading } = useQuery<InvoiceLineItem[]>({
+    queryKey: ["/api/portal/invoices", invoiceId, "line-items"],
+    queryFn: async () => {
+      const res = await fetch(`/api/portal/invoices/${invoiceId}/line-items`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  if (isLoading) return <Skeleton className="h-16 w-full" />;
+  if (!lineItems || lineItems.length === 0) return null;
+
+  return (
+    <div className="mt-3 border rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50">
+          <tr>
+            <th className="text-left p-2 font-medium">Service</th>
+            <th className="text-right p-2 font-medium">Qty</th>
+            <th className="text-right p-2 font-medium">Price</th>
+            <th className="text-right p-2 font-medium">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lineItems.map(li => (
+            <tr key={li.id} className="border-t" data-testid={`portal-line-item-${li.id}`}>
+              <td className="p-2">{li.description}</td>
+              <td className="p-2 text-right">{li.quantity}</td>
+              <td className="p-2 text-right">${parseFloat(li.unitPrice).toFixed(2)}</td>
+              <td className="p-2 text-right font-medium">${parseFloat(li.amount).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function PortalInvoices() {
   const { toast } = useToast();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({ queryKey: ["/api/portal/invoices"] });
 
   const approveMutation = useMutation({
@@ -90,7 +131,7 @@ export default function PortalInvoices() {
             <Card key={invoice.id} data-testid={`invoice-${invoice.id}`}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between gap-4">
-                  <div>
+                  <div className="cursor-pointer flex-1" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
                     <div className="font-medium">{invoice.invoiceNumber}</div>
                     <div className="text-sm text-muted-foreground">{invoice.description}</div>
                     {invoice.dueDate && (
@@ -120,8 +161,14 @@ export default function PortalInvoices() {
                         Approve Payment
                       </Button>
                     )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)} data-testid={`button-expand-portal-invoice-${invoice.id}`}>
+                      {expandedId === invoice.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
                   </div>
                 </div>
+                {expandedId === invoice.id && (
+                  <InvoiceLineItems invoiceId={invoice.id} />
+                )}
               </CardContent>
             </Card>
           ))}

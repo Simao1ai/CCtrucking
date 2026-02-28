@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine, ClipboardList, Stamp, History } from "lucide-react";
+import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine, ClipboardList, Stamp, History, Bot, BarChart3, DollarSign } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -22,9 +22,12 @@ const navItems = [
   { title: "Forms", url: "/admin/forms", icon: ClipboardList },
   { title: "Documents", url: "/admin/documents", icon: FileText },
   { title: "Invoices", url: "/admin/invoices", icon: Receipt },
+  { title: "Service Catalog", url: "/admin/service-items", icon: DollarSign },
   { title: "Signatures", url: "/admin/signatures", icon: PenLine },
   { title: "Notarizations", url: "/admin/notarizations", icon: Stamp },
   { title: "Messages", url: "/admin/chat", icon: MessageCircle },
+  { title: "AI Assistant", url: "/admin/ai-chat", icon: Bot },
+  { title: "Analytics", url: "/admin/analytics", icon: BarChart3, ownerOnly: true },
   { title: "Audit Log", url: "/admin/audit", icon: History },
   { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
   { title: "Users", url: "/admin/users", icon: UserCog },
@@ -54,7 +57,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {navItems.filter(item => !("ownerOnly" in item && item.ownerOnly) || user?.role === "owner").map((item) => {
                 const isActive = item.url === "/admin"
                   ? location === "/admin"
                   : location.startsWith(item.url);
@@ -113,7 +116,7 @@ export function AppSidebar() {
             </Avatar>
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-medium truncate">{user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username}</span>
-              <span className="text-xs text-muted-foreground truncate">Admin</span>
+              <span className="text-xs text-muted-foreground truncate">{user.role === "owner" ? "Owner" : "Admin"}</span>
             </div>
           </div>
         )}

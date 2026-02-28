@@ -5,14 +5,16 @@ import {
   insertClientSchema, insertServiceTicketSchema, insertDocumentSchema,
   insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema,
   insertFormTemplateSchema, insertFilledFormSchema, insertNotarizationSchema,
-  clients, notifications
+  insertServiceItemSchema, insertInvoiceLineItemSchema,
+  clients, notifications, invoices, invoiceLineItems, serviceItems
 } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql, desc, gte, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import OpenAI from "openai";
 
 function param(req: Request, name: string): string {
   return req.params[name] as string;
@@ -23,8 +25,21 @@ function isAdmin(req: Request, res: Response, next: NextFunction) {
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
-    if (!dbUser || dbUser.role !== "admin") {
+    if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "owner")) {
       return res.status(403).json({ message: "Admin access required" });
+    }
+    (req as any).dbUser = dbUser;
+    next();
+  }).catch(() => res.status(500).json({ message: "Server error" }));
+}
+
+function isOwner(req: Request, res: Response, next: NextFunction) {
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
+    if (!dbUser || dbUser.role !== "owner") {
+      return res.status(403).json({ message: "Owner access required" });
     }
     (req as any).dbUser = dbUser;
     next();
@@ -72,7 +87,7 @@ async function notifyUser(userId: string, title: string, message: string, type: 
 async function notifyAllAdmins(title: string, message: string, type: string, link?: string) {
   try {
     const allUsers = await db.select().from(users);
-    const admins = allUsers.filter(u => u.role === "admin");
+    const admins = allUsers.filter(u => u.role === "admin" || u.role === "owner");
     for (const admin of admins) {
       await notifyUser(admin.id, title, message, type, link);
     }
@@ -119,8 +134,8 @@ export async function registerRoutes(
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password are required" });
       }
-      if (!["admin", "client"].includes(role)) {
-        return res.status(400).json({ message: "Role must be admin or client" });
+      if (!["admin", "client", "owner"].includes(role)) {
+        return res.status(400).json({ message: "Role must be admin, owner, or client" });
       }
 
       const existing = await authStorage.getUserByUsername(username);
@@ -670,6 +685,261 @@ export async function registerRoutes(
       const logs = await storage.getAuditLogs(limit, offset);
       res.json(logs);
     }
+  });
+
+  // ===== SERVICE ITEMS ROUTES =====
+  app.get("/api/admin/service-items", isAuthenticated, isAdmin, async (_req, res) => {
+    const items = await storage.getServiceItems();
+    res.json(items);
+  });
+
+  app.get("/api/admin/service-items/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const item = await storage.getServiceItem(param(req, "id"));
+    if (!item) return res.status(404).json({ message: "Service item not found" });
+    res.json(item);
+  });
+
+  app.post("/api/admin/service-items", isAuthenticated, isAdmin, async (req, res) => {
+    const parsed = insertServiceItemSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const item = await storage.createServiceItem(parsed.data);
+    await audit(req, "created", "service_item", item.id, `Created service item "${item.name}" — $${item.defaultPrice}`);
+    res.status(201).json(item);
+  });
+
+  app.patch("/api/admin/service-items/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const item = await storage.updateServiceItem(param(req, "id"), req.body);
+    if (!item) return res.status(404).json({ message: "Service item not found" });
+    await audit(req, "updated", "service_item", item.id, `Updated service item "${item.name}"`);
+    res.json(item);
+  });
+
+  app.delete("/api/admin/service-items/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const id = param(req, "id");
+    await storage.deleteServiceItem(id);
+    await audit(req, "deleted", "service_item", id, "Deleted service item");
+    res.status(204).send();
+  });
+
+  // ===== INVOICE LINE ITEMS ROUTES =====
+  app.get("/api/invoices/:id/line-items", isAuthenticated, isAdmin, async (req, res) => {
+    const items = await storage.getInvoiceLineItems(param(req, "id"));
+    res.json(items);
+  });
+
+  app.post("/api/invoices/:id/line-items", isAuthenticated, isAdmin, async (req, res) => {
+    const invoiceId = param(req, "id");
+    const parsed = insertInvoiceLineItemSchema.safeParse({ ...req.body, invoiceId });
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const item = await storage.createInvoiceLineItem(parsed.data);
+    const allItems = await storage.getInvoiceLineItems(invoiceId);
+    const total = allItems.reduce((sum, li) => sum + parseFloat(li.amount), 0);
+    await storage.updateInvoice(invoiceId, { amount: total.toFixed(2) });
+    res.status(201).json(item);
+  });
+
+  app.patch("/api/invoice-line-items/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const item = await storage.updateInvoiceLineItem(param(req, "id"), req.body);
+    if (!item) return res.status(404).json({ message: "Line item not found" });
+    const allItems = await storage.getInvoiceLineItems(item.invoiceId);
+    const total = allItems.reduce((sum, li) => sum + parseFloat(li.amount), 0);
+    await storage.updateInvoice(item.invoiceId, { amount: total.toFixed(2) });
+    res.json(item);
+  });
+
+  app.delete("/api/invoice-line-items/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const id = param(req, "id");
+    const allLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.id, id));
+    const lineItem = allLineItems[0];
+    await storage.deleteInvoiceLineItem(id);
+    if (lineItem) {
+      const remainingItems = await storage.getInvoiceLineItems(lineItem.invoiceId);
+      const total = remainingItems.reduce((sum, li) => sum + parseFloat(li.amount), 0);
+      await storage.updateInvoice(lineItem.invoiceId, { amount: total.toFixed(2) });
+    }
+    res.status(204).send();
+  });
+
+  // ===== ANALYTICS ROUTES (owner only) =====
+  app.get("/api/admin/analytics", isAuthenticated, isOwner, async (_req, res) => {
+    try {
+      const [allClients, allTickets, allInvoices, allLineItems] = await Promise.all([
+        storage.getClients(),
+        storage.getTickets(),
+        storage.getInvoices(),
+        db.select().from(invoiceLineItems),
+      ]);
+
+      const now = new Date();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastYear = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+
+      const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((sum, i) => sum + parseFloat(i.amount), 0);
+      const monthlyRevenue = allInvoices.filter(i => i.status === "paid" && i.paidDate && new Date(i.paidDate) >= thisMonth).reduce((sum, i) => sum + parseFloat(i.amount), 0);
+      const outstanding = allInvoices.filter(i => ["sent", "overdue", "approved"].includes(i.status)).reduce((sum, i) => sum + parseFloat(i.amount), 0);
+      const paidInvoices = allInvoices.filter(i => i.status === "paid");
+      const avgInvoice = paidInvoices.length > 0 ? totalRevenue / paidInvoices.length : 0;
+
+      const activeClients = allClients.filter(c => c.status === "active").length;
+      const newClientsThisMonth = allClients.length;
+
+      const openTickets = allTickets.filter(t => t.status === "open" || t.status === "in_progress").length;
+      const completedTickets = allTickets.filter(t => t.status === "completed").length;
+      const ticketCompletionRate = allTickets.length > 0 ? (completedTickets / allTickets.length) * 100 : 0;
+
+      const monthlyData: { month: string; revenue: number; invoiceCount: number; paidCount: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const monthLabel = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+        const monthInvoices = allInvoices.filter(inv => {
+          const created = new Date(inv.createdAt);
+          return created >= d && created <= monthEnd;
+        });
+        const monthPaid = monthInvoices.filter(i => i.status === "paid");
+        monthlyData.push({
+          month: monthLabel,
+          revenue: monthPaid.reduce((sum, i) => sum + parseFloat(i.amount), 0),
+          invoiceCount: monthInvoices.length,
+          paidCount: monthPaid.length,
+        });
+      }
+
+      const serviceBreakdown: Record<string, { count: number; revenue: number }> = {};
+      for (const li of allLineItems) {
+        const key = li.description || "Other";
+        if (!serviceBreakdown[key]) serviceBreakdown[key] = { count: 0, revenue: 0 };
+        serviceBreakdown[key].count += li.quantity;
+        serviceBreakdown[key].revenue += parseFloat(li.amount);
+      }
+
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+      const sixtyDaysAgo = new Date(now.getTime() - 60 * 86400000);
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 86400000);
+
+      const unpaid = allInvoices.filter(i => ["sent", "overdue"].includes(i.status));
+      const aging = {
+        current: unpaid.filter(i => !i.dueDate || new Date(i.dueDate) >= now).reduce((s, i) => s + parseFloat(i.amount), 0),
+        thirtyDays: unpaid.filter(i => i.dueDate && new Date(i.dueDate) < now && new Date(i.dueDate) >= thirtyDaysAgo).reduce((s, i) => s + parseFloat(i.amount), 0),
+        sixtyDays: unpaid.filter(i => i.dueDate && new Date(i.dueDate) < thirtyDaysAgo && new Date(i.dueDate) >= sixtyDaysAgo).reduce((s, i) => s + parseFloat(i.amount), 0),
+        ninetyPlus: unpaid.filter(i => i.dueDate && new Date(i.dueDate) < sixtyDaysAgo).reduce((s, i) => s + parseFloat(i.amount), 0),
+      };
+
+      const clientRevenue = allClients.map(c => {
+        const clientInvoices = allInvoices.filter(i => i.clientId === c.id && i.status === "paid");
+        return { name: c.companyName, revenue: clientInvoices.reduce((s, i) => s + parseFloat(i.amount), 0) };
+      }).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+
+      res.json({
+        revenue: { total: totalRevenue, monthly: monthlyRevenue, outstanding, avgInvoice },
+        clients: { total: allClients.length, active: activeClients, newThisMonth: newClientsThisMonth },
+        tickets: { total: allTickets.length, open: openTickets, completed: completedTickets, completionRate: ticketCompletionRate },
+        monthlyData,
+        serviceBreakdown: Object.entries(serviceBreakdown).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.revenue - a.revenue),
+        aging,
+        clientRevenue,
+        invoiceSummary: {
+          total: allInvoices.length,
+          paid: allInvoices.filter(i => i.status === "paid").length,
+          pending: allInvoices.filter(i => ["sent", "draft", "approved"].includes(i.status)).length,
+          overdue: allInvoices.filter(i => i.status === "overdue").length,
+        },
+      });
+    } catch (error) {
+      console.error("Analytics error:", error);
+      res.status(500).json({ message: "Failed to load analytics" });
+    }
+  });
+
+  // ===== AI CHAT ROUTES (admin) =====
+  app.post("/api/admin/ai-chat", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { message, history = [] } = req.body;
+      if (!message) return res.status(400).json({ message: "Message is required" });
+
+      const [allClients, allTickets, allInvoices, allDocs, allServiceItemsList] = await Promise.all([
+        storage.getClients(),
+        storage.getTickets(),
+        storage.getInvoices(),
+        storage.getDocuments(),
+        storage.getServiceItems(),
+      ]);
+
+      const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
+      const outstanding = allInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
+
+      const systemPrompt = `You are an AI assistant for CC Trucking Services, a trucking-focused CRM and operations management platform. You have access to the following live data:
+
+CLIENTS (${allClients.length} total):
+${allClients.map(c => `- ${c.companyName} (${c.status}) — DOT: ${c.dotNumber || 'N/A'}, MC: ${c.mcNumber || 'N/A'}, Contact: ${c.contactName}, Email: ${c.email}, Phone: ${c.phone}`).join('\n')}
+
+SERVICE TICKETS (${allTickets.length} total, ${allTickets.filter(t => t.status === 'open' || t.status === 'in_progress').length} open):
+${allTickets.slice(0, 50).map(t => `- [${t.status}] ${t.title} (${t.serviceType}) — Client: ${allClients.find(c => c.id === t.clientId)?.companyName || t.clientId}${t.dueDate ? `, Due: ${new Date(t.dueDate).toLocaleDateString()}` : ''}`).join('\n')}
+
+INVOICES (${allInvoices.length} total):
+- Total Revenue (Paid): $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Outstanding: $${outstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- By Status: ${allInvoices.filter(i => i.status === 'paid').length} paid, ${allInvoices.filter(i => i.status === 'sent').length} sent, ${allInvoices.filter(i => i.status === 'draft').length} draft, ${allInvoices.filter(i => i.status === 'overdue').length} overdue
+${allInvoices.slice(0, 30).map(i => `- ${i.invoiceNumber} — $${i.amount} (${i.status}) — Client: ${allClients.find(c => c.id === i.clientId)?.companyName || i.clientId}`).join('\n')}
+
+DOCUMENTS (${allDocs.length} total):
+${allDocs.slice(0, 30).map(d => `- ${d.name} (${d.type}, ${d.status}) — Client: ${allClients.find(c => c.id === d.clientId)?.companyName || d.clientId}`).join('\n')}
+
+SERVICE CATALOG (${allServiceItemsList.length} items):
+${allServiceItemsList.map(s => `- ${s.name} — $${s.defaultPrice} (${s.category})`).join('\n')}
+
+You can answer questions about clients, invoices, tickets, documents, revenue, and services. Be concise, accurate, and helpful. Format numbers as currency when relevant. If asked to perform an action (create ticket, send invoice, etc.), describe what should be done and suggest the user confirm in the admin portal.`;
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const messages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...history.map((h: any) => ({ role: h.role, content: h.content })),
+        { role: "user", content: message },
+      ];
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const stream = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages,
+        stream: true,
+        max_completion_tokens: 8192,
+      });
+
+      let fullResponse = "";
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          fullResponse += content;
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (error) {
+      console.error("AI chat error:", error);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: "Failed to process request" })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ message: "AI chat failed" });
+      }
+    }
+  });
+
+  // ===== PORTAL LINE ITEMS ROUTES =====
+  app.get("/api/portal/invoices/:id/line-items", isAuthenticated, isClient, async (req: any, res) => {
+    const invoice = await storage.getInvoice(param(req, "id"));
+    if (!invoice || invoice.clientId !== req.clientId) return res.status(404).json({ message: "Invoice not found" });
+    const items = await storage.getInvoiceLineItems(param(req, "id"));
+    res.json(items);
   });
 
   // ===== GOOGLE SHEETS ROUTES (admin only) =====

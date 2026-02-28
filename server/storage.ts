@@ -2,7 +2,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
-  formTemplates, filledForms, notarizations, auditLogs,
+  formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -14,6 +14,8 @@ import {
   type FilledForm, type InsertFilledForm,
   type Notarization, type InsertNotarization,
   type AuditLog, type InsertAuditLog,
+  type ServiceItem, type InsertServiceItem,
+  type InvoiceLineItem, type InsertInvoiceLineItem,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -77,6 +79,17 @@ export interface IStorage {
   getAuditLogs(limit?: number, offset?: number): Promise<AuditLog[]>;
   getAuditLogsByEntity(entityType: string, entityId?: string): Promise<AuditLog[]>;
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
+
+  getServiceItems(): Promise<ServiceItem[]>;
+  getServiceItem(id: string): Promise<ServiceItem | undefined>;
+  createServiceItem(data: InsertServiceItem): Promise<ServiceItem>;
+  updateServiceItem(id: string, data: Partial<InsertServiceItem>): Promise<ServiceItem | undefined>;
+  deleteServiceItem(id: string): Promise<void>;
+
+  getInvoiceLineItems(invoiceId: string): Promise<InvoiceLineItem[]>;
+  createInvoiceLineItem(data: InsertInvoiceLineItem): Promise<InvoiceLineItem>;
+  updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined>;
+  deleteInvoiceLineItem(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -312,6 +325,47 @@ export class DatabaseStorage implements IStorage {
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
     const [log] = await db.insert(auditLogs).values(data).returning();
     return log;
+  }
+
+  async getServiceItems(): Promise<ServiceItem[]> {
+    return db.select().from(serviceItems).orderBy(serviceItems.name);
+  }
+
+  async getServiceItem(id: string): Promise<ServiceItem | undefined> {
+    const [item] = await db.select().from(serviceItems).where(eq(serviceItems.id, id));
+    return item;
+  }
+
+  async createServiceItem(data: InsertServiceItem): Promise<ServiceItem> {
+    const [item] = await db.insert(serviceItems).values(data).returning();
+    return item;
+  }
+
+  async updateServiceItem(id: string, data: Partial<InsertServiceItem>): Promise<ServiceItem | undefined> {
+    const [item] = await db.update(serviceItems).set(data).where(eq(serviceItems.id, id)).returning();
+    return item;
+  }
+
+  async deleteServiceItem(id: string): Promise<void> {
+    await db.delete(serviceItems).where(eq(serviceItems.id, id));
+  }
+
+  async getInvoiceLineItems(invoiceId: string): Promise<InvoiceLineItem[]> {
+    return db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId)).orderBy(invoiceLineItems.createdAt);
+  }
+
+  async createInvoiceLineItem(data: InsertInvoiceLineItem): Promise<InvoiceLineItem> {
+    const [item] = await db.insert(invoiceLineItems).values(data).returning();
+    return item;
+  }
+
+  async updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined> {
+    const [item] = await db.update(invoiceLineItems).set(data).where(eq(invoiceLineItems.id, id)).returning();
+    return item;
+  }
+
+  async deleteInvoiceLineItem(id: string): Promise<void> {
+    await db.delete(invoiceLineItems).where(eq(invoiceLineItems.id, id));
   }
 }
 

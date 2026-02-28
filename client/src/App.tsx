@@ -33,6 +33,9 @@ import AdminClientDetail from "@/pages/admin-client-detail";
 import AdminForms from "@/pages/admin-forms";
 import AdminNotarizations from "@/pages/admin-notarizations";
 import AdminAudit from "@/pages/admin-audit";
+import AdminServiceItems from "@/pages/admin-service-items";
+import AdminAnalytics from "@/pages/admin-analytics";
+import AdminAiChat from "@/pages/admin-ai-chat";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 
 const sidebarStyle = {
@@ -52,7 +55,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  if (user.role !== "admin") {
+  if (user.role !== "admin" && user.role !== "owner") {
     window.location.href = "/portal";
     return null;
   }
@@ -194,6 +197,15 @@ function App() {
           </Route>
           <Route path="/admin/audit">
             <AdminLayout><AdminAudit /></AdminLayout>
+          </Route>
+          <Route path="/admin/service-items">
+            <AdminLayout><AdminServiceItems /></AdminLayout>
+          </Route>
+          <Route path="/admin/analytics">
+            <AdminLayout><AdminAnalytics /></AdminLayout>
+          </Route>
+          <Route path="/admin/ai-chat">
+            <AdminLayout><AdminAiChat /></AdminLayout>
           </Route>
 
           <Route path="/portal">
