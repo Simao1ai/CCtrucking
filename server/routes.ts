@@ -296,6 +296,20 @@ export async function registerRoutes(
     res.json(doc);
   });
 
+  app.get("/api/invoices/next-number", isAuthenticated, isAdmin, async (_req, res) => {
+    const allInvoices = await storage.getInvoices();
+    let maxNum = 0;
+    for (const inv of allInvoices) {
+      const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    const nextNumber = `INV-${String(maxNum + 1).padStart(4, "0")}`;
+    res.json({ nextNumber, currentCount: allInvoices.length });
+  });
+
   app.get("/api/invoices", isAuthenticated, isAdmin, async (_req, res) => {
     const invoiceList = await storage.getInvoices();
     res.json(invoiceList);
@@ -308,7 +322,20 @@ export async function registerRoutes(
   });
 
   app.post("/api/invoices", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertInvoiceSchema.safeParse(req.body);
+    let body = { ...req.body };
+    if (!body.invoiceNumber || body.invoiceNumber.trim() === "") {
+      const allInvoices = await storage.getInvoices();
+      let maxNum = 0;
+      for (const inv of allInvoices) {
+        const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      body.invoiceNumber = `INV-${String(maxNum + 1).padStart(4, "0")}`;
+    }
+    const parsed = insertInvoiceSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
     await audit(req, "created", "invoice", invoice.id, `Created invoice #${invoice.invoiceNumber} — $${invoice.amount}`);

@@ -154,6 +154,9 @@ function InvoiceForm({ onSuccess, clients }: { onSuccess: () => void; clients: C
   const { toast } = useToast();
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const { data: serviceItems } = useQuery<ServiceItem[]>({ queryKey: ["/api/admin/service-items"] });
+  const { data: nextNumData } = useQuery<{ nextNumber: string; currentCount: number }>({
+    queryKey: ["/api/invoices/next-number"],
+  });
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -168,6 +171,11 @@ function InvoiceForm({ onSuccess, clients }: { onSuccess: () => void; clients: C
       description: "",
     },
   });
+
+  const currentInvNum = form.watch("invoiceNumber");
+  if (nextNumData && !currentInvNum) {
+    form.setValue("invoiceNumber", nextNumData.nextNumber);
+  }
 
   const total = lineItems.reduce((sum, li) => sum + (parseFloat(li.amount) || 0), 0);
 
@@ -203,8 +211,10 @@ function InvoiceForm({ onSuccess, clients }: { onSuccess: () => void; clients: C
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices/next-number"] });
       toast({ title: "Invoice created", description: "Invoice has been created." });
       setLineItems([]);
+      form.reset();
       onSuccess();
     },
     onError: (error: Error) => {
@@ -237,7 +247,8 @@ function InvoiceForm({ onSuccess, clients }: { onSuccess: () => void; clients: C
           <FormField control={form.control} name="invoiceNumber" render={({ field }) => (
             <FormItem>
               <FormLabel>Invoice Number</FormLabel>
-              <FormControl><Input {...field} placeholder="INV-001" data-testid="input-invoice-number" /></FormControl>
+              <FormControl><Input {...field} placeholder="Auto-generated" data-testid="input-invoice-number" /></FormControl>
+              <p className="text-xs text-muted-foreground">Auto-generated. Edit to override.</p>
               <FormMessage />
             </FormItem>
           )} />
