@@ -18,6 +18,7 @@ import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import webpush from "web-push";
 
 const uploadDir = path.join(process.cwd(), "uploads", "tax-documents");
 if (!fs.existsSync(uploadDir)) {
@@ -112,9 +113,45 @@ async function audit(req: Request, action: string, entityType: string, entityId?
   }
 }
 
+let vapidConfigured = false;
+try {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      "mailto:admin@cctrucking.com",
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+    vapidConfigured = true;
+  }
+} catch (e) {
+  console.warn("VAPID keys invalid or mismatched — push notifications disabled:", (e as Error).message);
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+  if (!vapidConfigured) return;
+  try {
+    const subs = await storage.getPushSubscriptionsByUser(userId);
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify(payload)
+        );
+      } catch (err: any) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await storage.deletePushSubscription(sub.endpoint);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Failed to send push notification:", e);
+  }
+}
+
 async function notifyUser(userId: string, title: string, message: string, type: string, link?: string) {
   try {
     await storage.createNotification({ userId, title, message, type, link: link || null, read: "false" });
+    sendPushToUser(userId, { title, body: message, url: link || "/", tag: type });
   } catch (e) {
     console.error("Failed to create notification:", e);
   }

@@ -45,5 +45,5 @@ integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_int
 [userenv]
 
 [userenv.shared]
-VAPID_PUBLIC_KEY = "BE6DuIJfbhDgDMa5HOoJsizPb8yB9WHMz2NPEtuCgrilTwOWjDqVQUmRaZ9UYTW0ki247cErb_zSDTLO-Gq2Phc"
-VITE_VAPID_PUBLIC_KEY = "BE6DuIJfbhDgDMa5HOoJsizPb8yB9WHMz2NPEtuCgrilTwOWjDqVQUmRaZ9UYTW0ki247cErb_zSDTLO-Gq2Phc"
+VAPID_PUBLIC_KEY = "BHOjC0D1RcqtiP0kMXYbgs0pn5Uk69sBDDF7m3Z9PUHtUdwsX6SWWnkYTdILmO2fc8AZRw3tiiZJQitOPYUuwAY"
+VITE_VAPID_PUBLIC_KEY = "BHOjC0D1RcqtiP0kMXYbgs0pn5Uk69sBDDF7m3Z9PUHtUdwsX6SWWnkYTdILmO2fc8AZRw3tiiZJQitOPYUuwAY"
