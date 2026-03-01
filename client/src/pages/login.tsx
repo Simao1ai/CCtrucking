@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Truck, Loader2, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Truck, Loader2, AlertCircle, ShieldCheck, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const [loginType, setLoginType] = useState<"admin" | "client">("admin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -65,10 +67,18 @@ export default function Login() {
         <Card className="w-full max-w-sm" data-testid="card-login">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-2">
-              <Truck className="w-6 h-6 text-primary" />
+              {loginType === "admin" ? (
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              ) : (
+                <Truck className="w-6 h-6 text-primary" />
+              )}
             </div>
             <CardTitle className="text-xl">Sign In</CardTitle>
-            <CardDescription>Enter your credentials to access your account</CardDescription>
+            <CardDescription>
+              {loginType === "admin"
+                ? "Sign in to manage operations and clients"
+                : "Sign in to access your client portal"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -78,6 +88,34 @@ export default function Login() {
                   {error}
                 </div>
               )}
+              <div className="space-y-2">
+                <Label htmlFor="login-type">Login As</Label>
+                <Select
+                  value={loginType}
+                  onValueChange={(val: "admin" | "client") => {
+                    setLoginType(val);
+                    setError("");
+                  }}
+                >
+                  <SelectTrigger id="login-type" data-testid="select-login-type">
+                    <SelectValue placeholder="Select login type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin" data-testid="option-admin">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Admin / Staff</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="client" data-testid="option-client">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        <span>Client Portal</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
@@ -111,7 +149,7 @@ export default function Login() {
                     Signing in...
                   </>
                 ) : (
-                  "Sign In"
+                  loginType === "admin" ? "Sign In as Admin" : "Sign In to Portal"
                 )}
               </Button>
             </form>
