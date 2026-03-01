@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { z } from "zod";
 import { storage } from "./storage";
 import {
   insertClientSchema, insertServiceTicketSchema, insertDocumentSchema,
@@ -666,6 +667,37 @@ export async function registerRoutes(
     const userId = (req.session as any).userId;
     await storage.markAllNotificationsRead(userId);
     res.json({ success: true });
+  });
+
+  const pushSubscribeSchema = z.object({
+    endpoint: z.string().url(),
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  });
+
+  app.post("/api/push/subscribe", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const parsed = pushSubscribeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid subscription data" });
+      }
+      await storage.createPushSubscription({ userId, ...parsed.data });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to save subscription" });
+    }
+  });
+
+  app.delete("/api/push/unsubscribe", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = z.object({ endpoint: z.string().url() }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid endpoint" });
+      await storage.deletePushSubscription(parsed.data.endpoint);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to remove subscription" });
+    }
   });
 
   app.get("/api/admin/form-templates", isAuthenticated, isAdmin, async (_req, res) => {

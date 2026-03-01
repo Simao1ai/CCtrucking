@@ -24,7 +24,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Form Management**: Reusable form templates with auto-fill placeholders for client data; tracking of filled forms with various statuses.
 - **Notarization Tracking**: System for recording in-house notarization details.
 - **Audit Logging**: Comprehensive system-wide logging for all major data operations (creates, updates, deletes) with user and entity details.
-- **Notification System**: In-app notifications for users in both portals for events like new invoices, messages, and signature requests.
+- **Notification System**: In-app notifications for users in both portals for events like new invoices, messages, and signature requests. Push notifications via Web Push API with VAPID keys.
+- **PWA Support**: Progressive Web App with manifest.json, service worker for push notifications, and installable on mobile/desktop. Service worker handles push events and notification clicks with deep linking.
 
 ### Feature Specifications
 - **Client Management**: Comprehensive client profiles including DOT/MC/EIN numbers.
