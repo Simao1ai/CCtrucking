@@ -13,7 +13,7 @@ export default function AuthRedirect() {
       return;
     }
 
-    if (user.role === "admin") {
+    if (user.role === "admin" || user.role === "owner") {
       window.location.href = "/admin";
     } else {
       window.location.href = "/portal";

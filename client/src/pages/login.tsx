@@ -38,7 +38,7 @@ export default function Login() {
       const user = await res.json();
       queryClient.setQueryData(["/api/auth/user"], user);
 
-      if (user.role === "admin") {
+      if (user.role === "admin" || user.role === "owner") {
         setLocation("/admin");
       } else {
         setLocation("/portal");
