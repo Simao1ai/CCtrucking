@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, AlertCircle } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, AlertCircle, CheckCircle, CreditCard } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { BookkeepingSubscription, BankTransaction, MonthlySummary } from "@shared/schema";
 
@@ -47,6 +48,20 @@ export default function PortalBookkeeping() {
   });
 
   const isActive = subscription?.status === "active";
+
+  const subscribeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/portal/bookkeeping/subscribe");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portal/bookkeeping/subscription"] });
+      toast({ title: "Bookkeeping Activated!", description: "Your bookkeeping service is now active. You can start uploading bank statements." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Activation failed", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: transactions = [], isLoading: loadingTx } = useQuery<BankTransaction[]>({
     queryKey: ["/api/portal/bookkeeping/transactions", filterMonth, filterYear],
@@ -120,12 +135,60 @@ export default function PortalBookkeeping() {
 
       {loadingSub ? (
         <Skeleton className="h-24 w-full" data-testid="skeleton-subscription" />
-      ) : !subscription ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-lg font-medium" data-testid="text-no-subscription">No bookkeeping subscription</p>
-            <p className="text-sm text-muted-foreground mt-1">Contact us to get started with bookkeeping services.</p>
+      ) : !subscription || subscription.status === "inactive" || subscription.status === "cancelled" ? (
+        <Card className="border-2 border-primary/20" data-testid="card-subscribe-bookkeeping">
+          <CardContent className="py-10">
+            <div className="max-w-lg mx-auto text-center space-y-6">
+              <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold" data-testid="text-subscribe-heading">Professional Bookkeeping Service</h2>
+                <p className="text-muted-foreground mt-2">
+                  Let us handle your bookkeeping so you can focus on driving. Upload bank statements, get AI-powered expense categorization, and view monthly financial summaries.
+                </p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-6 space-y-3">
+                <div className="text-3xl font-bold text-primary" data-testid="text-subscribe-price">
+                  $50<span className="text-base font-normal text-muted-foreground">/month</span>
+                </div>
+                <ul className="text-sm text-left space-y-2 max-w-xs mx-auto">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    Bank statement CSV upload & processing
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    AI-powered transaction categorization
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    Monthly income & expense summaries
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    Professional financial reporting
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    Dedicated tax preparer assignment
+                  </li>
+                </ul>
+              </div>
+              <Button
+                size="lg"
+                className="w-full max-w-xs"
+                onClick={() => subscribeMutation.mutate()}
+                disabled={subscribeMutation.isPending}
+                data-testid="button-activate-bookkeeping"
+              >
+                <CreditCard className="w-5 h-5 mr-2" />
+                {subscribeMutation.isPending ? "Activating..." : subscription ? "Reactivate Bookkeeping" : "Activate Bookkeeping — $50/mo"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Service begins immediately upon activation. Cancel anytime by contacting your admin.
+              </p>
+            </div>
           </CardContent>
         </Card>
       ) : (

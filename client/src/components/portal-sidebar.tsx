@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
-import type { BookkeepingSubscription } from "@shared/schema";
 
 const navItems = [
   { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
@@ -29,12 +27,6 @@ const navItems = [
 export function PortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-
-  const { data: bookkeepingSub } = useQuery<BookkeepingSubscription | null>({
-    queryKey: ["/api/portal/bookkeeping/subscription"],
-  });
-
-  const showBookkeeping = bookkeepingSub?.status === "active";
 
   return (
     <Sidebar>
@@ -71,16 +63,14 @@ export function PortalSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-              {showBookkeeping && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild data-active={location.startsWith("/portal/bookkeeping")}>
-                    <Link href="/portal/bookkeeping" data-testid="portal-nav-bookkeeping">
-                      <BookOpen className="w-4 h-4" />
-                      <span>Bookkeeping</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild data-active={location.startsWith("/portal/bookkeeping")}>
+                  <Link href="/portal/bookkeeping" data-testid="portal-nav-bookkeeping">
+                    <BookOpen className="w-4 h-4" />
+                    <span>Bookkeeping</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

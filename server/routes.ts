@@ -1909,6 +1909,36 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     res.json(sub || null);
   });
 
+  app.post("/api/portal/bookkeeping/subscribe", isAuthenticated, isClient, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const existing = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (existing && existing.status === "active") {
+        return res.status(400).json({ message: "You already have an active bookkeeping subscription" });
+      }
+      if (existing) {
+        const reactivated = await storage.updateBookkeepingSubscription(existing.id, {
+          status: "active",
+          startDate: new Date(),
+          endDate: null,
+        });
+        await audit(req, "reactivated", "bookkeeping_subscription", existing.id, `Client self-activated bookkeeping subscription`);
+        return res.json(reactivated);
+      }
+      const sub = await storage.createBookkeepingSubscription({
+        clientId,
+        plan: "standard",
+        price: "50.00",
+        status: "active",
+        startDate: new Date(),
+      });
+      await audit(req, "created", "bookkeeping_subscription", sub.id, `Client self-activated bookkeeping — $50.00/mo`);
+      res.json(sub);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/portal/bookkeeping/transactions", isAuthenticated, isClient, async (req, res) => {
     const clientId = (req as any).clientId;
     const { month, year } = req.query;

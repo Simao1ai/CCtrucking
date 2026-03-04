@@ -55,7 +55,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 
 ### API Route Structure (Bookkeeping)
 - Admin: `/api/admin/bookkeeping/*` — full CRUD for subscriptions, transactions, categories, summaries, preparer assignments
-- Client Portal: `/api/portal/bookkeeping/*` — read own subscription/transactions/summaries, upload statements
+- Client Portal: `/api/portal/bookkeeping/*` — read own subscription/transactions/summaries, upload statements, self-activate subscription (`POST /api/portal/bookkeeping/subscribe`)
 - Preparer: `/api/preparer/*` — read assigned clients, transactions, summaries; edit transaction categories
 
 ## External Dependencies
