@@ -224,8 +224,8 @@ export async function registerRoutes(
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password are required" });
       }
-      if (!["admin", "client", "owner"].includes(role)) {
-        return res.status(400).json({ message: "Role must be admin, owner, or client" });
+      if (!["admin", "client", "owner", "preparer"].includes(role)) {
+        return res.status(400).json({ message: "Role must be admin, owner, client, or preparer" });
       }
 
       const existing = await authStorage.getUserByUsername(username);
@@ -425,6 +425,10 @@ export async function registerRoutes(
       }
       body.invoiceNumber = `INV-${String(maxNum + 1).padStart(4, "0")}`;
     }
+    if (!body.ticketId || body.ticketId === "") body.ticketId = null;
+    if (!body.description) body.description = null;
+    if (body.dueDate === "") body.dueDate = null;
+    if (body.paidDate === "") body.paidDate = null;
     const parsed = insertInvoiceSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
@@ -1629,7 +1633,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
   app.patch("/api/admin/bookkeeping/subscriptions/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
       const allowed = z.object({
-        status: z.enum(["active", "cancelled", "past_due", "pending"]).optional(),
+        status: z.enum(["active", "inactive", "cancelled", "past_due", "pending"]).optional(),
         price: z.string().optional(),
         preparerId: z.string().nullable().optional(),
         endDate: z.string().nullable().optional(),
