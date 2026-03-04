@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home, PenLine, BookOpen } from "lucide-react";
+import { Truck, LayoutDashboard, LogOut, Home } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,39 +14,26 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
-import type { BookkeepingSubscription } from "@shared/schema";
 
 const navItems = [
-  { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
-  { title: "Services", url: "/portal/services", icon: Plus },
-  { title: "Documents", url: "/portal/documents", icon: FileText },
-  { title: "Invoices", url: "/portal/invoices", icon: Receipt },
-  { title: "Sign Documents", url: "/portal/signatures", icon: PenLine },
-  { title: "Messages", url: "/portal/chat", icon: MessageCircle },
+  { title: "Dashboard", url: "/preparer", icon: LayoutDashboard },
 ];
 
-export function PortalSidebar() {
+export function PreparerSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-
-  const { data: bookkeepingSub } = useQuery<BookkeepingSubscription | null>({
-    queryKey: ["/api/portal/bookkeeping/subscription"],
-  });
-
-  const showBookkeeping = bookkeepingSub?.status === "active";
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/portal" data-testid="link-portal-home">
+        <Link href="/preparer" data-testid="link-preparer-home">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
               <Truck className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold tracking-tight">CC Trucking</span>
-              <span className="text-xs text-muted-foreground">Client Portal</span>
+              <span className="text-xs text-muted-foreground">Preparer Portal</span>
             </div>
           </div>
         </Link>
@@ -57,13 +44,13 @@ export function PortalSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = item.url === "/portal"
-                  ? location === "/portal"
+                const isActive = item.url === "/preparer"
+                  ? location === "/preparer"
                   : location.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild data-active={isActive}>
-                      <Link href={item.url} data-testid={`portal-nav-${item.title.toLowerCase()}`}>
+                      <Link href={item.url} data-testid={`preparer-nav-${item.title.toLowerCase()}`}>
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -71,16 +58,6 @@ export function PortalSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-              {showBookkeeping && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild data-active={location.startsWith("/portal/bookkeeping")}>
-                    <Link href="/portal/bookkeeping" data-testid="portal-nav-bookkeeping">
-                      <BookOpen className="w-4 h-4" />
-                      <span>Bookkeeping</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -89,7 +66,7 @@ export function PortalSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/" data-testid="portal-nav-website">
+                  <a href="/" data-testid="preparer-nav-website">
                     <Home className="w-4 h-4" />
                     <span>Back to Website</span>
                   </a>
@@ -103,7 +80,7 @@ export function PortalSidebar() {
                         window.location.href = "/login";
                       });
                     }}
-                    data-testid="portal-nav-logout"
+                    data-testid="preparer-nav-logout"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
@@ -116,7 +93,7 @@ export function PortalSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-4">
         {user && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-testid="preparer-user-info">
             <Avatar className="w-7 h-7">
               <AvatarImage src={user.profileImageUrl || undefined} />
               <AvatarFallback className="text-xs">
@@ -124,7 +101,7 @@ export function PortalSidebar() {
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium truncate">{user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username}</span>
+              <span className="text-xs font-medium truncate" data-testid="text-preparer-name">{user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username}</span>
               <span className="text-xs text-muted-foreground truncate">{user.email || user.username}</span>
             </div>
           </div>

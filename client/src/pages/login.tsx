@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Loader2, AlertCircle, ShieldCheck, User } from "lucide-react";
+import { Truck, Loader2, AlertCircle, ShieldCheck, User, Calculator } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [loginType, setLoginType] = useState<"admin" | "client">("admin");
+  const [loginType, setLoginType] = useState<"admin" | "client" | "preparer">("admin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -42,6 +42,8 @@ export default function Login() {
 
       if (user.role === "admin" || user.role === "owner") {
         setLocation("/admin");
+      } else if (user.role === "preparer") {
+        setLocation("/preparer");
       } else {
         setLocation("/portal");
       }
@@ -69,6 +71,8 @@ export default function Login() {
             <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-2">
               {loginType === "admin" ? (
                 <ShieldCheck className="w-6 h-6 text-primary" />
+              ) : loginType === "preparer" ? (
+                <Calculator className="w-6 h-6 text-primary" />
               ) : (
                 <Truck className="w-6 h-6 text-primary" />
               )}
@@ -77,6 +81,8 @@ export default function Login() {
             <CardDescription>
               {loginType === "admin"
                 ? "Sign in to manage operations and clients"
+                : loginType === "preparer"
+                ? "Sign in to access assigned client bookkeeping"
                 : "Sign in to access your client portal"}
             </CardDescription>
           </CardHeader>
@@ -92,7 +98,7 @@ export default function Login() {
                 <Label htmlFor="login-type">Login As</Label>
                 <Select
                   value={loginType}
-                  onValueChange={(val: "admin" | "client") => {
+                  onValueChange={(val: "admin" | "client" | "preparer") => {
                     setLoginType(val);
                     setError("");
                   }}
@@ -111,6 +117,12 @@ export default function Login() {
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
                         <span>Client Portal</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="preparer" data-testid="option-preparer">
+                      <div className="flex items-center gap-2">
+                        <Calculator className="w-4 h-4" />
+                        <span>Tax Preparer</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -149,7 +161,7 @@ export default function Login() {
                     Signing in...
                   </>
                 ) : (
-                  loginType === "admin" ? "Sign In as Admin" : "Sign In to Portal"
+                  loginType === "admin" ? "Sign In as Admin" : loginType === "preparer" ? "Sign In as Tax Preparer" : "Sign In to Portal"
                 )}
               </Button>
             </form>

@@ -7,7 +7,10 @@ import {
   insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema,
   insertFormTemplateSchema, insertFilledFormSchema, insertNotarizationSchema,
   insertServiceItemSchema, insertInvoiceLineItemSchema, insertTaxDocumentSchema,
-  clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments
+  insertBookkeepingSubscriptionSchema, insertBankTransactionSchema,
+  insertTransactionCategorySchema, insertPreparerAssignmentSchema,
+  clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
+  bookkeepingSubscriptions, bankTransactions, preparerAssignments
 } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -93,6 +96,19 @@ function isClient(req: Request, res: Response, next: NextFunction) {
       return res.status(403).json({ message: "Client access required" });
     }
     (req as any).clientId = dbUser.clientId;
+    (req as any).dbUser = dbUser;
+    next();
+  }).catch(() => res.status(500).json({ message: "Server error" }));
+}
+
+function isPreparer(req: Request, res: Response, next: NextFunction) {
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
+    if (!dbUser || dbUser.role !== "preparer") {
+      return res.status(403).json({ message: "Preparer access required" });
+    }
     (req as any).dbUser = dbUser;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
@@ -1584,5 +1600,503 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
+  // ===== BOOKKEEPING ROUTES (admin) =====
+  app.get("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, async (_req, res) => {
+    const subs = await storage.getBookkeepingSubscriptions();
+    res.json(subs);
+  });
+
+  app.post("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { clientId } = req.body;
+      if (!clientId) return res.status(400).json({ message: "clientId is required" });
+      const existing = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (existing) return res.status(400).json({ message: "Client already has a bookkeeping subscription" });
+      const sub = await storage.createBookkeepingSubscription({
+        clientId,
+        plan: "standard",
+        price: "50.00",
+        status: "active",
+        startDate: new Date(),
+      });
+      await audit(req, "created", "bookkeeping_subscription", sub.id, `Activated bookkeeping for client ${clientId}`);
+      res.json(sub);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/bookkeeping/subscriptions/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const allowed = z.object({
+        status: z.enum(["active", "cancelled", "past_due", "pending"]).optional(),
+        price: z.string().optional(),
+        preparerId: z.string().nullable().optional(),
+        endDate: z.string().nullable().optional(),
+      }).parse(req.body);
+      const updateData: any = { ...allowed };
+      if (allowed.endDate) updateData.endDate = new Date(allowed.endDate);
+      const sub = await storage.updateBookkeepingSubscription(param(req, "id"), updateData);
+      if (!sub) return res.status(404).json({ message: "Subscription not found" });
+      await audit(req, "updated", "bookkeeping_subscription", sub.id, JSON.stringify(req.body));
+      res.json(sub);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/bookkeeping/transactions", isAuthenticated, isAdmin, async (req, res) => {
+    const { clientId, month, year } = req.query;
+    if (!clientId || typeof clientId !== "string") return res.status(400).json({ message: "clientId required" });
+    const m = month ? parseInt(month as string) : undefined;
+    const y = year ? parseInt(year as string) : undefined;
+    const txns = await storage.getBankTransactions(clientId, m, y);
+    res.json(txns);
+  });
+
+  const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+  app.post("/api/admin/bookkeeping/upload-statement/:clientId", isAuthenticated, isAdmin, csvUpload.single("file"), async (req, res) => {
+    try {
+      const clientId = param(req, "clientId");
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "CSV file required" });
+      const { month, year, bankName, accountLast4 } = req.body;
+      if (!month || !year) return res.status(400).json({ message: "month and year required" });
+
+      const csvText = file.buffer.toString("utf-8");
+      const transactions = parseCSV(csvText, clientId, parseInt(month), parseInt(year), bankName, accountLast4);
+      if (transactions.length === 0) return res.status(400).json({ message: "No valid transactions found in CSV" });
+
+      const created = await storage.createBankTransactions(transactions);
+      await audit(req, "uploaded", "bank_statement", clientId, `Uploaded ${created.length} transactions for month ${month}/${year}`);
+      res.json({ count: created.length, transactions: created });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const allowed = z.object({
+        manualCategory: z.string().nullable().optional(),
+        reviewed: z.boolean().optional(),
+        aiCategory: z.string().nullable().optional(),
+        aiConfidence: z.string().nullable().optional(),
+      }).parse(req.body);
+      const txn = await storage.updateBankTransaction(param(req, "id"), allowed);
+      if (!txn) return res.status(404).json({ message: "Transaction not found" });
+      res.json(txn);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, async (req, res) => {
+    await storage.deleteBankTransaction(param(req, "id"));
+    res.json({ success: true });
+  });
+
+  app.post("/api/admin/bookkeeping/ai-categorize/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const clientId = param(req, "clientId");
+      const { month, year } = req.body;
+      const m = month ? parseInt(month) : undefined;
+      const y = year ? parseInt(year) : undefined;
+      const txns = await storage.getBankTransactions(clientId, m, y);
+      const uncategorized = txns.filter(t => !t.aiCategory && !t.manualCategory);
+      if (uncategorized.length === 0) return res.json({ message: "All transactions already categorized", count: 0 });
+
+      const categories = await storage.getTransactionCategories();
+      const categoryNames = categories.map(c => c.name);
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const batchSize = 30;
+      let categorizedCount = 0;
+      for (let i = 0; i < uncategorized.length; i += batchSize) {
+        const batch = uncategorized.slice(i, i + batchSize);
+        const txnList = batch.map((t, idx) => `${idx + 1}. "${t.description}" - $${t.amount}`).join("\n");
+
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are a trucking company bookkeeper. Categorize each transaction into one of these categories: ${categoryNames.join(", ")}. Return a JSON array of objects with "index" (1-based), "category" (exact category name), and "confidence" (0-100). Only return the JSON array, no other text.`
+            },
+            { role: "user", content: `Categorize these trucking company transactions:\n${txnList}` }
+          ],
+          temperature: 0.1,
+        });
+
+        const responseText = completion.choices[0]?.message?.content || "[]";
+        try {
+          const cleaned = responseText.replace(/```json\n?|\n?```/g, "").trim();
+          const results = JSON.parse(cleaned);
+          for (const result of results) {
+            const idx = result.index - 1;
+            if (idx >= 0 && idx < batch.length && categoryNames.includes(result.category)) {
+              await storage.updateBankTransaction(batch[idx].id, {
+                aiCategory: result.category,
+                aiConfidence: String(result.confidence),
+              });
+              categorizedCount++;
+            }
+          }
+        } catch (parseErr) {
+          console.error("AI categorization parse error:", parseErr);
+        }
+      }
+
+      await audit(req, "ai_categorized", "bank_transactions", clientId, `AI categorized ${categorizedCount} transactions`);
+      res.json({ message: `Categorized ${categorizedCount} transactions`, count: categorizedCount });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/bookkeeping/summaries", isAuthenticated, isAdmin, async (req, res) => {
+    const { clientId } = req.query;
+    if (!clientId || typeof clientId !== "string") return res.status(400).json({ message: "clientId required" });
+    const summaries = await storage.getMonthlySummaries(clientId);
+    res.json(summaries);
+  });
+
+  app.post("/api/admin/bookkeeping/generate-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const clientId = param(req, "clientId");
+      const { month, year } = req.body;
+      if (!month || !year) return res.status(400).json({ message: "month and year required" });
+
+      const txns = await storage.getBankTransactions(clientId, parseInt(month), parseInt(year));
+      const categories = await storage.getTransactionCategories();
+      const incomeCategories = categories.filter(c => c.parentCategory === "Income").map(c => c.name);
+
+      let totalIncome = 0;
+      let totalExpenses = 0;
+      const breakdown: Record<string, number> = {};
+
+      for (const txn of txns) {
+        const cat = txn.manualCategory || txn.aiCategory || "Uncategorized";
+        const amount = parseFloat(txn.amount);
+        if (!breakdown[cat]) breakdown[cat] = 0;
+        breakdown[cat] += Math.abs(amount);
+        if (incomeCategories.includes(cat) || amount > 0) {
+          totalIncome += Math.abs(amount);
+        } else {
+          totalExpenses += Math.abs(amount);
+        }
+      }
+
+      const existing = await storage.getMonthlySummary(clientId, parseInt(month), parseInt(year));
+      const summaryData = {
+        clientId,
+        month: parseInt(month),
+        year: parseInt(year),
+        totalIncome: totalIncome.toFixed(2),
+        totalExpenses: totalExpenses.toFixed(2),
+        netIncome: (totalIncome - totalExpenses).toFixed(2),
+        categoryBreakdown: JSON.stringify(breakdown),
+      };
+
+      let summary;
+      if (existing) {
+        summary = await storage.updateMonthlySummary(existing.id, summaryData);
+      } else {
+        summary = await storage.createMonthlySummary(summaryData);
+      }
+      await audit(req, "generated", "monthly_summary", summary?.id, `Generated summary for ${month}/${year}`);
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, async (_req, res) => {
+    const cats = await storage.getTransactionCategories();
+    res.json(cats);
+  });
+
+  app.post("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const parsed = insertTransactionCategorySchema.parse(req.body);
+      const cat = await storage.createTransactionCategory(parsed);
+      res.json(cat);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const allowed = z.object({ name: z.string().optional(), description: z.string().nullable().optional(), parentCategory: z.string().nullable().optional() }).parse(req.body);
+    const cat = await storage.updateTransactionCategory(param(req, "id"), allowed);
+    if (!cat) return res.status(404).json({ message: "Category not found" });
+    res.json(cat);
+  });
+
+  app.delete("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, async (req, res) => {
+    await storage.deleteTransactionCategory(param(req, "id"));
+    res.json({ success: true });
+  });
+
+  app.get("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, async (req, res) => {
+    const { clientId } = req.query;
+    if (clientId && typeof clientId === "string") {
+      const assignments = await storage.getPreparerAssignmentsByClient(clientId);
+      res.json(assignments);
+    } else {
+      const allPreparers = await db.select().from(users).where(eq(users.role, "preparer"));
+      const assignments = [];
+      for (const p of allPreparers) {
+        const a = await storage.getPreparerAssignments(p.id);
+        assignments.push(...a);
+      }
+      res.json(assignments);
+    }
+  });
+
+  app.post("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { preparerId, clientId } = req.body;
+      if (!preparerId || !clientId) return res.status(400).json({ message: "preparerId and clientId required" });
+      const dbUser = (req as any).dbUser;
+      const assignment = await storage.createPreparerAssignment({
+        preparerId,
+        clientId,
+        assignedBy: dbUser.id,
+      });
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (sub) {
+        await storage.updateBookkeepingSubscription(sub.id, { preparerId });
+      }
+      await audit(req, "assigned", "preparer_assignment", assignment.id, `Assigned preparer ${preparerId} to client ${clientId}`);
+      res.json(assignment);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/bookkeeping/preparer-assignments/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const assignment = await db.select().from(preparerAssignments).where(eq(preparerAssignments.id, param(req, "id")));
+    if (assignment.length > 0) {
+      const sub = await storage.getBookkeepingSubscriptionByClient(assignment[0].clientId);
+      if (sub && sub.preparerId === assignment[0].preparerId) {
+        await storage.updateBookkeepingSubscription(sub.id, { preparerId: null });
+      }
+    }
+    await storage.deletePreparerAssignment(param(req, "id"));
+    await audit(req, "removed", "preparer_assignment", param(req, "id"));
+    res.json({ success: true });
+  });
+
+  app.get("/api/admin/bookkeeping/preparers", isAuthenticated, isAdmin, async (_req, res) => {
+    const preparers = await db.select().from(users).where(eq(users.role, "preparer"));
+    res.json(preparers.map(p => ({ id: p.id, username: p.username, firstName: p.firstName, lastName: p.lastName, email: p.email })));
+  });
+
+  // ===== CLIENT PORTAL BOOKKEEPING ROUTES =====
+  app.get("/api/portal/bookkeeping/subscription", isAuthenticated, isClient, async (req, res) => {
+    const clientId = (req as any).clientId;
+    const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+    res.json(sub || null);
+  });
+
+  app.get("/api/portal/bookkeeping/transactions", isAuthenticated, isClient, async (req, res) => {
+    const clientId = (req as any).clientId;
+    const { month, year } = req.query;
+    const m = month ? parseInt(month as string) : undefined;
+    const y = year ? parseInt(year as string) : undefined;
+    const txns = await storage.getBankTransactions(clientId, m, y);
+    res.json(txns);
+  });
+
+  app.post("/api/portal/bookkeeping/upload-statement", isAuthenticated, isClient, csvUpload.single("file"), async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (!sub || sub.status !== "active") return res.status(403).json({ message: "Active bookkeeping subscription required" });
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "CSV file required" });
+      const { month, year, bankName, accountLast4 } = req.body;
+      if (!month || !year) return res.status(400).json({ message: "month and year required" });
+
+      const csvText = file.buffer.toString("utf-8");
+      const transactions = parseCSV(csvText, clientId, parseInt(month), parseInt(year), bankName, accountLast4);
+      if (transactions.length === 0) return res.status(400).json({ message: "No valid transactions found" });
+
+      const created = await storage.createBankTransactions(transactions);
+      await audit(req, "uploaded", "bank_statement", clientId, `Client uploaded ${created.length} transactions`);
+      res.json({ count: created.length, transactions: created });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/portal/bookkeeping/summaries", isAuthenticated, isClient, async (req, res) => {
+    const clientId = (req as any).clientId;
+    const summaries = await storage.getMonthlySummaries(clientId);
+    res.json(summaries);
+  });
+
+  // ===== PREPARER PORTAL ROUTES =====
+  app.get("/api/preparer/clients", isAuthenticated, isPreparer, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    const clientIds = assignments.map(a => a.clientId);
+    if (clientIds.length === 0) return res.json([]);
+
+    const clientList = [];
+    for (const cid of clientIds) {
+      const client = await storage.getClient(cid);
+      if (client) {
+        const sub = await storage.getBookkeepingSubscriptionByClient(cid);
+        clientList.push({ ...client, bookkeepingSubscription: sub });
+      }
+    }
+    res.json(clientList);
+  });
+
+  app.get("/api/preparer/clients/:id/transactions", isAuthenticated, isPreparer, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const clientId = param(req, "id");
+    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    if (!assignments.some(a => a.clientId === clientId)) {
+      return res.status(403).json({ message: "Not assigned to this client" });
+    }
+    const { month, year } = req.query;
+    const m = month ? parseInt(month as string) : undefined;
+    const y = year ? parseInt(year as string) : undefined;
+    const txns = await storage.getBankTransactions(clientId, m, y);
+    res.json(txns);
+  });
+
+  app.get("/api/preparer/clients/:id/summaries", isAuthenticated, isPreparer, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const clientId = param(req, "id");
+    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    if (!assignments.some(a => a.clientId === clientId)) {
+      return res.status(403).json({ message: "Not assigned to this client" });
+    }
+    const summaries = await storage.getMonthlySummaries(clientId);
+    res.json(summaries);
+  });
+
+  app.patch("/api/preparer/transactions/:id", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const txn = await storage.getBankTransaction(param(req, "id"));
+      if (!txn) return res.status(404).json({ message: "Transaction not found" });
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === txn.clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const updated = await storage.updateBankTransaction(txn.id, {
+        manualCategory: req.body.manualCategory,
+        reviewed: req.body.reviewed,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== BOOKKEEPING CATEGORIES (public for authenticated) =====
+  app.get("/api/bookkeeping/categories", isAuthenticated, async (_req, res) => {
+    const cats = await storage.getTransactionCategories();
+    res.json(cats);
+  });
+
   return httpServer;
+}
+
+function parseCSV(csvText: string, clientId: string, month: number, year: number, bankName?: string, accountLast4?: string) {
+  const lines = csvText.trim().split("\n");
+  if (lines.length < 2) return [];
+
+  const header = lines[0].toLowerCase();
+  const headers = parseCSVLine(header);
+
+  const dateIdx = headers.findIndex(h => /date|posted|trans/.test(h));
+  const descIdx = headers.findIndex(h => /desc|memo|narr|detail|payee|name/.test(h));
+  const amountIdx = headers.findIndex(h => /amount|total/.test(h));
+  const debitIdx = headers.findIndex(h => /debit|withdrawal|charge/.test(h));
+  const creditIdx = headers.findIndex(h => /credit|deposit/.test(h));
+
+  if (dateIdx === -1 || descIdx === -1) return [];
+
+  const transactions: any[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const cols = parseCSVLine(line);
+
+    const dateStr = cols[dateIdx]?.trim();
+    const desc = cols[descIdx]?.trim();
+    if (!dateStr || !desc) continue;
+
+    let amount: number;
+    if (amountIdx !== -1 && cols[amountIdx]) {
+      amount = parseFloat(cols[amountIdx].replace(/[,$"]/g, ""));
+    } else if (debitIdx !== -1 || creditIdx !== -1) {
+      const debit = debitIdx !== -1 && cols[debitIdx] ? parseFloat(cols[debitIdx].replace(/[,$"]/g, "")) : 0;
+      const credit = creditIdx !== -1 && cols[creditIdx] ? parseFloat(cols[creditIdx].replace(/[,$"]/g, "")) : 0;
+      amount = credit > 0 ? credit : -Math.abs(debit);
+    } else {
+      continue;
+    }
+
+    if (isNaN(amount)) continue;
+
+    let transactionDate: Date;
+    try {
+      transactionDate = new Date(dateStr);
+      if (isNaN(transactionDate.getTime())) continue;
+    } catch {
+      continue;
+    }
+
+    transactions.push({
+      clientId,
+      transactionDate,
+      description: desc,
+      amount: amount.toFixed(2),
+      statementMonth: month,
+      statementYear: year,
+      bankName: bankName || null,
+      accountLast4: accountLast4 || null,
+    });
+  }
+
+  return transactions;
+}
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
 }

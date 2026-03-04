@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PortalSidebar } from "@/components/portal-sidebar";
+import { PreparerSidebar } from "@/components/preparer-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuth } from "@/hooks/use-auth";
@@ -38,7 +39,11 @@ import AdminAnalytics from "@/pages/admin-analytics";
 import AdminAiChat from "@/pages/admin-ai-chat";
 import AdminTaxPrep from "@/pages/admin-tax-prep";
 import AdminEmployeePerformance from "@/pages/admin-employee-performance";
+import AdminBookkeeping from "@/pages/admin-bookkeeping";
 import PortalSignatures from "@/pages/portal/portal-signatures";
+import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
+import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
+import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -104,6 +109,43 @@ function PortalLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger data-testid="button-portal-sidebar-toggle" />
             <div className="flex items-center gap-1">
               <NotificationBell basePath="/portal" />
+              <ThemeToggle />
+            </div>
+          </header>
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function PreparerLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!user) {
+    window.location.href = "/login";
+    return null;
+  }
+
+  if (user.role !== "preparer") {
+    window.location.href = "/login";
+    return null;
+  }
+
+  return (
+    <SidebarProvider style={sidebarStyle}>
+      <div className="flex h-screen w-full">
+        <PreparerSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between gap-2 p-2 border-b">
+            <SidebarTrigger data-testid="button-preparer-sidebar-toggle" />
+            <div className="flex items-center gap-1">
               <ThemeToggle />
             </div>
           </header>
@@ -215,6 +257,9 @@ function App() {
           <Route path="/admin/employee-performance">
             <AdminLayout><AdminEmployeePerformance /></AdminLayout>
           </Route>
+          <Route path="/admin/bookkeeping">
+            <AdminLayout><AdminBookkeeping /></AdminLayout>
+          </Route>
 
           <Route path="/portal">
             <PortalLayout><PortalDashboard /></PortalLayout>
@@ -233,6 +278,16 @@ function App() {
           </Route>
           <Route path="/portal/signatures">
             <PortalLayout><PortalSignatures /></PortalLayout>
+          </Route>
+          <Route path="/portal/bookkeeping">
+            <PortalLayout><PortalBookkeeping /></PortalLayout>
+          </Route>
+
+          <Route path="/preparer">
+            <PreparerLayout><PreparerDashboard /></PreparerLayout>
+          </Route>
+          <Route path="/preparer/client/:id">
+            <PreparerLayout><PreparerClientDetail /></PreparerLayout>
           </Route>
 
           <Route path="/dashboard">

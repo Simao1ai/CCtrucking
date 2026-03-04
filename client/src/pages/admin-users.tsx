@@ -327,6 +327,7 @@ export default function AdminUsers() {
                   <SelectItem value="admin" data-testid="option-role-admin">Staff</SelectItem>
                   <SelectItem value="owner" data-testid="option-role-owner">Admin (Owner)</SelectItem>
                   <SelectItem value="client" data-testid="option-role-client">Client</SelectItem>
+                  <SelectItem value="preparer" data-testid="option-role-preparer">Tax Preparer</SelectItem>
                 </SelectContent>
               </Select>
             </div>

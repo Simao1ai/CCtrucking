@@ -212,10 +212,77 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const bookkeepingSubscriptions = pgTable("bookkeeping_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  plan: text("plan").notNull().default("standard"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().default("50.00"),
+  status: text("status").notNull().default("pending"),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
+  stripeCustomerId: varchar("stripe_customer_id"),
+  preparerId: varchar("preparer_id"),
+  startDate: timestamp("start_date").notNull().defaultNow(),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const bankTransactions = pgTable("bank_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  transactionDate: timestamp("transaction_date").notNull(),
+  description: text("description").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  originalCategory: text("original_category"),
+  aiCategory: text("ai_category"),
+  aiConfidence: decimal("ai_confidence", { precision: 5, scale: 2 }),
+  manualCategory: text("manual_category"),
+  reviewed: boolean("reviewed").notNull().default(false),
+  bankName: text("bank_name"),
+  accountLast4: varchar("account_last4"),
+  statementMonth: integer("statement_month").notNull(),
+  statementYear: integer("statement_year").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const transactionCategories = pgTable("transaction_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  parentCategory: text("parent_category"),
+  isDefault: boolean("is_default").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const monthlySummaries = pgTable("monthly_summaries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  totalIncome: decimal("total_income", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalExpenses: decimal("total_expenses", { precision: 12, scale: 2 }).notNull().default("0"),
+  netIncome: decimal("net_income", { precision: 12, scale: 2 }).notNull().default("0"),
+  categoryBreakdown: text("category_breakdown"),
+  generatedAt: timestamp("generated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const preparerAssignments = pgTable("preparer_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  preparerId: varchar("preparer_id").notNull(),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  assignedBy: varchar("assigned_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
 export const insertTaxDocumentSchema = createInsertSchema(taxDocuments).omit({ id: true, createdAt: true, updatedAt: true, analyzedAt: true });
 export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({ id: true, createdAt: true });
+export const insertBookkeepingSubscriptionSchema = createInsertSchema(bookkeepingSubscriptions).omit({ id: true, createdAt: true });
+export const insertBankTransactionSchema = createInsertSchema(bankTransactions).omit({ id: true, createdAt: true });
+export const insertTransactionCategorySchema = createInsertSchema(transactionCategories).omit({ id: true, createdAt: true });
+export const insertMonthlySummarySchema = createInsertSchema(monthlySummaries).omit({ id: true, createdAt: true, generatedAt: true });
+export const insertPreparerAssignmentSchema = createInsertSchema(preparerAssignments).omit({ id: true, createdAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -247,3 +314,13 @@ export type TaxDocument = typeof taxDocuments.$inferSelect;
 export type InsertTaxDocument = z.infer<typeof insertTaxDocumentSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type BookkeepingSubscription = typeof bookkeepingSubscriptions.$inferSelect;
+export type InsertBookkeepingSubscription = z.infer<typeof insertBookkeepingSubscriptionSchema>;
+export type BankTransaction = typeof bankTransactions.$inferSelect;
+export type InsertBankTransaction = z.infer<typeof insertBankTransactionSchema>;
+export type TransactionCategory = typeof transactionCategories.$inferSelect;
+export type InsertTransactionCategory = z.infer<typeof insertTransactionCategorySchema>;
+export type MonthlySummary = typeof monthlySummaries.$inferSelect;
+export type InsertMonthlySummary = z.infer<typeof insertMonthlySummarySchema>;
+export type PreparerAssignment = typeof preparerAssignments.$inferSelect;
+export type InsertPreparerAssignment = z.infer<typeof insertPreparerAssignmentSchema>;

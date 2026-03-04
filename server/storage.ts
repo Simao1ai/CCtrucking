@@ -3,6 +3,7 @@ import { db } from "./db";
 import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
+  bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -18,6 +19,11 @@ import {
   type InvoiceLineItem, type InsertInvoiceLineItem,
   type TaxDocument, type InsertTaxDocument,
   type PushSubscription, type InsertPushSubscription,
+  type BookkeepingSubscription, type InsertBookkeepingSubscription,
+  type BankTransaction, type InsertBankTransaction,
+  type TransactionCategory, type InsertTransactionCategory,
+  type MonthlySummary, type InsertMonthlySummary,
+  type PreparerAssignment, type InsertPreparerAssignment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -106,6 +112,34 @@ export interface IStorage {
   createPushSubscription(data: InsertPushSubscription): Promise<PushSubscription>;
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUser(userId: string): Promise<void>;
+
+  getBookkeepingSubscriptions(): Promise<BookkeepingSubscription[]>;
+  getBookkeepingSubscription(id: string): Promise<BookkeepingSubscription | undefined>;
+  getBookkeepingSubscriptionByClient(clientId: string): Promise<BookkeepingSubscription | undefined>;
+  createBookkeepingSubscription(data: InsertBookkeepingSubscription): Promise<BookkeepingSubscription>;
+  updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>): Promise<BookkeepingSubscription | undefined>;
+
+  getBankTransactions(clientId: string, month?: number, year?: number): Promise<BankTransaction[]>;
+  getBankTransaction(id: string): Promise<BankTransaction | undefined>;
+  createBankTransaction(data: InsertBankTransaction): Promise<BankTransaction>;
+  createBankTransactions(data: InsertBankTransaction[]): Promise<BankTransaction[]>;
+  updateBankTransaction(id: string, data: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined>;
+  deleteBankTransaction(id: string): Promise<void>;
+
+  getTransactionCategories(): Promise<TransactionCategory[]>;
+  createTransactionCategory(data: InsertTransactionCategory): Promise<TransactionCategory>;
+  updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>): Promise<TransactionCategory | undefined>;
+  deleteTransactionCategory(id: string): Promise<void>;
+
+  getMonthlySummaries(clientId: string): Promise<MonthlySummary[]>;
+  getMonthlySummary(clientId: string, month: number, year: number): Promise<MonthlySummary | undefined>;
+  createMonthlySummary(data: InsertMonthlySummary): Promise<MonthlySummary>;
+  updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>): Promise<MonthlySummary | undefined>;
+
+  getPreparerAssignments(preparerId: string): Promise<PreparerAssignment[]>;
+  getPreparerAssignmentsByClient(clientId: string): Promise<PreparerAssignment[]>;
+  createPreparerAssignment(data: InsertPreparerAssignment): Promise<PreparerAssignment>;
+  deletePreparerAssignment(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -438,6 +472,117 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionsByUser(userId: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async getBookkeepingSubscriptions(): Promise<BookkeepingSubscription[]> {
+    return db.select().from(bookkeepingSubscriptions).orderBy(desc(bookkeepingSubscriptions.createdAt));
+  }
+
+  async getBookkeepingSubscription(id: string): Promise<BookkeepingSubscription | undefined> {
+    const [sub] = await db.select().from(bookkeepingSubscriptions).where(eq(bookkeepingSubscriptions.id, id));
+    return sub;
+  }
+
+  async getBookkeepingSubscriptionByClient(clientId: string): Promise<BookkeepingSubscription | undefined> {
+    const [sub] = await db.select().from(bookkeepingSubscriptions).where(eq(bookkeepingSubscriptions.clientId, clientId));
+    return sub;
+  }
+
+  async createBookkeepingSubscription(data: InsertBookkeepingSubscription): Promise<BookkeepingSubscription> {
+    const [sub] = await db.insert(bookkeepingSubscriptions).values(data).returning();
+    return sub;
+  }
+
+  async updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>): Promise<BookkeepingSubscription | undefined> {
+    const [sub] = await db.update(bookkeepingSubscriptions).set(data).where(eq(bookkeepingSubscriptions.id, id)).returning();
+    return sub;
+  }
+
+  async getBankTransactions(clientId: string, month?: number, year?: number): Promise<BankTransaction[]> {
+    const conditions = [eq(bankTransactions.clientId, clientId)];
+    if (month !== undefined) conditions.push(eq(bankTransactions.statementMonth, month));
+    if (year !== undefined) conditions.push(eq(bankTransactions.statementYear, year));
+    return db.select().from(bankTransactions).where(and(...conditions)).orderBy(desc(bankTransactions.transactionDate));
+  }
+
+  async getBankTransaction(id: string): Promise<BankTransaction | undefined> {
+    const [txn] = await db.select().from(bankTransactions).where(eq(bankTransactions.id, id));
+    return txn;
+  }
+
+  async createBankTransaction(data: InsertBankTransaction): Promise<BankTransaction> {
+    const [txn] = await db.insert(bankTransactions).values(data).returning();
+    return txn;
+  }
+
+  async createBankTransactions(data: InsertBankTransaction[]): Promise<BankTransaction[]> {
+    if (data.length === 0) return [];
+    return db.insert(bankTransactions).values(data).returning();
+  }
+
+  async updateBankTransaction(id: string, data: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined> {
+    const [txn] = await db.update(bankTransactions).set(data).where(eq(bankTransactions.id, id)).returning();
+    return txn;
+  }
+
+  async deleteBankTransaction(id: string): Promise<void> {
+    await db.delete(bankTransactions).where(eq(bankTransactions.id, id));
+  }
+
+  async getTransactionCategories(): Promise<TransactionCategory[]> {
+    return db.select().from(transactionCategories).orderBy(transactionCategories.name);
+  }
+
+  async createTransactionCategory(data: InsertTransactionCategory): Promise<TransactionCategory> {
+    const [cat] = await db.insert(transactionCategories).values(data).returning();
+    return cat;
+  }
+
+  async updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>): Promise<TransactionCategory | undefined> {
+    const [cat] = await db.update(transactionCategories).set(data).where(eq(transactionCategories.id, id)).returning();
+    return cat;
+  }
+
+  async deleteTransactionCategory(id: string): Promise<void> {
+    await db.delete(transactionCategories).where(eq(transactionCategories.id, id));
+  }
+
+  async getMonthlySummaries(clientId: string): Promise<MonthlySummary[]> {
+    return db.select().from(monthlySummaries).where(eq(monthlySummaries.clientId, clientId)).orderBy(desc(monthlySummaries.year), desc(monthlySummaries.month));
+  }
+
+  async getMonthlySummary(clientId: string, month: number, year: number): Promise<MonthlySummary | undefined> {
+    const [summary] = await db.select().from(monthlySummaries).where(
+      and(eq(monthlySummaries.clientId, clientId), eq(monthlySummaries.month, month), eq(monthlySummaries.year, year))
+    );
+    return summary;
+  }
+
+  async createMonthlySummary(data: InsertMonthlySummary): Promise<MonthlySummary> {
+    const [summary] = await db.insert(monthlySummaries).values(data).returning();
+    return summary;
+  }
+
+  async updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>): Promise<MonthlySummary | undefined> {
+    const [summary] = await db.update(monthlySummaries).set(data).where(eq(monthlySummaries.id, id)).returning();
+    return summary;
+  }
+
+  async getPreparerAssignments(preparerId: string): Promise<PreparerAssignment[]> {
+    return db.select().from(preparerAssignments).where(eq(preparerAssignments.preparerId, preparerId)).orderBy(desc(preparerAssignments.createdAt));
+  }
+
+  async getPreparerAssignmentsByClient(clientId: string): Promise<PreparerAssignment[]> {
+    return db.select().from(preparerAssignments).where(eq(preparerAssignments.clientId, clientId)).orderBy(desc(preparerAssignments.createdAt));
+  }
+
+  async createPreparerAssignment(data: InsertPreparerAssignment): Promise<PreparerAssignment> {
+    const [assignment] = await db.insert(preparerAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async deletePreparerAssignment(id: string): Promise<void> {
+    await db.delete(preparerAssignments).where(eq(preparerAssignments.id, id));
   }
 }
 
