@@ -36,6 +36,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Signature Requests**: Management and tracking of documents requiring client signatures.
 - **Tax Preparation Intake**: System for collecting tax documents, with AI analysis capabilities and CSV export.
 - **Business Analytics**: Owner-only dashboard with key metrics: revenue, client acquisition, service breakdown, invoice aging, and top clients.
+- **Employee Performance**: Owner-only grading system tracking staff activity via audit logs. Weighted scoring by action type and entity, letter grades (A+ through F), 12-week trend charts, individual breakdowns, and recent activity logs. Useful for employee review meetings.
 
 ## External Dependencies
 - **OpenAI**: Integrated via Replit AI Integrations for the AI Chat Assistant and AI analysis of tax documents (uses `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY`).

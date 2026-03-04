@@ -983,6 +983,141 @@ export async function registerRoutes(
     }
   });
 
+  // ===== EMPLOYEE PERFORMANCE ROUTES (owner only) =====
+  app.get("/api/admin/employee-performance", isAuthenticated, isOwner, async (_req, res) => {
+    try {
+      const allUsers = await db.select().from(users);
+      const staffUsers = allUsers.filter(u => u.role === "admin" || u.role === "owner");
+      const allLogs = await storage.getAuditLogs(50000, 0);
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+      const actionWeights: Record<string, number> = {
+        created: 10,
+        uploaded: 8,
+        updated: 5,
+        sent_for_signature: 7,
+        analyzed: 6,
+        exported: 4,
+        viewed: 1,
+        deleted: 3,
+        downloaded: 2,
+      };
+
+      const entityWeights: Record<string, number> = {
+        client: 2.0,
+        invoice: 1.8,
+        ticket: 1.5,
+        document: 1.3,
+        tax_document: 1.4,
+        form_template: 1.2,
+        filled_form: 1.3,
+        notarization: 1.5,
+        service_item: 1.0,
+        signature_request: 1.2,
+      };
+
+      const employees = staffUsers.map(user => {
+        const userLogs = allLogs.filter(l => l.userId === user.id);
+        const last30Logs = userLogs.filter(l => new Date(l.createdAt) >= thirtyDaysAgo);
+        const last90Logs = userLogs.filter(l => new Date(l.createdAt) >= ninetyDaysAgo);
+
+        const actionBreakdown: Record<string, Record<string, number>> = {};
+        const entityBreakdown: Record<string, number> = {};
+
+        userLogs.forEach(log => {
+          const entity = log.entityType || "other";
+          const action = log.action || "other";
+          if (!actionBreakdown[entity]) actionBreakdown[entity] = {};
+          actionBreakdown[entity][action] = (actionBreakdown[entity][action] || 0) + 1;
+          entityBreakdown[entity] = (entityBreakdown[entity] || 0) + 1;
+        });
+
+        let totalScore = 0;
+        userLogs.forEach(log => {
+          const actionW = actionWeights[log.action || ""] || 3;
+          const entityW = entityWeights[log.entityType || ""] || 1.0;
+          totalScore += actionW * entityW;
+        });
+
+        let last30Score = 0;
+        last30Logs.forEach(log => {
+          const actionW = actionWeights[log.action || ""] || 3;
+          const entityW = entityWeights[log.entityType || ""] || 1.0;
+          last30Score += actionW * entityW;
+        });
+
+        const weeklyActivity: { week: string; actions: number; score: number }[] = [];
+        for (let i = 11; i >= 0; i--) {
+          const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+          const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+          const weekLogs = userLogs.filter(l => {
+            const d = new Date(l.createdAt);
+            return d >= weekStart && d < weekEnd;
+          });
+          let weekScore = 0;
+          weekLogs.forEach(log => {
+            const actionW = actionWeights[log.action || ""] || 3;
+            const entityW = entityWeights[log.entityType || ""] || 1.0;
+            weekScore += actionW * entityW;
+          });
+          weeklyActivity.push({
+            week: `${weekStart.getMonth() + 1}/${weekStart.getDate()}`,
+            actions: weekLogs.length,
+            score: Math.round(weekScore),
+          });
+        }
+
+        let grade: string;
+        if (last30Score >= 500) grade = "A+";
+        else if (last30Score >= 350) grade = "A";
+        else if (last30Score >= 250) grade = "B+";
+        else if (last30Score >= 150) grade = "B";
+        else if (last30Score >= 80) grade = "C+";
+        else if (last30Score >= 40) grade = "C";
+        else if (last30Score >= 15) grade = "D";
+        else grade = "F";
+
+        return {
+          id: user.id,
+          name: user.firstName && user.lastName
+            ? `${user.firstName} ${user.lastName}`.trim()
+            : user.username || "Unknown",
+          username: user.username,
+          role: user.role,
+          totalActions: userLogs.length,
+          last30Actions: last30Logs.length,
+          last90Actions: last90Logs.length,
+          totalScore: Math.round(totalScore),
+          last30Score: Math.round(last30Score),
+          grade,
+          actionBreakdown,
+          entityBreakdown,
+          weeklyActivity,
+          topEntities: Object.entries(entityBreakdown)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([entity, count]) => ({ entity, count })),
+          recentActivity: userLogs.slice(0, 10).map(l => ({
+            action: l.action,
+            entityType: l.entityType,
+            details: l.details,
+            createdAt: l.createdAt,
+          })),
+        };
+      });
+
+      employees.sort((a, b) => b.last30Score - a.last30Score);
+
+      res.json({ employees });
+    } catch (error) {
+      console.error("Employee performance error:", error);
+      res.status(500).json({ message: "Failed to load employee performance data" });
+    }
+  });
+
   // ===== AI CHAT ROUTES (admin) =====
   app.post("/api/admin/ai-chat", isAuthenticated, isAdmin, async (req, res) => {
     try {
