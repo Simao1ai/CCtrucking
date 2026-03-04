@@ -128,8 +128,10 @@ export default function AdminUsers() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                        {user.role === "admin" ? (
+                        {user.role === "owner" ? (
                           <Shield className="w-5 h-5 text-primary" />
+                        ) : user.role === "admin" ? (
+                          <Shield className="w-5 h-5 text-blue-500" />
                         ) : (
                           <Users className="w-5 h-5 text-muted-foreground" />
                         )}
@@ -153,10 +155,10 @@ export default function AdminUsers() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                        {user.role}
+                      <Badge variant={user.role === "owner" ? "default" : user.role === "admin" ? "default" : "secondary"}>
+                        {user.role === "owner" ? "Admin (Owner)" : user.role === "admin" ? "Staff" : "Client"}
                       </Badge>
-                      {user.role !== "admin" && (
+                      {user.role !== "owner" && (
                         <>
                           <Button
                             variant="outline"
@@ -322,8 +324,9 @@ export default function AdminUsers() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="admin" data-testid="option-role-admin">Staff</SelectItem>
+                  <SelectItem value="owner" data-testid="option-role-owner">Admin (Owner)</SelectItem>
+                  <SelectItem value="client" data-testid="option-role-client">Client</SelectItem>
                 </SelectContent>
               </Select>
             </div>
