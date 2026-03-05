@@ -1735,6 +1735,10 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
   });
 
   const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+  const receiptUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files are allowed"));
+  }});
 
   app.post("/api/admin/bookkeeping/upload-statement/:clientId", isAuthenticated, isAdmin, csvUpload.single("file"), async (req, res) => {
     try {
@@ -2042,6 +2046,126 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
       const created = await storage.createBankTransactions(transactions);
       await audit(req, "uploaded", "bank_statement", clientId, `Client uploaded ${created.length} transactions`);
       res.json({ count: created.length, transactions: created });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  async function analyzeReceiptWithAI(imageBase64: string, mimeType: string): Promise<{
+    vendor: string; amount: number; date: string; category: string; description: string; confidence: number;
+  }> {
+    const openai = new OpenAI({
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    });
+
+    const categories = await storage.getTransactionCategories();
+    const categoryNames = categories.map(c => c.name).join(", ");
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a receipt analysis assistant for a trucking company bookkeeping system. Analyze the receipt image and extract the following information. Return ONLY valid JSON with these fields:
+- "vendor": string (business/store name)
+- "amount": number (total amount paid, positive number)
+- "date": string (transaction date in YYYY-MM-DD format)
+- "category": string (must be one of: ${categoryNames})
+- "description": string (brief description of the purchase, e.g. "Fuel purchase at Pilot Travel Center")
+- "confidence": number (0-100, your confidence in the extraction accuracy)
+
+If you cannot read a field clearly, make your best estimate and lower the confidence score. For the category, pick the most appropriate one from the list for a trucking company.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Please analyze this receipt and extract the transaction details." },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      max_tokens: 500,
+    });
+
+    const text = response.choices[0]?.message?.content || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Failed to parse AI response");
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      vendor: String(parsed.vendor || "Unknown"),
+      amount: Number(parsed.amount) || 0,
+      date: String(parsed.date || new Date().toISOString().split("T")[0]),
+      category: String(parsed.category || "Uncategorized"),
+      description: String(parsed.description || `${parsed.vendor || "Unknown"} purchase`),
+      confidence: Math.min(100, Math.max(0, Number(parsed.confidence) || 50)),
+    };
+  }
+
+  app.post("/api/portal/bookkeeping/upload-receipt", isAuthenticated, isClient, receiptUpload.single("receipt"), async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (!sub || sub.status !== "active") return res.status(403).json({ message: "Active bookkeeping subscription required" });
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "Receipt image required" });
+
+      const imageBase64 = file.buffer.toString("base64");
+      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype);
+
+      const txDate = new Date(extracted.date);
+      if (isNaN(txDate.getTime())) throw new Error("Could not parse date from receipt");
+
+      const transaction = await storage.createBankTransaction({
+        clientId,
+        transactionDate: txDate,
+        description: extracted.description || `${extracted.vendor} purchase`,
+        amount: String(-Math.abs(extracted.amount)),
+        aiCategory: extracted.category,
+        aiConfidence: String(extracted.confidence),
+        originalCategory: extracted.category,
+        statementMonth: txDate.getMonth() + 1,
+        statementYear: txDate.getFullYear(),
+        source: "receipt",
+        receiptData: JSON.stringify({ vendor: extracted.vendor, rawAmount: extracted.amount, extractedDate: extracted.date, confidence: extracted.confidence }),
+      });
+
+      await audit(req, "uploaded", "receipt", clientId, `Receipt scanned: ${extracted.vendor} $${extracted.amount}`);
+      res.json({ transaction, extracted });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/bookkeeping/upload-receipt/:clientId", isAuthenticated, isAdmin, receiptUpload.single("receipt"), async (req, res) => {
+    try {
+      const clientId = param(req, "clientId");
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "Receipt image required" });
+
+      const imageBase64 = file.buffer.toString("base64");
+      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype);
+
+      const txDate = new Date(extracted.date);
+      if (isNaN(txDate.getTime())) throw new Error("Could not parse date from receipt");
+
+      const transaction = await storage.createBankTransaction({
+        clientId,
+        transactionDate: txDate,
+        description: extracted.description || `${extracted.vendor} purchase`,
+        amount: String(-Math.abs(extracted.amount)),
+        aiCategory: extracted.category,
+        aiConfidence: String(extracted.confidence),
+        originalCategory: extracted.category,
+        statementMonth: txDate.getMonth() + 1,
+        statementYear: txDate.getFullYear(),
+        source: "receipt",
+        receiptData: JSON.stringify({ vendor: extracted.vendor, rawAmount: extracted.amount, extractedDate: extracted.date, confidence: extracted.confidence }),
+      });
+
+      await audit(req, "uploaded", "receipt", clientId, `Admin receipt scan: ${extracted.vendor} $${extracted.amount}`);
+      res.json({ transaction, extracted });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

@@ -241,6 +241,8 @@ export const bankTransactions = pgTable("bank_transactions", {
   accountLast4: varchar("account_last4"),
   statementMonth: integer("statement_month").notNull(),
   statementYear: integer("statement_year").notNull(),
+  source: text("source").default("csv"),
+  receiptData: text("receipt_data"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

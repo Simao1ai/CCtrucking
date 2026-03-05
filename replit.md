@@ -43,6 +43,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
   - **AI Transaction Categorization**: OpenAI-powered categorization of transactions into trucking-specific categories (Fuel, Maintenance, Tolls, Insurance, Payroll, Permits, Equipment, Meals, Parking, License & Registration, Lease Payments, Office, Professional Services, Taxes, Freight Revenue, Fuel Surcharge, Accessorial Income, etc.). Batch processing with confidence scores.
   - **Monthly Financial Summaries**: Auto-generated income/expenses/net summaries with category breakdowns. Recharts visualization.
   - **Preparer Assignment**: Admin assigns tax preparers to client bookkeeping accounts. Preparers see only their assigned clients.
+  - **Receipt Scanning**: Clients can photograph receipts (mobile camera capture supported), upload them, and AI (OpenAI Vision) extracts vendor, amount, date, and category. Transactions are created automatically with `source: "receipt"` and stored extraction metadata in `receiptData`. Admin can also upload receipts on behalf of clients.
   - **Stripe Scaffolding**: Code ready for Stripe subscription billing when API keys are added (manual activation for now).
 - **Preparer Portal**: Dedicated portal at /preparer/* for tax preparers to review assigned client bookkeeping data, edit transaction categories, and mark transactions as reviewed.
 
@@ -55,7 +56,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 
 ### API Route Structure (Bookkeeping)
 - Admin: `/api/admin/bookkeeping/*` — full CRUD for subscriptions, transactions, categories, summaries, preparer assignments
-- Client Portal: `/api/portal/bookkeeping/*` — read own subscription/transactions/summaries, upload statements, self-activate subscription (`POST /api/portal/bookkeeping/subscribe`)
+- Client Portal: `/api/portal/bookkeeping/*` — read own subscription/transactions/summaries, upload statements, upload receipt photos with AI analysis, self-activate subscription (`POST /api/portal/bookkeeping/subscribe`)
 - Preparer: `/api/preparer/*` — read assigned clients, transactions, summaries; edit transaction categories
 
 ## External Dependencies

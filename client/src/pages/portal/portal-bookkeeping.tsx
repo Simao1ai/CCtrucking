@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, AlertCircle, CheckCircle, CreditCard } from "lucide-react";
+import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, AlertCircle, CheckCircle, CreditCard, Camera, Receipt, Loader2, X, ImageIcon } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { BookkeepingSubscription, BankTransaction, MonthlySummary } from "@shared/schema";
 
@@ -42,6 +42,9 @@ export default function PortalBookkeeping() {
   const [uploadYear, setUploadYear] = useState(String(now.getFullYear()));
   const [bankName, setBankName] = useState("");
   const [accountLast4, setAccountLast4] = useState("");
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptResult, setReceiptResult] = useState<any>(null);
 
   const { data: subscription, isLoading: loadingSub } = useQuery<BookkeepingSubscription | null>({
     queryKey: ["/api/portal/bookkeeping/subscription"],
@@ -103,6 +106,57 @@ export default function PortalBookkeeping() {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     },
   });
+
+  const receiptMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const res = await fetch("/api/portal/bookkeeping/upload-receipt", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Receipt upload failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portal/bookkeeping/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/portal/bookkeeping/summaries"] });
+      setReceiptResult(data.extracted);
+      const amt = Number(data.extracted.amount) || 0;
+      toast({ title: "Receipt scanned!", description: `${data.extracted.vendor} — $${amt.toFixed(2)} added to your expenses.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Receipt scan failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleReceiptSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setReceiptPreview(reader.result as string);
+    reader.readAsDataURL(file);
+    setReceiptResult(null);
+  };
+
+  const handleReceiptUpload = () => {
+    const file = receiptInputRef.current?.files?.[0];
+    if (!file) {
+      toast({ title: "No image selected", description: "Please take a photo or select a receipt image.", variant: "destructive" });
+      return;
+    }
+    const formData = new FormData();
+    formData.append("receipt", file);
+    receiptMutation.mutate(formData);
+  };
+
+  const clearReceipt = () => {
+    setReceiptPreview(null);
+    setReceiptResult(null);
+    if (receiptInputRef.current) receiptInputRef.current.value = "";
+  };
 
   const handleUpload = () => {
     const file = fileInputRef.current?.files?.[0];
@@ -307,6 +361,127 @@ export default function PortalBookkeeping() {
           )}
 
           {isActive && (
+            <Card data-testid="card-scan-receipt">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Receipt className="w-5 h-5" />
+                  Scan Receipt
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Take a photo of a receipt and AI will extract the details and add it as an expense
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={receiptInputRef}
+                      onChange={handleReceiptSelect}
+                      className="hidden"
+                      data-testid="input-receipt-file"
+                    />
+                    {!receiptPreview ? (
+                      <div
+                        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                        onClick={() => receiptInputRef.current?.click()}
+                        data-testid="dropzone-receipt"
+                      >
+                        <Camera className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                        <p className="text-sm font-medium">Tap to take a photo or select an image</p>
+                        <p className="text-xs text-muted-foreground mt-1">Supports JPG, PNG, HEIC</p>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <img
+                          src={receiptPreview}
+                          alt="Receipt preview"
+                          className="w-full max-h-64 object-contain rounded-lg border"
+                          data-testid="img-receipt-preview"
+                        />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-7 w-7"
+                          onClick={clearReceipt}
+                          data-testid="button-clear-receipt"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {receiptPreview && !receiptResult && (
+                      <Button
+                        className="w-full mt-3"
+                        onClick={handleReceiptUpload}
+                        disabled={receiptMutation.isPending}
+                        data-testid="button-scan-receipt"
+                      >
+                        {receiptMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing receipt...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="w-4 h-4 mr-2" />
+                            Scan & Add Expense
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {receiptResult && (
+                    <div className="flex-1 p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900" data-testid="card-receipt-result">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <p className="font-medium text-green-800 dark:text-green-300">Expense Added</p>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Vendor</span>
+                          <span className="font-medium" data-testid="text-receipt-vendor">{receiptResult.vendor}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amount</span>
+                          <span className="font-medium text-red-600 dark:text-red-400" data-testid="text-receipt-amount">
+                            ${(Number(receiptResult.amount) || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Date</span>
+                          <span className="font-medium" data-testid="text-receipt-date">{receiptResult.date}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Category</span>
+                          <Badge variant="secondary" data-testid="badge-receipt-category">{receiptResult.category}</Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Confidence</span>
+                          <span className="font-medium" data-testid="text-receipt-confidence">{receiptResult.confidence}%</span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-3"
+                        onClick={clearReceipt}
+                        data-testid="button-scan-another"
+                      >
+                        <Camera className="w-3 h-3 mr-2" />
+                        Scan Another Receipt
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {isActive && (
             <Card data-testid="card-transactions">
               <CardHeader>
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -355,11 +530,12 @@ export default function PortalBookkeeping() {
                           <th className="text-left p-2 font-medium">Description</th>
                           <th className="text-right p-2 font-medium">Amount</th>
                           <th className="text-left p-2 font-medium">Category</th>
+                          <th className="text-left p-2 font-medium">Source</th>
                           <th className="text-right p-2 font-medium">AI Confidence</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {transactions.map((tx) => (
+                        {transactions.map((tx: any) => (
                           <tr key={tx.id} className="border-t" data-testid={`row-transaction-${tx.id}`}>
                             <td className="p-2">
                               {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString() : "N/A"}
@@ -372,6 +548,16 @@ export default function PortalBookkeeping() {
                               <Badge variant="secondary">
                                 {tx.manualCategory || tx.aiCategory || tx.originalCategory || "Uncategorized"}
                               </Badge>
+                            </td>
+                            <td className="p-2">
+                              {tx.source === "receipt" ? (
+                                <Badge variant="outline" className="text-xs gap-1">
+                                  <Receipt className="w-3 h-3" />
+                                  Receipt
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs">CSV</Badge>
+                              )}
                             </td>
                             <td className="p-2 text-right">
                               {tx.aiConfidence ? `${parseFloat(String(tx.aiConfidence)).toFixed(0)}%` : "-"}
