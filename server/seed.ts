@@ -1,8 +1,39 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users } from "@shared/schema";
 import { sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+
+async function seedUsers() {
+  const existingUsers = await db.select().from(users);
+  if (existingUsers.length > 0) return;
+
+  const adminHash = await bcrypt.hash("admin123", 10);
+  const staffHash = await bcrypt.hash("staff123", 10);
+
+  await db.insert(users).values([
+    {
+      username: "admin",
+      password: adminHash,
+      email: "admin@cctrucking.com",
+      firstName: "CC",
+      lastName: "Admin",
+      role: "owner",
+    },
+    {
+      username: "staff",
+      password: staffHash,
+      email: "staff@cctrucking.com",
+      firstName: "Staff",
+      lastName: "Member",
+      role: "admin",
+    },
+  ]);
+  console.log("Default users seeded.");
+}
 
 export async function seedDatabase() {
+  await seedUsers();
+
   const existingClients = await db.select().from(clients);
   if (existingClients.length > 0) return;
 
