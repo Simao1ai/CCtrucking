@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Receipt, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Receipt, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format } from "date-fns";
 import type { Invoice, InvoiceLineItem } from "@shared/schema";
 
@@ -151,6 +151,15 @@ export default function PortalInvoices() {
                         {invoice.status === "approved" ? "Approved - Processing" : invoice.status}
                       </Badge>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`/api/portal/invoices/${invoice.id}/pdf`, "_blank")}
+                      data-testid={`button-download-pdf-${invoice.id}`}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1" />
+                      PDF
+                    </Button>
                     {(invoice.status === "sent" || invoice.status === "overdue") && (
                       <Button
                         size="sm"

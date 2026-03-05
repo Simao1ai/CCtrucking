@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertInvoiceSchema, type Invoice, type Client, type ServiceItem, type InvoiceLineItem } from "@shared/schema";
-import { Plus, Search, Receipt, DollarSign, Calendar, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Receipt, DollarSign, Calendar, X, ChevronDown, ChevronUp, Download, Send, Loader2, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
 
@@ -314,6 +314,20 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
   const clientMap = new Map(clients.map(c => [c.id, c]));
   const [addingItem, setAddingItem] = useState(false);
   const [newItem, setNewItem] = useState<LineItemEntry>({ serviceItemId: null, description: "", quantity: 1, unitPrice: "0.00", amount: "0.00" });
+
+  const sendInvoiceMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/invoices/${invoice.id}/send`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      toast({ title: "Invoice sent!", description: data.message });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send", description: err.message, variant: "destructive" });
+    },
+  });
   const { data: serviceItems } = useQuery<ServiceItem[]>({ queryKey: ["/api/admin/service-items"] });
   const { data: lineItems, isLoading } = useQuery<InvoiceLineItem[]>({
     queryKey: ["/api/invoices", invoice.id, "line-items"],
@@ -399,6 +413,35 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
           <p>{invoice.description}</p>
         </div>
       )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, "_blank")}
+          data-testid={`button-download-pdf-${invoice.id}`}
+        >
+          <Download className="w-3.5 h-3.5 mr-1.5" />
+          Download PDF
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => sendInvoiceMutation.mutate()}
+          disabled={sendInvoiceMutation.isPending}
+          data-testid={`button-send-invoice-${invoice.id}`}
+        >
+          {sendInvoiceMutation.isPending ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              Sending...
+            </>
+          ) : (
+            <>
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              Email Invoice to Client
+            </>
+          )}
+        </Button>
+      </div>
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium">Line Items</p>

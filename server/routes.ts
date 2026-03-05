@@ -22,7 +22,10 @@ import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { PassThrough } from "stream";
 import webpush from "web-push";
+import { generateInvoicePDF } from "./invoice-pdf";
+import { sendInvoiceEmail } from "./invoice-email";
 
 const uploadDir = path.join(process.cwd(), "uploads", "tax-documents");
 if (!fs.existsSync(uploadDir)) {
@@ -442,6 +445,163 @@ export async function registerRoutes(
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     await audit(req, "updated", "invoice", invoice.id, `Updated invoice #${invoice.invoiceNumber} — status: ${invoice.status}`);
     res.json(invoice);
+  });
+
+  app.get("/api/invoices/:id/pdf", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const invoice = await storage.getInvoice(param(req, "id"));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      const client = await storage.getClient(invoice.clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+
+      const pdfDoc = generateInvoicePDF({
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        createdAt: invoice.createdAt,
+        dueDate: invoice.dueDate,
+        paidDate: invoice.paidDate,
+        description: invoice.description,
+        amount: String(invoice.amount),
+        client: {
+          companyName: client.companyName,
+          contactName: client.contactName,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          city: client.city,
+          state: client.state,
+          zipCode: client.zipCode,
+        },
+        lineItems: lineItems.map(li => ({
+          description: li.description,
+          quantity: li.quantity,
+          unitPrice: String(li.unitPrice),
+          amount: String(li.amount),
+        })),
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+      pdfDoc.pipe(res);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/invoices/:id/send", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const invoice = await storage.getInvoice(param(req, "id"));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      const client = await storage.getClient(invoice.clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+
+      const pdfDoc = generateInvoicePDF({
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        createdAt: invoice.createdAt,
+        dueDate: invoice.dueDate,
+        paidDate: invoice.paidDate,
+        description: invoice.description,
+        amount: String(invoice.amount),
+        client: {
+          companyName: client.companyName,
+          contactName: client.contactName,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          city: client.city,
+          state: client.state,
+          zipCode: client.zipCode,
+        },
+        lineItems: lineItems.map(li => ({
+          description: li.description,
+          quantity: li.quantity,
+          unitPrice: String(li.unitPrice),
+          amount: String(li.amount),
+        })),
+      });
+
+      const passThrough = new PassThrough();
+      pdfDoc.pipe(passThrough);
+      const chunks: Buffer[] = [];
+      passThrough.on("data", (chunk: Buffer) => chunks.push(chunk));
+      await new Promise<void>((resolve, reject) => {
+        passThrough.on("end", resolve);
+        passThrough.on("error", reject);
+        pdfDoc.on("error", reject);
+      });
+      const pdfBuffer = Buffer.concat(chunks);
+
+      const emailTo = req.body?.email || client?.email;
+      if (!emailTo) {
+        return res.status(400).json({ message: "No email address found for this client. Please add an email to the client record first." });
+      }
+
+      await sendInvoiceEmail({
+        to: emailTo,
+        clientName: client?.contactName || "Valued Client",
+        invoiceNumber: invoice.invoiceNumber,
+        amount: String(invoice.amount),
+        dueDate: invoice.dueDate ? String(invoice.dueDate) : null,
+        pdfBuffer,
+      });
+
+      if (invoice.status === "draft") {
+        await storage.updateInvoice(invoice.id, { status: "sent" });
+      }
+
+      await audit(req, "sent", "invoice", invoice.id, `Emailed invoice #${invoice.invoiceNumber} to ${emailTo}`);
+      notifyClientUsers(invoice.clientId, "Invoice Sent", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been sent to your email.`, "invoice", "/portal/invoices");
+
+      res.json({ message: `Invoice sent to ${emailTo}`, invoiceNumber: invoice.invoiceNumber });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/portal/invoices/:id/pdf", isAuthenticated, isClient, async (req: any, res) => {
+    try {
+      const invoice = await storage.getInvoice(param(req, "id"));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (invoice.clientId !== req.clientId) return res.status(403).json({ message: "Access denied" });
+      const client = await storage.getClient(invoice.clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+
+      const pdfDoc = generateInvoicePDF({
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        createdAt: invoice.createdAt,
+        dueDate: invoice.dueDate,
+        paidDate: invoice.paidDate,
+        description: invoice.description,
+        amount: String(invoice.amount),
+        client: {
+          companyName: client.companyName,
+          contactName: client.contactName,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          city: client.city,
+          state: client.state,
+          zipCode: client.zipCode,
+        },
+        lineItems: lineItems.map(li => ({
+          description: li.description,
+          quantity: li.quantity,
+          unitPrice: String(li.unitPrice),
+          amount: String(li.amount),
+        })),
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${invoice.invoiceNumber}.pdf"`);
+      pdfDoc.pipe(res);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/admin/chats", isAuthenticated, isAdmin, async (_req, res) => {

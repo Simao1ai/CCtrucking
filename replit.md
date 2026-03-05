@@ -31,7 +31,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Client Management**: Comprehensive client profiles including DOT/MC/EIN numbers.
 - **Service Ticket Management**: Workflow for various compliance and business setup services.
 - **Document Management**: Tracking and storage of compliance documents per client.
-- **Invoicing**: Detailed invoicing with line items, multiple statuses (draft, sent, paid, overdue, approved), and auto-calculation of totals.
+- **Invoicing**: Detailed invoicing with line items, multiple statuses (draft, sent, paid, overdue, approved), auto-calculation of totals, PDF generation (pdfkit), and email sending via Outlook SMTP (nodemailer). Admin can download PDF or email invoice with attached PDF to client. Clients can download PDF from portal. Sending an invoice auto-updates status from "draft" to "sent".
 - **Chat System**: Client-admin messaging system scoped per client.
 - **Signature Requests**: Management and tracking of documents requiring client signatures.
 - **Tax Preparation Intake**: System for collecting tax documents, with AI analysis capabilities and CSV export.
