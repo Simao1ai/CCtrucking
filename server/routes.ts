@@ -1574,6 +1574,70 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     });
   });
 
+  app.get("/api/admin/tax-prep/bookkeeping-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const clientId = param(req, "clientId");
+      const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
+
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (!sub) {
+        return res.json({ hasBookkeeping: false });
+      }
+
+      const summaries = await storage.getMonthlySummaries(clientId);
+      const yearSummaries = summaries.filter(s => s.year === taxYear);
+
+      const transactions = await storage.getBankTransactions(clientId);
+      const yearTransactions = transactions.filter(tx => {
+        if (tx.statementYear === taxYear) return true;
+        if (tx.transactionDate) {
+          const d = new Date(tx.transactionDate);
+          return d.getFullYear() === taxYear;
+        }
+        return false;
+      });
+
+      const totalIncome = yearSummaries.reduce((s, m) => s + parseFloat(String(m.totalIncome || "0")), 0);
+      const totalExpenses = yearSummaries.reduce((s, m) => s + parseFloat(String(m.totalExpenses || "0")), 0);
+      const netIncome = yearSummaries.reduce((s, m) => s + parseFloat(String(m.netIncome || "0")), 0);
+
+      const categoryTotals: Record<string, number> = {};
+      for (const tx of yearTransactions) {
+        const cat = tx.manualCategory || tx.aiCategory || tx.originalCategory || "Uncategorized";
+        const amt = Math.abs(parseFloat(String(tx.amount || "0")));
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+      }
+
+      const topCategories = Object.entries(categoryTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([name, amount]) => ({ name, amount }));
+
+      const monthlyBreakdown = yearSummaries.map(s => ({
+        month: s.month,
+        year: s.year,
+        income: parseFloat(String(s.totalIncome || "0")),
+        expenses: parseFloat(String(s.totalExpenses || "0")),
+        net: parseFloat(String(s.netIncome || "0")),
+      })).sort((a, b) => a.month - b.month);
+
+      res.json({
+        hasBookkeeping: true,
+        subscriptionStatus: sub.status,
+        taxYear,
+        totalIncome,
+        totalExpenses,
+        netIncome,
+        transactionCount: yearTransactions.length,
+        monthsCovered: yearSummaries.length,
+        topCategories,
+        monthlyBreakdown,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ===== GOOGLE SHEETS ROUTES (admin only) =====
   app.get("/api/admin/sheets/info", isAuthenticated, isAdmin, async (req, res) => {
     try {

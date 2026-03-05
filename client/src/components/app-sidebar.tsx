@@ -30,7 +30,7 @@ const navItems = [
   { title: "Bookkeeping", url: "/admin/bookkeeping", icon: BookOpen },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3, ownerOnly: true },
   { title: "Employee Performance", url: "/admin/employee-performance", icon: Award, ownerOnly: true },
-  { title: "Audit Log", url: "/admin/audit", icon: History },
+  { title: "Audit Log", url: "/admin/audit", icon: History, ownerOnly: true },
   { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
   { title: "Users", url: "/admin/users", icon: UserCog },
 ];

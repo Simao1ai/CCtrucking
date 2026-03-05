@@ -18,8 +18,10 @@ import type { TaxDocument, Client } from "@shared/schema";
 import { insertTaxDocumentSchema } from "@shared/schema";
 import {
   Plus, Search, FileText, Download, Brain, AlertTriangle, CheckCircle,
-  Clock, Shield, Trash2, ChevronDown, ChevronUp, Upload, File, X, Paperclip
+  Clock, Shield, Trash2, ChevronDown, ChevronUp, Upload, File, X, Paperclip,
+  BookOpen, TrendingUp, TrendingDown, DollarSign, BarChart3
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format } from "date-fns";
 import { z } from "zod";
 
@@ -528,6 +530,148 @@ function ExtractedDataView({ doc }: { doc: TaxDocument }) {
   );
 }
 
+interface BookkeepingSummaryData {
+  hasBookkeeping: boolean;
+  subscriptionStatus?: string;
+  taxYear?: number;
+  totalIncome?: number;
+  totalExpenses?: number;
+  netIncome?: number;
+  transactionCount?: number;
+  monthsCovered?: number;
+  topCategories?: { name: string; amount: number }[];
+  monthlyBreakdown?: { month: number; income: number; expenses: number; net: number }[];
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function BookkeepingSummaryPanel({ clientId, taxYear }: { clientId: string; taxYear: number }) {
+  const { data, isLoading } = useQuery<BookkeepingSummaryData>({
+    queryKey: ["/api/admin/tax-prep/bookkeeping-summary", clientId, taxYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/tax-prep/bookkeeping-summary/${clientId}?taxYear=${taxYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch bookkeeping data");
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+  if (!data || !data.hasBookkeeping) return null;
+  if (data.transactionCount === 0 && data.monthsCovered === 0) {
+    return (
+      <Card className="border-primary/20 bg-primary/5" data-testid="card-bookkeeping-summary-empty">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 text-sm">
+            <BookOpen className="w-4 h-4 text-primary" />
+            <span className="font-medium">Bookkeeping Active</span>
+            <span className="text-muted-foreground">— No financial data recorded for {taxYear} yet.</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const chartData = (data.monthlyBreakdown || []).map(m => ({
+    name: MONTH_NAMES[m.month - 1] || String(m.month),
+    Income: m.income,
+    Expenses: m.expenses,
+  }));
+
+  return (
+    <Card className="border-primary/20" data-testid="card-bookkeeping-summary">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-primary" />
+            Bookkeeping Financial Data — {taxYear}
+          </CardTitle>
+          <Badge variant="outline" className="text-xs" data-testid="badge-bookkeeping-status">
+            {data.transactionCount} transactions · {data.monthsCovered} months
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="w-3.5 h-3.5 text-green-600" />
+              <p className="text-xs text-muted-foreground">Total Income</p>
+            </div>
+            <p className="text-lg font-bold text-green-600 dark:text-green-400" data-testid="text-bk-income">
+              ${(data.totalIncome || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingDown className="w-3.5 h-3.5 text-red-600" />
+              <p className="text-xs text-muted-foreground">Total Expenses</p>
+            </div>
+            <p className="text-lg font-bold text-red-600 dark:text-red-400" data-testid="text-bk-expenses">
+              ${(data.totalExpenses || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+            <div className="flex items-center gap-1.5 mb-1">
+              <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+              <p className="text-xs text-muted-foreground">Net Income</p>
+            </div>
+            <p className={`text-lg font-bold ${(data.netIncome || 0) >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"}`} data-testid="text-bk-net">
+              ${(data.netIncome || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-1.5 mb-1">
+              <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Avg Monthly</p>
+            </div>
+            <p className="text-lg font-bold" data-testid="text-bk-avg">
+              ${data.monthsCovered && data.monthsCovered > 0
+                ? ((data.netIncome || 0) / data.monthsCovered).toLocaleString("en-US", { minimumFractionDigits: 2 })
+                : "0.00"}
+            </p>
+          </div>
+        </div>
+
+        {chartData.length > 1 && (
+          <div data-testid="chart-bookkeeping-monthly">
+            <p className="text-xs font-medium mb-2">Monthly Income vs Expenses</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value: number) => `$${value.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+                <Bar dataKey="Income" fill="hsl(142, 71%, 45%)" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="Expenses" fill="hsl(0, 84%, 60%)" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {data.topCategories && data.topCategories.length > 0 && (
+          <div data-testid="section-top-categories">
+            <p className="text-xs font-medium mb-2">Top Expense Categories</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {data.topCategories.slice(0, 9).map((cat, i) => (
+                <div key={i} className="flex items-center justify-between text-xs p-2 rounded bg-muted/30" data-testid={`category-${i}`}>
+                  <span className="truncate">{cat.name}</span>
+                  <span className="font-medium ml-2 flex-shrink-0">${cat.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 p-2 rounded bg-muted/30 text-xs text-muted-foreground">
+          <Shield className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>This data comes from the client's bookkeeping records. Compare with tax documents above to verify reported income and deductions.</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminTaxPrep() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -697,6 +841,13 @@ export default function AdminTaxPrep() {
           </SelectContent>
         </Select>
       </div>
+
+      {filterClient !== "all" && (
+        <BookkeepingSummaryPanel
+          clientId={filterClient}
+          taxYear={filterYear !== "all" ? parseInt(filterYear) : new Date().getFullYear()}
+        />
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
