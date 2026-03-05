@@ -1175,7 +1175,19 @@ ${allDocs.slice(0, 30).map(d => `- ${d.name} (${d.type}, ${d.status}) — Client
 SERVICE CATALOG (${allServiceItemsList.length} items):
 ${allServiceItemsList.map(s => `- ${s.name} — $${s.defaultPrice} (${s.category})`).join('\n')}
 
-You can answer questions about clients, invoices, tickets, documents, revenue, and services. Be concise, accurate, and helpful. Format numbers as currency when relevant. If asked to perform an action (create ticket, send invoice, etc.), describe what should be done and suggest the user confirm in the admin portal.`;
+You can answer questions about clients, invoices, tickets, documents, revenue, and services.
+
+FORMATTING RULES:
+- Use **bold** for important values, names, and statuses
+- Format currency amounts as **$X,XXX.XX**
+- Use bullet points (- ) for lists
+- Use ### headings for sections when answering complex queries
+- Include relevant admin portal links using markdown: [Link Text](/admin/path)
+  Available links: [View Clients](/admin/clients), [View Tickets](/admin/tickets), [View Invoices](/admin/invoices), [View Documents](/admin/documents), [Service Catalog](/admin/service-items), [Bookkeeping](/admin/bookkeeping), [Analytics](/admin/analytics)
+  For specific clients: [Client Name](/admin/clients/CLIENT_ID)
+- Keep responses concise and well-structured
+- Use tables for comparisons when appropriate (plain text aligned)
+- If asked to perform an action, describe what should be done and provide a direct link to the relevant page`;
 
       const openai = new OpenAI({
         apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,

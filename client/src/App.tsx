@@ -37,6 +37,7 @@ import AdminAudit from "@/pages/admin-audit";
 import AdminServiceItems from "@/pages/admin-service-items";
 import AdminAnalytics from "@/pages/admin-analytics";
 import AdminAiChat from "@/pages/admin-ai-chat";
+import { AiChatWidget } from "@/components/ai-chat-widget";
 import AdminTaxPrep from "@/pages/admin-tax-prep";
 import AdminEmployeePerformance from "@/pages/admin-employee-performance";
 import AdminBookkeeping from "@/pages/admin-bookkeeping";
@@ -83,6 +84,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <AiChatWidget />
       </div>
     </SidebarProvider>
   );
@@ -249,7 +251,7 @@ function App() {
             <AdminLayout><AdminAnalytics /></AdminLayout>
           </Route>
           <Route path="/admin/ai-chat">
-            <AdminLayout><AdminAiChat /></AdminLayout>
+            <AdminLayout><div className="p-6 text-center text-muted-foreground">The AI Assistant is now available as a floating chat button in the bottom-right corner of every page.</div></AdminLayout>
           </Route>
           <Route path="/admin/tax-prep">
             <AdminLayout><AdminTaxPrep /></AdminLayout>

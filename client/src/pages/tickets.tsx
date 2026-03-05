@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertServiceTicketSchema, type ServiceTicket, type InsertServiceTicket, type Client } from "@shared/schema";
-import { Plus, Search, Ticket, Calendar, User } from "lucide-react";
+import type { User } from "@shared/models/auth";
+import { Plus, Search, Ticket, Calendar, User as UserIcon } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
 
@@ -60,8 +61,14 @@ const ticketFormSchema = insertServiceTicketSchema.extend({
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
 
+type SafeUser = Omit<User, "password">;
+
 function TicketForm({ onSuccess, clients }: { onSuccess: () => void; clients: Client[] }) {
   const { toast } = useToast();
+  const { data: teamMembers = [] } = useQuery<SafeUser[]>({
+    queryKey: ["/api/admin/users"],
+    select: (users: SafeUser[]) => users.filter(u => u.role === "admin" || u.role === "owner"),
+  });
   const form = useForm<TicketFormValues>({
     resolver: zodResolver(ticketFormSchema),
     defaultValues: {
@@ -171,8 +178,22 @@ function TicketForm({ onSuccess, clients }: { onSuccess: () => void; clients: Cl
         )} />
         <FormField control={form.control} name="assignedTo" render={({ field }) => (
           <FormItem>
-            <FormLabel>Assigned To</FormLabel>
-            <FormControl><Input {...field} value={field.value ?? ""} placeholder="Team member name" data-testid="input-assigned-to" /></FormControl>
+            <FormLabel>Assign Team Member</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value ?? ""}>
+              <FormControl>
+                <SelectTrigger data-testid="select-assigned-to">
+                  <SelectValue placeholder="Select team member" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {teamMembers.map(member => (
+                  <SelectItem key={member.id} value={`${member.firstName || ''} ${member.lastName || ''}`.trim() || member.username} data-testid={`option-member-${member.id}`}>
+                    {`${member.firstName || ''} ${member.lastName || ''}`.trim() || member.username}
+                    {member.role === "owner" ? " (Owner)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FormMessage />
           </FormItem>
         )} />
@@ -310,7 +331,7 @@ export default function Tickets() {
                             {ticket.serviceType}
                           </span>
                           <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
+                            <UserIcon className="w-3 h-3" />
                             {clientMap.get(ticket.clientId)?.companyName ?? "Unknown"}
                           </span>
                           {ticket.dueDate && (
@@ -321,7 +342,7 @@ export default function Tickets() {
                           )}
                           {ticket.assignedTo && (
                             <span className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
+                              <UserIcon className="w-3 h-3" />
                               {ticket.assignedTo}
                             </span>
                           )}
