@@ -32,7 +32,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Service Ticket Management**: Workflow for various compliance and business setup services. Supports "blocked" status when required documents are pending. Required documents can be attached to tickets with status tracking (pending/received/waived).
 - **Document Management**: Tracking and storage of compliance documents per client. Documents can be linked as required docs on tickets.
 - **Invoicing**: Detailed invoicing with line items, multiple statuses (draft, sent, paid, overdue, approved), auto-calculation of totals, PDF generation (pdfkit), and email sending via Outlook SMTP (nodemailer). Admin can download PDF or email invoice with attached PDF to client. Clients can download PDF from portal. Sending an invoice auto-updates status from "draft" to "sent". Automated AR escalation: reminders sent at day 7 (friendly), day 14 (second notice), day 21+ (final notice) via scheduled background job.
-- **Chat System**: Client-admin messaging system scoped per client.
+- **Chat System**: Client-admin messaging system scoped per client. Internal staff-to-staff messaging via `staff_messages` table with read tracking and notifications.
 - **Signature Requests**: Management and tracking of documents requiring client signatures.
 - **Tax Preparation Intake**: System for collecting tax documents, with AI analysis capabilities and CSV export.
 - **Service Catalog**: Predefined service items with categories and default pricing for streamlined invoicing. 10 default trucking services seeded (IFTA Filing, MCS-150 Update, UCR Registration, DOT Compliance Review, Business Entity Setup, Tax Preparation, Bookkeeping Monthly, Permit & Authority Filing, Insurance Filing, BOC-3 Filing).

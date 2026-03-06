@@ -27,6 +27,7 @@ import PortalInvoices from "@/pages/portal/portal-invoices";
 import PortalDocuments from "@/pages/portal/portal-documents";
 import PortalChat from "@/pages/portal/portal-chat";
 import AdminChat from "@/pages/admin-chat";
+import AdminStaffChat from "@/pages/admin-staff-chat";
 import AdminUsers from "@/pages/admin-users";
 import AdminSheets from "@/pages/admin-sheets";
 import AdminSignatures from "@/pages/admin-signatures";
@@ -226,6 +227,9 @@ function App() {
           </Route>
           <Route path="/admin/chat">
             <AdminLayout><AdminChat /></AdminLayout>
+          </Route>
+          <Route path="/admin/staff-chat">
+            <AdminLayout><AdminStaffChat /></AdminLayout>
           </Route>
           <Route path="/admin/users">
             <AdminLayout><AdminUsers /></AdminLayout>

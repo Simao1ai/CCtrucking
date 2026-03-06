@@ -4,12 +4,13 @@ import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
-  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules,
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
   type Invoice, type InsertInvoice,
   type ChatMessage, type InsertChatMessage,
+  type StaffMessage, type InsertStaffMessage,
   type SignatureRequest, type InsertSignatureRequest,
   type Notification, type InsertNotification,
   type FormTemplate, type InsertFormTemplate,
@@ -57,6 +58,12 @@ export interface IStorage {
 
   getChatMessages(clientId: string): Promise<ChatMessage[]>;
   createChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
+
+  getStaffMessages(userId: string): Promise<StaffMessage[]>;
+  getStaffConversation(userId1: string, userId2: string): Promise<StaffMessage[]>;
+  createStaffMessage(data: InsertStaffMessage): Promise<StaffMessage>;
+  markStaffMessagesRead(recipientId: string, senderId: string): Promise<void>;
+  getUnreadStaffMessageCount(userId: string): Promise<number>;
 
   getSignatureRequests(): Promise<SignatureRequest[]>;
   getSignatureRequest(id: string): Promise<SignatureRequest | undefined>;
@@ -263,6 +270,36 @@ export class DatabaseStorage implements IStorage {
   async createChatMessage(data: InsertChatMessage): Promise<ChatMessage> {
     const [msg] = await db.insert(chatMessages).values(data).returning();
     return msg;
+  }
+
+  async getStaffMessages(userId: string): Promise<StaffMessage[]> {
+    return db.select().from(staffMessages)
+      .where(sql`${staffMessages.senderId} = ${userId} OR ${staffMessages.recipientId} = ${userId}`)
+      .orderBy(desc(staffMessages.createdAt));
+  }
+
+  async getStaffConversation(userId1: string, userId2: string): Promise<StaffMessage[]> {
+    return db.select().from(staffMessages)
+      .where(sql`(${staffMessages.senderId} = ${userId1} AND ${staffMessages.recipientId} = ${userId2}) OR (${staffMessages.senderId} = ${userId2} AND ${staffMessages.recipientId} = ${userId1})`)
+      .orderBy(staffMessages.createdAt);
+  }
+
+  async createStaffMessage(data: InsertStaffMessage): Promise<StaffMessage> {
+    const [msg] = await db.insert(staffMessages).values(data).returning();
+    return msg;
+  }
+
+  async markStaffMessagesRead(recipientId: string, senderId: string): Promise<void> {
+    await db.update(staffMessages)
+      .set({ read: true })
+      .where(and(eq(staffMessages.recipientId, recipientId), eq(staffMessages.senderId, senderId)));
+  }
+
+  async getUnreadStaffMessageCount(userId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)` })
+      .from(staffMessages)
+      .where(and(eq(staffMessages.recipientId, userId), eq(staffMessages.read, false)));
+    return Number(result?.count || 0);
   }
 
   async getSignatureRequests(): Promise<SignatureRequest[]> {

@@ -10,6 +10,7 @@ import {
   insertBookkeepingSubscriptionSchema, insertBankTransactionSchema,
   insertTransactionCategorySchema, insertPreparerAssignmentSchema,
   insertTicketRequiredDocumentSchema, insertRecurringTemplateSchema, insertClientRecurringScheduleSchema,
+  insertStaffMessageSchema,
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents
@@ -631,6 +632,77 @@ export async function registerRoutes(
     const msg = await storage.createChatMessage(parsed.data);
     notifyClientUsers(param(req, "clientId"), "New Message", "You have a new message from CC Trucking Services.", "chat", "/portal/chat");
     res.status(201).json(msg);
+  });
+
+  // ===== STAFF MESSAGING =====
+  app.get("/api/admin/staff", isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const allUsers = await db.select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+      }).from(users).where(sql`${users.role} IN ('owner', 'admin')`);
+      res.json(allUsers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/staff-messages/unread", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const dbUser = req.dbUser;
+      const count = await storage.getUnreadStaffMessageCount(dbUser.id);
+      res.json({ count });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/staff-messages/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const dbUser = req.dbUser;
+      const otherUserId = req.params.userId;
+      await storage.markStaffMessagesRead(dbUser.id, otherUserId);
+      const msgs = await storage.getStaffConversation(dbUser.id, otherUserId);
+      res.json(msgs);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/staff-messages/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const dbUser = req.dbUser;
+      const recipientId = req.params.userId;
+      const recipientUsers = await db.select().from(users).where(eq(users.id, recipientId));
+      const recipient = recipientUsers[0];
+      if (!recipient) return res.status(404).json({ message: "Recipient not found" });
+
+      const parsed = insertStaffMessageSchema.safeParse({
+        senderId: dbUser.id,
+        senderName: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || dbUser.username,
+        recipientId,
+        recipientName: `${recipient.firstName || ''} ${recipient.lastName || ''}`.trim() || recipient.username,
+        message: req.body.message,
+      });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+      const msg = await storage.createStaffMessage(parsed.data);
+
+      await storage.createNotification({
+        userId: recipientId,
+        title: "New Staff Message",
+        message: `${parsed.data.senderName} sent you a message.`,
+        type: "chat",
+        link: "/admin/staff-chat",
+      });
+
+      res.status(201).json(msg);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/portal/account", isAuthenticated, isClient, async (req: any, res) => {
