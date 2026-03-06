@@ -15,7 +15,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertClientSchema, type Client, type InsertClient } from "@shared/schema";
-import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Eye } from "lucide-react";
+import { format } from "date-fns";
+import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Eye, Calendar } from "lucide-react";
+
+const PIPELINE_STAGES = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "quoted", label: "Quoted" },
+  { value: "proposal_sent", label: "Proposal Sent" },
+  { value: "negotiating", label: "Negotiating" },
+  { value: "won", label: "Won" },
+  { value: "lost", label: "Lost" },
+];
+
+const PIPELINE_STAGE_COLORS: Record<string, string> = {
+  new: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  contacted: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  quoted: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  proposal_sent: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  negotiating: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+  won: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  lost: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -42,8 +63,13 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
       zipCode: existingClient?.zipCode ?? "",
       status: existingClient?.status ?? "active",
       notes: existingClient?.notes ?? "",
+      pipelineStage: existingClient?.pipelineStage ?? "new",
+      nextActionDate: existingClient?.nextActionDate ? new Date(existingClient.nextActionDate) : null,
+      nextActionNote: existingClient?.nextActionNote ?? "",
     },
   });
+
+  const watchedStatus = form.watch("status");
 
   const mutation = useMutation({
     mutationFn: async (data: InsertClient) => {
@@ -173,6 +199,51 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
               <FormMessage />
             </FormItem>
           )} />
+          {watchedStatus === "prospect" && (
+            <>
+              <FormField control={form.control} name="pipelineStage" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pipeline Stage</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? "new"}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-pipeline-stage">
+                        <SelectValue placeholder="Select stage" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PIPELINE_STAGES.map(s => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="nextActionDate" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Next Action Date</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      data-testid="input-next-action-date"
+                      value={field.value ? format(new Date(field.value), "yyyy-MM-dd") : ""}
+                      onChange={(e) => {
+                        field.onChange(e.target.value ? new Date(e.target.value + "T00:00:00") : null);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="nextActionNote" render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel>Next Action Note</FormLabel>
+                  <FormControl><Textarea {...field} value={field.value ?? ""} placeholder="Describe the next action..." data-testid="input-next-action-note" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </>
+          )}
           <FormField control={form.control} name="notes" render={({ field }) => (
             <FormItem className="col-span-2">
               <FormLabel>Notes</FormLabel>
@@ -282,9 +353,16 @@ export default function Clients() {
                     <h3 className="font-semibold text-sm truncate">{client.companyName}</h3>
                     <p className="text-xs text-muted-foreground truncate">{client.contactName}</p>
                   </div>
-                  <Badge variant={client.status === "active" ? "default" : "secondary"} className="text-xs flex-shrink-0">
-                    {client.status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Badge variant={client.status === "active" ? "default" : "secondary"} className="text-xs" data-testid={`badge-status-${client.id}`}>
+                      {client.status}
+                    </Badge>
+                    {client.status === "prospect" && client.pipelineStage && (
+                      <Badge className={`text-xs no-default-hover-elevate no-default-active-elevate ${PIPELINE_STAGE_COLORS[client.pipelineStage] ?? ""}`} data-testid={`badge-pipeline-${client.id}`}>
+                        {PIPELINE_STAGES.find(s => s.value === client.pipelineStage)?.label ?? client.pipelineStage}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -306,6 +384,17 @@ export default function Clients() {
                       <Hash className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>DOT: {client.dotNumber}</span>
                     </div>
+                  )}
+                  {client.status === "prospect" && client.nextActionDate && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={`text-next-action-date-${client.id}`}>
+                      <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>Next: {format(new Date(client.nextActionDate), "MMM d, yyyy")}</span>
+                    </div>
+                  )}
+                  {client.status === "prospect" && client.nextActionNote && (
+                    <p className="text-xs text-muted-foreground truncate" data-testid={`text-next-action-note-${client.id}`}>
+                      {client.nextActionNote}
+                    </p>
                   )}
                 </div>
               </CardContent>

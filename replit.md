@@ -28,15 +28,17 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **PWA Support**: Progressive Web App with manifest.json, service worker for push notifications, and installable on mobile/desktop. Service worker handles push events and notification clicks with deep linking.
 
 ### Feature Specifications
-- **Client Management**: Comprehensive client profiles including DOT/MC/EIN numbers.
-- **Service Ticket Management**: Workflow for various compliance and business setup services.
-- **Document Management**: Tracking and storage of compliance documents per client.
-- **Invoicing**: Detailed invoicing with line items, multiple statuses (draft, sent, paid, overdue, approved), auto-calculation of totals, PDF generation (pdfkit), and email sending via Outlook SMTP (nodemailer). Admin can download PDF or email invoice with attached PDF to client. Clients can download PDF from portal. Sending an invoice auto-updates status from "draft" to "sent".
+- **Client Management**: Comprehensive client profiles including DOT/MC/EIN numbers. Prospect pipeline tracking with stage (new/contacted/quoted/proposal_sent/negotiating/won/lost), next action date, and next action note fields.
+- **Service Ticket Management**: Workflow for various compliance and business setup services. Supports "blocked" status when required documents are pending. Required documents can be attached to tickets with status tracking (pending/received/waived).
+- **Document Management**: Tracking and storage of compliance documents per client. Documents can be linked as required docs on tickets.
+- **Invoicing**: Detailed invoicing with line items, multiple statuses (draft, sent, paid, overdue, approved), auto-calculation of totals, PDF generation (pdfkit), and email sending via Outlook SMTP (nodemailer). Admin can download PDF or email invoice with attached PDF to client. Clients can download PDF from portal. Sending an invoice auto-updates status from "draft" to "sent". Automated AR escalation: reminders sent at day 7 (friendly), day 14 (second notice), day 21+ (final notice) via scheduled background job.
 - **Chat System**: Client-admin messaging system scoped per client.
 - **Signature Requests**: Management and tracking of documents requiring client signatures.
 - **Tax Preparation Intake**: System for collecting tax documents, with AI analysis capabilities and CSV export.
-- **Business Analytics**: Owner-only dashboard with key metrics: revenue, client acquisition, service breakdown, invoice aging, and top clients.
+- **Service Catalog**: Predefined service items with categories and default pricing for streamlined invoicing. 10 default trucking services seeded (IFTA Filing, MCS-150 Update, UCR Registration, DOT Compliance Review, Business Entity Setup, Tax Preparation, Bookkeeping Monthly, Permit & Authority Filing, Insurance Filing, BOC-3 Filing).
+- **Business Analytics**: Owner-only dashboard with key metrics: revenue, client acquisition, service breakdown, invoice aging, and top clients. Enhanced with ticket SLA tracking (7/14/30 day due counts, overdue list), document blockers by client, and detailed AR aging (current/30/60/90+ day buckets with dollar amounts).
 - **Employee Performance**: Owner-only grading system tracking staff activity via audit logs. Weighted scoring by action type and entity, letter grades (A+ through F), 12-week trend charts, individual breakdowns, and recent activity logs. Useful for employee review meetings.
+- **Recurring Compliance Templates**: System for auto-generating service tickets on recurring schedules. Admin creates templates (IFTA quarterly, UCR annual, MCS-150 biennial, DOT annual) with frequency, priority, and lead-time days. Clients can be assigned schedules with specific due dates. Background scheduler auto-creates tickets ahead of deadlines.
 - **Bookkeeping System**: Subscription-based ($50/month flat fee) bookkeeping service for clients.
   - **Subscription Management**: Admin activates/deactivates bookkeeping per client. Feature flag model — only subscribed clients see bookkeeping in their portal.
   - **Bank Statement Upload**: CSV upload with intelligent parsing (handles date, description, amount/debit/credit columns). Supports common bank statement formats.

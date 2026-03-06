@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine, ClipboardList, Stamp, History, BarChart3, DollarSign, Calculator, Award, BookOpen } from "lucide-react";
+import { Truck, LayoutDashboard, Users, Ticket, FileText, Receipt, LogOut, Home, MessageCircle, UserCog, FileSpreadsheet, PenLine, ClipboardList, Stamp, History, BarChart3, DollarSign, Calculator, Award, BookOpen, RefreshCcw } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +28,7 @@ const navItems = [
   { title: "Messages", url: "/admin/chat", icon: MessageCircle },
   { title: "Tax Prep", url: "/admin/tax-prep", icon: Calculator },
   { title: "Bookkeeping", url: "/admin/bookkeeping", icon: BookOpen },
+  { title: "Compliance", url: "/admin/recurring", icon: RefreshCcw },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3, ownerOnly: true },
   { title: "Employee Performance", url: "/admin/employee-performance", icon: Award, ownerOnly: true },
   { title: "Audit Log", url: "/admin/audit", icon: History, ownerOnly: true },

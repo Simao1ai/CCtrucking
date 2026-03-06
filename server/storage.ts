@@ -4,6 +4,7 @@ import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -24,6 +25,9 @@ import {
   type TransactionCategory, type InsertTransactionCategory,
   type MonthlySummary, type InsertMonthlySummary,
   type PreparerAssignment, type InsertPreparerAssignment,
+  type TicketRequiredDocument, type InsertTicketRequiredDocument,
+  type RecurringTemplate, type InsertRecurringTemplate,
+  type ClientRecurringSchedule, type InsertClientRecurringSchedule,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -140,6 +144,23 @@ export interface IStorage {
   getPreparerAssignmentsByClient(clientId: string): Promise<PreparerAssignment[]>;
   createPreparerAssignment(data: InsertPreparerAssignment): Promise<PreparerAssignment>;
   deletePreparerAssignment(id: string): Promise<void>;
+
+  getTicketRequiredDocs(ticketId: string): Promise<TicketRequiredDocument[]>;
+  createTicketRequiredDoc(data: InsertTicketRequiredDocument): Promise<TicketRequiredDocument>;
+  updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>): Promise<TicketRequiredDocument | undefined>;
+  deleteTicketRequiredDoc(id: string): Promise<void>;
+
+  getRecurringTemplates(): Promise<RecurringTemplate[]>;
+  getRecurringTemplate(id: string): Promise<RecurringTemplate | undefined>;
+  createRecurringTemplate(data: InsertRecurringTemplate): Promise<RecurringTemplate>;
+  updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>): Promise<RecurringTemplate | undefined>;
+  deleteRecurringTemplate(id: string): Promise<void>;
+
+  getClientRecurringSchedules(clientId?: string): Promise<ClientRecurringSchedule[]>;
+  getActiveSchedules(): Promise<ClientRecurringSchedule[]>;
+  createClientRecurringSchedule(data: InsertClientRecurringSchedule): Promise<ClientRecurringSchedule>;
+  updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>): Promise<ClientRecurringSchedule | undefined>;
+  deleteClientRecurringSchedule(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -583,6 +604,72 @@ export class DatabaseStorage implements IStorage {
 
   async deletePreparerAssignment(id: string): Promise<void> {
     await db.delete(preparerAssignments).where(eq(preparerAssignments.id, id));
+  }
+
+  async getTicketRequiredDocs(ticketId: string): Promise<TicketRequiredDocument[]> {
+    return db.select().from(ticketRequiredDocuments).where(eq(ticketRequiredDocuments.ticketId, ticketId)).orderBy(desc(ticketRequiredDocuments.createdAt));
+  }
+
+  async createTicketRequiredDoc(data: InsertTicketRequiredDocument): Promise<TicketRequiredDocument> {
+    const [doc] = await db.insert(ticketRequiredDocuments).values(data).returning();
+    return doc;
+  }
+
+  async updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>): Promise<TicketRequiredDocument | undefined> {
+    const [doc] = await db.update(ticketRequiredDocuments).set(data).where(eq(ticketRequiredDocuments.id, id)).returning();
+    return doc;
+  }
+
+  async deleteTicketRequiredDoc(id: string): Promise<void> {
+    await db.delete(ticketRequiredDocuments).where(eq(ticketRequiredDocuments.id, id));
+  }
+
+  async getRecurringTemplates(): Promise<RecurringTemplate[]> {
+    return db.select().from(recurringTemplates).orderBy(desc(recurringTemplates.createdAt));
+  }
+
+  async getRecurringTemplate(id: string): Promise<RecurringTemplate | undefined> {
+    const [template] = await db.select().from(recurringTemplates).where(eq(recurringTemplates.id, id));
+    return template;
+  }
+
+  async createRecurringTemplate(data: InsertRecurringTemplate): Promise<RecurringTemplate> {
+    const [template] = await db.insert(recurringTemplates).values(data).returning();
+    return template;
+  }
+
+  async updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>): Promise<RecurringTemplate | undefined> {
+    const [template] = await db.update(recurringTemplates).set(data).where(eq(recurringTemplates.id, id)).returning();
+    return template;
+  }
+
+  async deleteRecurringTemplate(id: string): Promise<void> {
+    await db.delete(recurringTemplates).where(eq(recurringTemplates.id, id));
+  }
+
+  async getClientRecurringSchedules(clientId?: string): Promise<ClientRecurringSchedule[]> {
+    if (clientId) {
+      return db.select().from(clientRecurringSchedules).where(eq(clientRecurringSchedules.clientId, clientId)).orderBy(desc(clientRecurringSchedules.createdAt));
+    }
+    return db.select().from(clientRecurringSchedules).orderBy(desc(clientRecurringSchedules.createdAt));
+  }
+
+  async getActiveSchedules(): Promise<ClientRecurringSchedule[]> {
+    return db.select().from(clientRecurringSchedules).where(eq(clientRecurringSchedules.isActive, true));
+  }
+
+  async createClientRecurringSchedule(data: InsertClientRecurringSchedule): Promise<ClientRecurringSchedule> {
+    const [schedule] = await db.insert(clientRecurringSchedules).values(data).returning();
+    return schedule;
+  }
+
+  async updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>): Promise<ClientRecurringSchedule | undefined> {
+    const [schedule] = await db.update(clientRecurringSchedules).set(data).where(eq(clientRecurringSchedules.id, id)).returning();
+    return schedule;
+  }
+
+  async deleteClientRecurringSchedule(id: string): Promise<void> {
+    await db.delete(clientRecurringSchedules).where(eq(clientRecurringSchedules.id, id));
   }
 }
 

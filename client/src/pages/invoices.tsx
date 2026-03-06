@@ -396,7 +396,14 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
         </div>
         <div>
           <p className="text-muted-foreground">Status</p>
-          <Badge variant={statusColor(invoice.status)}>{invoice.status}</Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={statusColor(invoice.status)}>{invoice.status}</Badge>
+            {(invoice as any).reminderCount > 0 && (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300" data-testid={`badge-reminder-${invoice.id}`}>
+                {(invoice as any).reminderCount === 1 ? "1st Reminder" : (invoice as any).reminderCount === 2 ? "2nd Notice" : "Final Notice"}
+              </Badge>
+            )}
+          </div>
         </div>
         <div>
           <p className="text-muted-foreground">Due Date</p>

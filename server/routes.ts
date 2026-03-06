@@ -9,9 +9,13 @@ import {
   insertServiceItemSchema, insertInvoiceLineItemSchema, insertTaxDocumentSchema,
   insertBookkeepingSubscriptionSchema, insertBankTransactionSchema,
   insertTransactionCategorySchema, insertPreparerAssignmentSchema,
+  insertTicketRequiredDocumentSchema, insertRecurringTemplateSchema, insertClientRecurringScheduleSchema,
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
-  bookkeepingSubscriptions, bankTransactions, preparerAssignments
+  bookkeepingSubscriptions, bankTransactions, preparerAssignments,
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents
 } from "@shared/schema";
+import { startInvoiceScheduler } from "./invoice-scheduler";
+import { startRecurringScheduler } from "./recurring-scheduler";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
@@ -2404,6 +2408,218 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     const cats = await storage.getTransactionCategories();
     res.json(cats);
   });
+
+  // ===== TICKET REQUIRED DOCUMENTS =====
+  async function recomputeTicketBlockedStatus(ticketId: string) {
+    const requiredDocs = await storage.getTicketRequiredDocs(ticketId);
+    const ticket = await storage.getTicket(ticketId);
+    if (!ticket) return;
+
+    const hasPendingDocs = requiredDocs.some(d => d.status === "pending");
+
+    if (hasPendingDocs && ticket.status !== "blocked" && ticket.status !== "completed") {
+      await storage.updateTicket(ticketId, { status: "blocked" });
+    } else if (!hasPendingDocs && ticket.status === "blocked") {
+      await storage.updateTicket(ticketId, { status: "open" });
+    }
+  }
+
+  app.get("/api/tickets/:ticketId/required-docs", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const docs = await storage.getTicketRequiredDocs(req.params.ticketId);
+      res.json(docs);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/tickets/:ticketId/required-docs", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const doc = await storage.createTicketRequiredDoc({
+        ticketId: req.params.ticketId,
+        documentName: req.body.documentName,
+        documentType: req.body.documentType,
+        status: "pending",
+      });
+      await recomputeTicketBlockedStatus(req.params.ticketId);
+      await audit(req, "created", "ticket_required_doc", doc.id, `Added required doc "${req.body.documentName}" to ticket`);
+      res.json(doc);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/tickets/required-docs/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const doc = await storage.updateTicketRequiredDoc(req.params.id, req.body);
+      if (doc) {
+        await recomputeTicketBlockedStatus(doc.ticketId);
+      }
+      res.json(doc);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/tickets/required-docs/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const allDocs = await db.select().from(ticketRequiredDocuments).where(eq(ticketRequiredDocuments.id, req.params.id));
+      const ticketId = allDocs[0]?.ticketId;
+      await storage.deleteTicketRequiredDoc(req.params.id);
+      if (ticketId) {
+        await recomputeTicketBlockedStatus(ticketId);
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== RECURRING TEMPLATES =====
+  app.get("/api/admin/recurring-templates", isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const templates = await storage.getRecurringTemplates();
+      res.json(templates);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/recurring-templates", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const template = await storage.createRecurringTemplate(req.body);
+      await audit(req, "created", "recurring_template", template.id, `Created recurring template "${template.name}"`);
+      res.json(template);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const template = await storage.updateRecurringTemplate(req.params.id, req.body);
+      res.json(template);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      await storage.deleteRecurringTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== CLIENT RECURRING SCHEDULES =====
+  app.get("/api/admin/recurring-schedules", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const clientId = req.query.clientId as string | undefined;
+      const schedules = await storage.getClientRecurringSchedules(clientId);
+      res.json(schedules);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/recurring-schedules", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const schedule = await storage.createClientRecurringSchedule(req.body);
+      await audit(req, "created", "recurring_schedule", schedule.id, `Assigned recurring schedule to client`);
+      res.json(schedule);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const schedule = await storage.updateClientRecurringSchedule(req.params.id, req.body);
+      res.json(schedule);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      await storage.deleteClientRecurringSchedule(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== ENHANCED ANALYTICS =====
+  app.get("/api/admin/analytics/enhanced", isAuthenticated, isOwner, async (_req, res) => {
+    try {
+      const now = new Date();
+
+      const allTickets = await storage.getTickets();
+      const openTickets = allTickets.filter(t => t.status === "open" || t.status === "in_progress" || t.status === "blocked");
+      const ticketsDue7 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 7 * 86400000) && new Date(t.dueDate) > now);
+      const ticketsDue14 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 14 * 86400000) && new Date(t.dueDate) > now);
+      const ticketsDue30 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 30 * 86400000) && new Date(t.dueDate) > now);
+      const overdueTickets = openTickets.filter(t => t.dueDate && new Date(t.dueDate) < now);
+
+      const allDocs = await storage.getDocuments();
+      const pendingDocs = allDocs.filter(d => d.status === "pending");
+      const docsByClient: Record<string, number> = {};
+      for (const doc of pendingDocs) {
+        docsByClient[doc.clientId] = (docsByClient[doc.clientId] || 0) + 1;
+      }
+      const allClients = await storage.getClients();
+      const clientMap = Object.fromEntries(allClients.map(c => [c.id, c.companyName]));
+      const topDocBlockers = Object.entries(docsByClient)
+        .map(([clientId, count]) => ({ clientId, companyName: clientMap[clientId] || "Unknown", pendingCount: count }))
+        .sort((a, b) => b.pendingCount - a.pendingCount)
+        .slice(0, 10);
+
+      const allInvoices = await storage.getInvoices();
+      const unpaidInvoices = allInvoices.filter(i => i.status === "sent" || i.status === "overdue" || i.status === "approved");
+      let current = 0, days30 = 0, days60 = 0, days90 = 0;
+      for (const inv of unpaidInvoices) {
+        const age = inv.dueDate ? Math.floor((now.getTime() - new Date(inv.dueDate).getTime()) / 86400000) : 0;
+        const amt = parseFloat(String(inv.amount));
+        if (age <= 0) current += amt;
+        else if (age <= 30) days30 += amt;
+        else if (age <= 60) days60 += amt;
+        else days90 += amt;
+      }
+
+      res.json({
+        ticketSLA: {
+          due7Days: ticketsDue7.length,
+          due14Days: ticketsDue14.length,
+          due30Days: ticketsDue30.length,
+          overdue: overdueTickets.length,
+          overdueTickets: overdueTickets.map(t => ({
+            id: t.id,
+            title: t.title,
+            dueDate: t.dueDate,
+            clientId: t.clientId,
+            companyName: clientMap[t.clientId] || "Unknown",
+          })),
+        },
+        docBlockers: topDocBlockers,
+        arAging: {
+          current: current.toFixed(2),
+          days30: days30.toFixed(2),
+          days60: days60.toFixed(2),
+          days90Plus: days90.toFixed(2),
+          total: (current + days30 + days60 + days90).toFixed(2),
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Start background schedulers
+  startInvoiceScheduler();
+  startRecurringScheduler();
 
   return httpServer;
 }

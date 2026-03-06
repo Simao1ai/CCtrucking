@@ -12,11 +12,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertServiceTicketSchema, type ServiceTicket, type InsertServiceTicket, type Client } from "@shared/schema";
+import { insertServiceTicketSchema, type ServiceTicket, type InsertServiceTicket, type Client, type TicketRequiredDocument } from "@shared/schema";
 import type { User } from "@shared/models/auth";
-import { Plus, Search, Ticket, Calendar, User as UserIcon } from "lucide-react";
+import { Plus, Search, Ticket, Calendar, User as UserIcon, ChevronDown, AlertTriangle, FileText, Check, X, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
 
@@ -35,12 +36,25 @@ const SERVICE_TYPES = [
 
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 
+const REQUIRED_DOC_TYPES = [
+  "Fuel Records",
+  "Mileage Report",
+  "Insurance Certificate",
+  "DOT Registration",
+  "EIN Letter",
+  "Operating Agreement",
+  "Power of Attorney",
+  "Tax Return",
+  "Other",
+];
+
 function statusColor(status: string): "default" | "secondary" | "destructive" {
   switch (status) {
     case "open": return "default";
     case "in_progress": return "default";
     case "completed": return "secondary";
     case "on_hold": return "secondary";
+    case "blocked": return "destructive";
     default: return "secondary";
   }
 }
@@ -55,6 +69,24 @@ function priorityColor(priority: string): "default" | "secondary" | "destructive
   }
 }
 
+function docStatusBadgeVariant(status: string): "default" | "secondary" | "destructive" {
+  switch (status) {
+    case "received": return "default";
+    case "waived": return "secondary";
+    case "pending": return "destructive";
+    default: return "secondary";
+  }
+}
+
+function docStatusBadgeClass(status: string): string {
+  switch (status) {
+    case "pending": return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+    case "received": return "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30";
+    case "waived": return "bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/30";
+    default: return "";
+  }
+}
+
 const ticketFormSchema = insertServiceTicketSchema.extend({
   dueDate: z.string().optional().nullable(),
 });
@@ -62,6 +94,197 @@ const ticketFormSchema = insertServiceTicketSchema.extend({
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
 
 type SafeUser = Omit<User, "password">;
+
+function RequiredDocsSection({ ticketId }: { ticketId: string }) {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newDocName, setNewDocName] = useState("");
+  const [newDocType, setNewDocType] = useState("");
+
+  const { data: requiredDocs = [], isLoading } = useQuery<TicketRequiredDocument[]>({
+    queryKey: ["/api/tickets", ticketId, "required-docs"],
+    enabled: isOpen,
+  });
+
+  const addDocMutation = useMutation({
+    mutationFn: async (data: { documentName: string; documentType: string }) => {
+      await apiRequest("POST", `/api/tickets/${ticketId}/required-docs`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets", ticketId, "required-docs"] });
+      toast({ title: "Document added", description: "Required document has been added." });
+      setNewDocName("");
+      setNewDocType("");
+      setShowAddForm(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      await apiRequest("PATCH", `/api/tickets/required-docs/${id}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets", ticketId, "required-docs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/tickets/required-docs/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets", ticketId, "required-docs"] });
+      toast({ title: "Deleted", description: "Required document removed." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddDoc = () => {
+    if (!newDocName.trim() || !newDocType) return;
+    addDocMutation.mutate({ documentName: newDocName.trim(), documentType: newDocType });
+  };
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1 mt-2" data-testid={`button-toggle-docs-${ticketId}`}>
+          <FileText className="w-3 h-3" />
+          Required Documents
+          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-3 space-y-2 border-t pt-3" data-testid={`section-required-docs-${ticketId}`}>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : requiredDocs.length === 0 && !showAddForm ? (
+            <p className="text-xs text-muted-foreground">No required documents yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {requiredDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between gap-2 rounded-md border p-2"
+                  data-testid={`required-doc-${doc.id}`}
+                >
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-xs font-medium" data-testid={`doc-name-${doc.id}`}>{doc.documentName}</span>
+                    <Badge variant="secondary" className="text-xs" data-testid={`doc-type-${doc.id}`}>{doc.documentType}</Badge>
+                    <Badge variant="secondary" className={`text-xs ${docStatusBadgeClass(doc.status)}`} data-testid={`doc-status-${doc.id}`}>
+                      {doc.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {doc.status === "pending" && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateStatusMutation.mutate({ id: doc.id, status: "received" })}
+                          disabled={updateStatusMutation.isPending}
+                          data-testid={`button-mark-received-${doc.id}`}
+                          title="Mark as received"
+                        >
+                          <Check className="w-3 h-3 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateStatusMutation.mutate({ id: doc.id, status: "waived" })}
+                          disabled={updateStatusMutation.isPending}
+                          data-testid={`button-mark-waived-${doc.id}`}
+                          title="Mark as waived"
+                        >
+                          <X className="w-3 h-3 text-gray-500" />
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate(doc.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-doc-${doc.id}`}
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3 h-3 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showAddForm ? (
+            <div className="flex items-end gap-2 flex-wrap mt-2" data-testid={`form-add-doc-${ticketId}`}>
+              <div className="flex-1 min-w-[120px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Document Name</label>
+                <Input
+                  value={newDocName}
+                  onChange={(e) => setNewDocName(e.target.value)}
+                  placeholder="Document name"
+                  data-testid={`input-doc-name-${ticketId}`}
+                />
+              </div>
+              <div className="min-w-[160px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Document Type</label>
+                <Select value={newDocType} onValueChange={setNewDocType}>
+                  <SelectTrigger data-testid={`select-doc-type-${ticketId}`}>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REQUIRED_DOC_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleAddDoc}
+                disabled={addDocMutation.isPending || !newDocName.trim() || !newDocType}
+                data-testid={`button-submit-doc-${ticketId}`}
+              >
+                {addDocMutation.isPending ? "Adding..." : "Add"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { setShowAddForm(false); setNewDocName(""); setNewDocType(""); }}
+                data-testid={`button-cancel-doc-${ticketId}`}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 mt-1"
+              onClick={() => setShowAddForm(true)}
+              data-testid={`button-add-doc-${ticketId}`}
+            >
+              <Plus className="w-3 h-3" />
+              Add Required Document
+            </Button>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 function TicketForm({ onSuccess, clients }: { onSuccess: () => void; clients: Client[] }) {
   const { toast } = useToast();
@@ -238,6 +461,7 @@ export default function Tickets() {
     in_progress: tickets?.filter(t => t.status === "in_progress").length ?? 0,
     completed: tickets?.filter(t => t.status === "completed").length ?? 0,
     on_hold: tickets?.filter(t => t.status === "on_hold").length ?? 0,
+    blocked: tickets?.filter(t => t.status === "blocked").length ?? 0,
   };
 
   const updateStatus = useMutation({
@@ -292,6 +516,7 @@ export default function Tickets() {
           <TabsTrigger value="in_progress" data-testid="tab-in-progress">In Progress ({statusCounts.in_progress})</TabsTrigger>
           <TabsTrigger value="completed" data-testid="tab-completed">Completed ({statusCounts.completed})</TabsTrigger>
           <TabsTrigger value="on_hold" data-testid="tab-on-hold">On Hold ({statusCounts.on_hold})</TabsTrigger>
+          <TabsTrigger value="blocked" data-testid="tab-blocked">Blocked ({statusCounts.blocked})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-4">
@@ -318,9 +543,15 @@ export default function Tickets() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-semibold text-sm">{ticket.title}</h3>
-                          <Badge variant={statusColor(ticket.status)} className="text-xs">
+                          <Badge variant={statusColor(ticket.status)} className="text-xs" data-testid={`badge-status-${ticket.id}`}>
                             {ticket.status.replace("_", " ")}
                           </Badge>
+                          {ticket.status === "blocked" && (
+                            <Badge variant="destructive" className="text-xs gap-1" data-testid={`badge-blocked-warning-${ticket.id}`}>
+                              <AlertTriangle className="w-3 h-3" />
+                              Blocked
+                            </Badge>
+                          )}
                           <Badge variant={priorityColor(ticket.priority)} className="text-xs">
                             {ticket.priority}
                           </Badge>
@@ -350,6 +581,7 @@ export default function Tickets() {
                         {ticket.description && (
                           <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{ticket.description}</p>
                         )}
+                        <RequiredDocsSection ticketId={ticket.id} />
                       </div>
                       <div className="flex-shrink-0">
                         <Select
@@ -364,6 +596,7 @@ export default function Tickets() {
                             <SelectItem value="in_progress">In Progress</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
                             <SelectItem value="on_hold">On Hold</SelectItem>
+                            <SelectItem value="blocked">Blocked</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

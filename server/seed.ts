@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -33,6 +33,8 @@ async function seedUsers() {
 
 export async function seedDatabase() {
   await seedUsers();
+  await seedServiceItems();
+  await seedRecurringTemplates();
 
   const existingClients = await db.select().from(clients);
   if (existingClients.length > 0) return;
@@ -266,4 +268,118 @@ export async function seedDatabase() {
   ]);
 
   console.log("Database seeded successfully.");
+}
+
+async function seedServiceItems() {
+  const existing = await db.select().from(serviceItems);
+  if (existing.length > 0) return;
+
+  await db.insert(serviceItems).values([
+    {
+      name: "IFTA Quarterly Filing",
+      description: "International Fuel Tax Agreement quarterly tax return preparation and filing for interstate carriers.",
+      category: "Tax & Compliance",
+      defaultPrice: "450.00",
+    },
+    {
+      name: "MCS-150 Biennial Update",
+      description: "Mandatory biennial update of motor carrier information with FMCSA.",
+      category: "DOT Compliance",
+      defaultPrice: "150.00",
+    },
+    {
+      name: "UCR Annual Registration",
+      description: "Unified Carrier Registration annual renewal for interstate operations.",
+      category: "Registration",
+      defaultPrice: "175.00",
+    },
+    {
+      name: "Annual DOT Compliance Review",
+      description: "Comprehensive annual review of DOT compliance documentation, driver files, and vehicle records.",
+      category: "DOT Compliance",
+      defaultPrice: "1250.00",
+    },
+    {
+      name: "Business Entity Setup",
+      description: "LLC formation, EIN application, and initial business structure setup for new trucking companies.",
+      category: "Business Setup",
+      defaultPrice: "1800.00",
+    },
+    {
+      name: "Quarterly Tax Preparation",
+      description: "Quarterly estimated tax calculation and filing for trucking businesses.",
+      category: "Tax & Compliance",
+      defaultPrice: "350.00",
+    },
+    {
+      name: "Bookkeeping - Monthly Service",
+      description: "Monthly bookkeeping service including bank reconciliation, expense categorization, and financial reporting.",
+      category: "Bookkeeping",
+      defaultPrice: "50.00",
+    },
+    {
+      name: "Permit & Authority Filing",
+      description: "Filing for operating authority, permits, and interstate carrier credentials.",
+      category: "Registration",
+      defaultPrice: "500.00",
+    },
+    {
+      name: "Insurance Filing (Form E/H)",
+      description: "Filing of insurance certificates and endorsements with FMCSA.",
+      category: "DOT Compliance",
+      defaultPrice: "125.00",
+    },
+    {
+      name: "BOC-3 Process Agent Filing",
+      description: "Designation of process agents (BOC-3) filing required for interstate carriers.",
+      category: "Registration",
+      defaultPrice: "75.00",
+    },
+  ]);
+  console.log("Service catalog items seeded.");
+}
+
+async function seedRecurringTemplates() {
+  const existing = await db.select().from(recurringTemplates);
+  if (existing.length > 0) return;
+
+  await db.insert(recurringTemplates).values([
+    {
+      name: "IFTA Quarterly Filing",
+      serviceType: "IFTA Permit",
+      description: "Quarterly IFTA tax return filing. Requires fuel receipts and mileage records.",
+      priority: "high",
+      frequencyType: "quarterly",
+      daysBefore: 30,
+      requiredDocuments: JSON.stringify(["Fuel Receipts", "Mileage Report"]),
+    },
+    {
+      name: "UCR Annual Registration",
+      serviceType: "UCR Registration",
+      description: "Annual Unified Carrier Registration renewal.",
+      priority: "medium",
+      frequencyType: "annual",
+      daysBefore: 60,
+      requiredDocuments: JSON.stringify(["Current UCR Certificate"]),
+    },
+    {
+      name: "MCS-150 Biennial Update",
+      serviceType: "MCS-150 Update",
+      description: "Biennial update of motor carrier census information.",
+      priority: "medium",
+      frequencyType: "biennial",
+      daysBefore: 60,
+      requiredDocuments: JSON.stringify(["Fleet Size Report", "Driver Count"]),
+    },
+    {
+      name: "Annual DOT Compliance Review",
+      serviceType: "DOT Permit",
+      description: "Comprehensive annual DOT compliance audit and documentation review.",
+      priority: "high",
+      frequencyType: "annual",
+      daysBefore: 45,
+      requiredDocuments: JSON.stringify(["Insurance Certificate", "Vehicle Inspection Reports", "Driver Qualification Files"]),
+    },
+  ]);
+  console.log("Recurring templates seeded.");
 }

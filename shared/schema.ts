@@ -21,6 +21,9 @@ export const clients = pgTable("clients", {
   zipCode: text("zip_code"),
   status: text("status").notNull().default("active"),
   notes: text("notes"),
+  pipelineStage: text("pipeline_stage").default("new"),
+  nextActionDate: timestamp("next_action_date"),
+  nextActionNote: text("next_action_note"),
 });
 
 export const serviceTickets = pgTable("service_tickets", {
@@ -56,6 +59,8 @@ export const invoices = pgTable("invoices", {
   dueDate: timestamp("due_date"),
   paidDate: timestamp("paid_date"),
   description: text("description"),
+  lastReminderSent: timestamp("last_reminder_sent"),
+  reminderCount: integer("reminder_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -276,6 +281,39 @@ export const preparerAssignments = pgTable("preparer_assignments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const ticketRequiredDocuments = pgTable("ticket_required_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").notNull().references(() => serviceTickets.id),
+  documentName: text("document_name").notNull(),
+  documentType: text("document_type").notNull(),
+  status: text("status").notNull().default("pending"),
+  documentId: varchar("document_id").references(() => documents.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const recurringTemplates = pgTable("recurring_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  serviceType: text("service_type").notNull(),
+  description: text("description"),
+  priority: text("priority").notNull().default("medium"),
+  frequencyType: text("frequency_type").notNull().default("annual"),
+  daysBefore: integer("days_before").notNull().default(30),
+  requiredDocuments: text("required_documents"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const clientRecurringSchedules = pgTable("client_recurring_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  templateId: varchar("template_id").notNull().references(() => recurringTemplates.id),
+  nextDueDate: timestamp("next_due_date").notNull(),
+  lastGeneratedDate: timestamp("last_generated_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
 export const insertTaxDocumentSchema = createInsertSchema(taxDocuments).omit({ id: true, createdAt: true, updatedAt: true, analyzedAt: true });
@@ -285,6 +323,9 @@ export const insertBankTransactionSchema = createInsertSchema(bankTransactions).
 export const insertTransactionCategorySchema = createInsertSchema(transactionCategories).omit({ id: true, createdAt: true });
 export const insertMonthlySummarySchema = createInsertSchema(monthlySummaries).omit({ id: true, createdAt: true, generatedAt: true });
 export const insertPreparerAssignmentSchema = createInsertSchema(preparerAssignments).omit({ id: true, createdAt: true });
+export const insertTicketRequiredDocumentSchema = createInsertSchema(ticketRequiredDocuments).omit({ id: true, createdAt: true });
+export const insertRecurringTemplateSchema = createInsertSchema(recurringTemplates).omit({ id: true, createdAt: true });
+export const insertClientRecurringScheduleSchema = createInsertSchema(clientRecurringSchedules).omit({ id: true, createdAt: true });
 
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -326,3 +367,9 @@ export type MonthlySummary = typeof monthlySummaries.$inferSelect;
 export type InsertMonthlySummary = z.infer<typeof insertMonthlySummarySchema>;
 export type PreparerAssignment = typeof preparerAssignments.$inferSelect;
 export type InsertPreparerAssignment = z.infer<typeof insertPreparerAssignmentSchema>;
+export type TicketRequiredDocument = typeof ticketRequiredDocuments.$inferSelect;
+export type InsertTicketRequiredDocument = z.infer<typeof insertTicketRequiredDocumentSchema>;
+export type RecurringTemplate = typeof recurringTemplates.$inferSelect;
+export type InsertRecurringTemplate = z.infer<typeof insertRecurringTemplateSchema>;
+export type ClientRecurringSchedule = typeof clientRecurringSchedules.$inferSelect;
+export type InsertClientRecurringSchedule = z.infer<typeof insertClientRecurringScheduleSchema>;
