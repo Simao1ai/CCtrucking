@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -31,10 +31,39 @@ async function seedUsers() {
   console.log("Default users seeded.");
 }
 
+async function seedTransactionCategories() {
+  const existing = await db.select().from(transactionCategories);
+  if (existing.length > 0) return;
+
+  await db.insert(transactionCategories).values([
+    { name: "Fuel", description: "Diesel, gasoline, and other fuel purchases", parentCategory: "expense", isDefault: true },
+    { name: "Maintenance", description: "Vehicle repairs, parts, and preventive maintenance", parentCategory: "expense", isDefault: true },
+    { name: "Tolls", description: "Highway and bridge toll charges", parentCategory: "expense", isDefault: true },
+    { name: "Insurance", description: "Vehicle, cargo, and liability insurance premiums", parentCategory: "expense", isDefault: true },
+    { name: "Payroll", description: "Driver wages, benefits, and payroll taxes", parentCategory: "expense", isDefault: true },
+    { name: "Permits", description: "Operating permits, oversize/overweight permits", parentCategory: "expense", isDefault: true },
+    { name: "Equipment", description: "Truck parts, trailers, and equipment purchases", parentCategory: "expense", isDefault: true },
+    { name: "Meals", description: "Driver meals and per diem expenses", parentCategory: "expense", isDefault: true },
+    { name: "Parking", description: "Truck parking and rest stop fees", parentCategory: "expense", isDefault: true },
+    { name: "License & Registration", description: "Vehicle registration, CDL renewals, and licensing fees", parentCategory: "expense", isDefault: true },
+    { name: "Lease Payments", description: "Truck and trailer lease or loan payments", parentCategory: "expense", isDefault: true },
+    { name: "Office", description: "Office supplies, software, and administrative costs", parentCategory: "expense", isDefault: true },
+    { name: "Professional Services", description: "Accounting, legal, and consulting fees", parentCategory: "expense", isDefault: true },
+    { name: "Taxes", description: "IFTA, HVUT, and other tax payments", parentCategory: "expense", isDefault: true },
+    { name: "Freight Revenue", description: "Income from hauling freight and loads", parentCategory: "income", isDefault: true },
+    { name: "Fuel Surcharge", description: "Fuel surcharge income from shippers", parentCategory: "income", isDefault: true },
+    { name: "Accessorial Income", description: "Detention, layover, and stop-off charges", parentCategory: "income", isDefault: true },
+    { name: "Other Income", description: "Miscellaneous income not categorized elsewhere", parentCategory: "income", isDefault: true },
+    { name: "Other Expense", description: "Miscellaneous expenses not categorized elsewhere", parentCategory: "expense", isDefault: true },
+  ]);
+  console.log("Transaction categories seeded.");
+}
+
 export async function seedDatabase() {
   await seedUsers();
   await seedServiceItems();
   await seedRecurringTemplates();
+  await seedTransactionCategories();
 
   const existingClients = await db.select().from(clients);
   if (existingClients.length > 0) return;
