@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertDocumentSchema, type Document as DocType, type Client } from "@shared/schema";
@@ -16,7 +17,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Search, FileText, Clock, CheckCircle, AlertCircle, FolderOpen } from "lucide-react";
+import { Plus, Search, FileText, Clock, CheckCircle, AlertCircle, FolderOpen, Building2 } from "lucide-react";
 import { format } from "date-fns";
 
 const DOC_TYPES = [
@@ -36,15 +37,6 @@ const DOC_TYPES = [
   "Engagement Letter",
   "Other",
 ];
-
-function statusIcon(status: string) {
-  switch (status) {
-    case "approved": return <CheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
-    case "pending": return <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
-    case "rejected": return <AlertCircle className="w-3.5 h-3.5 text-destructive" />;
-    default: return <FileText className="w-3.5 h-3.5 text-muted-foreground" />;
-  }
-}
 
 function DocumentForm({ onSuccess, clients }: { onSuccess: () => void; clients: Client[] }) {
   const { toast } = useToast();
@@ -150,7 +142,7 @@ function DocumentForm({ onSuccess, clients }: { onSuccess: () => void; clients: 
 export default function Documents() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [filterType, setFilterType] = useState("all");
+  const [tab, setTab] = useState("all");
 
   const { data: documents, isLoading } = useQuery<DocType[]>({ queryKey: ["/api/documents"] });
   const { data: clients } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
@@ -168,8 +160,8 @@ export default function Documents() {
     const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.type.toLowerCase().includes(search.toLowerCase()) ||
       (clientMap.get(d.clientId)?.companyName ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchesType = filterType === "all" || d.status === filterType;
-    return matchesSearch && matchesType;
+    const matchesTab = tab === "all" || d.status === tab;
+    return matchesSearch && matchesTab;
   }) ?? [];
 
   const updateStatus = useMutation({
@@ -210,14 +202,14 @@ export default function Documents() {
           value={statusCounts.all}
           icon={FileText}
           iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-500/10"
+          iconBg="bg-blue-100 dark:bg-blue-900/40"
         />
         <StatCard
           title="Pending Review"
           value={statusCounts.pending}
           icon={Clock}
           iconColor="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-500/10"
+          iconBg="bg-amber-100 dark:bg-amber-900/40"
           subtitle={statusCounts.pending > 0 ? "Awaiting review" : undefined}
         />
         <StatCard
@@ -225,104 +217,116 @@ export default function Documents() {
           value={statusCounts.approved}
           icon={CheckCircle}
           iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-500/10"
+          iconBg="bg-emerald-100 dark:bg-emerald-900/40"
         />
         <StatCard
           title="Rejected"
           value={statusCounts.rejected}
           icon={AlertCircle}
           iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-500/10"
+          iconBg="bg-red-100 dark:bg-red-900/40"
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search documents..."
+            placeholder="Search by name, type, or client..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
             data-testid="input-search-docs"
           />
         </div>
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[140px]" data-testid="select-filter-status">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent>
-            <EmptyState
-              icon={FolderOpen}
-              title="No documents found"
-              description={search || filterType !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"}
-              action={
-                !search && filterType === "all" ? (
-                  <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-doc">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Document
-                  </Button>
-                ) : undefined
-              }
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(doc => (
-            <Card key={doc.id} data-testid={`card-doc-${doc.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {statusIcon(doc.status)}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.name}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{clientMap.get(doc.clientId)?.companyName ?? "Unknown"}</span>
-                        <span>-</span>
-                        <span>{doc.type}</span>
-                        <span>-</span>
-                        <span>{format(new Date(doc.uploadedAt), "MMM d, yyyy")}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <StatusBadge status={doc.status} />
-                    <Select
-                      value={doc.status}
-                      onValueChange={(status) => updateStatus.mutate({ id: doc.id, status })}
-                    >
-                      <SelectTrigger className="w-[120px]" data-testid={`select-doc-status-${doc.id}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="all" data-testid="tab-all-docs" className="text-xs">All ({statusCounts.all})</TabsTrigger>
+          <TabsTrigger value="pending" data-testid="tab-pending-docs" className="text-xs">Pending ({statusCounts.pending})</TabsTrigger>
+          <TabsTrigger value="approved" data-testid="tab-approved-docs" className="text-xs">Approved ({statusCounts.approved})</TabsTrigger>
+          <TabsTrigger value="rejected" data-testid="tab-rejected-docs" className="text-xs">Rejected ({statusCounts.rejected})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={tab} className="mt-4">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <Card>
+              <CardContent>
+                <EmptyState
+                  icon={FolderOpen}
+                  title="No documents found"
+                  description={search || tab !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"}
+                  action={
+                    !search && tab === "all" ? (
+                      <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-doc">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Document
+                      </Button>
+                    ) : undefined
+                  }
+                />
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(doc => {
+                const client = clientMap.get(doc.clientId);
+                return (
+                  <Card key={doc.id} data-testid={`card-doc-${doc.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${doc.status === "approved" ? "bg-emerald-100 dark:bg-emerald-900/40" : doc.status === "rejected" ? "bg-red-100 dark:bg-red-900/40" : "bg-amber-100 dark:bg-amber-900/40"}`}>
+                          {doc.status === "approved" ? (
+                            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                          ) : doc.status === "rejected" ? (
+                            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                          ) : (
+                            <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-sm font-medium truncate">{doc.name}</p>
+                            <StatusBadge status={doc.type.toLowerCase().replace(/\s+/g, '_')} label={doc.type} />
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <span className="flex items-center gap-1">
+                              <Building2 className="w-3 h-3" />
+                              {client?.companyName ?? "Unknown"}
+                            </span>
+                            <span>·</span>
+                            <span>{format(new Date(doc.uploadedAt), "MMM d, yyyy")}</span>
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Select
+                            value={doc.status}
+                            onValueChange={(status) => updateStatus.mutate({ id: doc.id, status })}
+                          >
+                            <SelectTrigger className="w-[120px] h-8 text-xs" data-testid={`select-doc-status-${doc.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="approved">Approved</SelectItem>
+                              <SelectItem value="rejected">Rejected</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

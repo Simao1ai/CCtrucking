@@ -3,21 +3,22 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Client, BookkeepingSubscription, BankTransaction, TransactionCategory, MonthlySummary } from "@shared/schema";
 import {
   BookOpen, Search, Upload, Brain, Plus, Trash2, ArrowLeft,
-  DollarSign, TrendingDown, TrendingUp, Pencil, Check, X
+  DollarSign, TrendingDown, TrendingUp, Pencil, Check, X,
+  Building2, Users, ArrowRight, Receipt, BarChart3, Tags
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -42,11 +43,6 @@ const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 function formatCurrency(value: number | string) {
   const num = typeof value === "string" ? parseFloat(value) : value;
   return `$${Math.abs(num).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function subscriptionStatusBadge(status: string | undefined) {
-  if (!status) return <StatusBadge status="inactive" label="No Subscription" />;
-  return <StatusBadge status={status} />;
 }
 
 function ClientsTab({
@@ -103,18 +99,46 @@ function ClientsTab({
     search === "" || c.companyName.toLowerCase().includes(search.toLowerCase())
   );
 
+  const activeCount = filtered.filter(c => subMap.get(c.id)?.status === "active").length;
+  const inactiveCount = filtered.filter(c => !subMap.get(c.id) || subMap.get(c.id)?.status !== "active").length;
+
   if (clientsLoading) {
     return (
       <div className="space-y-3" data-testid="loading-clients">
-        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Total Clients"
+          value={filtered.length}
+          icon={Users}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-100 dark:bg-blue-900/40"
+        />
+        <StatCard
+          title="Active Subscriptions"
+          value={activeCount}
+          subtitle={`$${(activeCount * 50).toLocaleString()}/mo revenue`}
+          icon={BookOpen}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-100 dark:bg-emerald-900/40"
+        />
+        <StatCard
+          title="Unsubscribed"
+          value={inactiveCount}
+          icon={Building2}
+          iconColor="text-gray-500 dark:text-gray-400"
+          iconBg="bg-gray-100 dark:bg-gray-800"
+        />
+      </div>
+
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
@@ -126,48 +150,48 @@ function ClientsTab({
         </div>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Preparer</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  No clients found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map(client => {
-                const sub = subMap.get(client.id);
-                return (
-                  <TableRow key={client.id} data-testid={`row-client-${client.id}`}>
-                    <TableCell>
-                      <button
-                        className="text-sm font-medium hover:underline text-left"
-                        onClick={() => onSelectClient(client)}
-                        data-testid={`link-client-${client.id}`}
-                      >
-                        {client.companyName}
-                      </button>
-                    </TableCell>
-                    <TableCell>{subscriptionStatusBadge(sub?.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {sub ? `$${sub.price}/mo` : "—"}
-                    </TableCell>
-                    <TableCell>
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState icon={Users} title="No clients found" description="No clients match your search" />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(client => {
+            const sub = subMap.get(client.id);
+            const isActive = sub?.status === "active";
+            return (
+              <Card key={client.id} className={`transition-colors ${isActive ? "" : "opacity-75"}`} data-testid={`row-client-${client.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${isActive ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-muted"}`}>
+                      <Building2 className={`w-5 h-5 ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          className="text-sm font-semibold hover:underline text-left"
+                          onClick={() => onSelectClient(client)}
+                          data-testid={`link-client-${client.id}`}
+                        >
+                          {client.companyName}
+                        </button>
+                        <StatusBadge status={isActive ? "active" : "inactive"} />
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                        {sub && <span className="font-medium">${sub.price}/mo</span>}
+                        {sub?.preparerId && (
+                          <span>Preparer assigned</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
                       <Select
                         value={sub?.preparerId ?? ""}
                         onValueChange={val => assignPreparerMutation.mutate({ preparerId: val, clientId: client.id })}
                       >
-                        <SelectTrigger className="w-[160px]" data-testid={`select-preparer-${client.id}`}>
+                        <SelectTrigger className="w-[140px] h-8 text-xs" data-testid={`select-preparer-${client.id}`}>
                           <SelectValue placeholder="Assign preparer" />
                         </SelectTrigger>
                         <SelectContent>
@@ -178,55 +202,55 @@ function ClientsTab({
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {!sub ? (
-                          <Button
-                            size="sm"
-                            onClick={() => activateMutation.mutate(client.id)}
-                            disabled={activateMutation.isPending}
-                            data-testid={`button-activate-${client.id}`}
-                          >
-                            Activate
-                          </Button>
-                        ) : sub.status === "active" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => toggleStatusMutation.mutate({ id: sub.id, status: "inactive" })}
-                            disabled={toggleStatusMutation.isPending}
-                            data-testid={`button-deactivate-${client.id}`}
-                          >
-                            Deactivate
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => toggleStatusMutation.mutate({ id: sub.id, status: "active" })}
-                            disabled={toggleStatusMutation.isPending}
-                            data-testid={`button-reactivate-${client.id}`}
-                          >
-                            Activate
-                          </Button>
-                        )}
+                      {!sub ? (
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={() => onSelectClient(client)}
-                          data-testid={`button-view-detail-${client.id}`}
+                          className="h-8 text-xs"
+                          onClick={() => activateMutation.mutate(client.id)}
+                          disabled={activateMutation.isPending}
+                          data-testid={`button-activate-${client.id}`}
                         >
-                          View
+                          Activate
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+                      ) : isActive ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => toggleStatusMutation.mutate({ id: sub.id, status: "inactive" })}
+                          disabled={toggleStatusMutation.isPending}
+                          data-testid={`button-deactivate-${client.id}`}
+                        >
+                          Deactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => toggleStatusMutation.mutate({ id: sub.id, status: "active" })}
+                          disabled={toggleStatusMutation.isPending}
+                          data-testid={`button-reactivate-${client.id}`}
+                        >
+                          Activate
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs"
+                        onClick={() => onSelectClient(client)}
+                        data-testid={`button-view-detail-${client.id}`}
+                      >
+                        View <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -244,6 +268,13 @@ function ClientDetailTab({
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [bankName, setBankName] = useState("");
   const [accountLast4, setAccountLast4] = useState("");
+
+  const { data: subscription } = useQuery<BookkeepingSubscription[]>({
+    queryKey: ["/api/admin/bookkeeping/subscriptions"],
+    select: (subs) => subs.filter(s => s.clientId === client.id),
+  });
+
+  const isSubscribed = subscription && subscription.length > 0 && subscription[0].status === "active";
 
   const { data: transactions, isLoading: txLoading } = useQuery<BankTransaction[]>({
     queryKey: ["/api/admin/bookkeeping/transactions", { clientId: client.id, month: selectedMonth, year: selectedYear }],
@@ -342,13 +373,26 @@ function ClientDetailTab({
     try { categoryBreakdown = JSON.parse(currentSummary.categoryBreakdown); } catch {}
   }
 
+  const txList = transactions ?? [];
+  const totalIncome = txList.filter(t => parseFloat(t.amount) > 0).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+  const totalExpenses = txList.filter(t => parseFloat(t.amount) < 0).reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0);
+  const reviewedCount = txList.filter(t => t.reviewed).length;
+
+  const monthLabel = MONTHS.find(m => m.value === selectedMonth)?.label ?? "";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onBack} data-testid="button-back-to-clients">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back
-        </Button>
-        <h2 className="text-lg font-semibold" data-testid="text-client-name">{client.companyName}</h2>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <button onClick={onBack} className="hover:text-foreground transition-colors flex items-center gap-1" data-testid="button-back-to-clients">
+          <ArrowLeft className="w-3.5 h-3.5" /> Bookkeeping
+        </button>
+        <span>/</span>
+        <span className="font-medium text-foreground" data-testid="text-client-name">{client.companyName}</span>
+        {isSubscribed ? (
+          <StatusBadge status="active" />
+        ) : (
+          <StatusBadge status="inactive" label="No Subscription" />
+        )}
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -368,11 +412,45 @@ function ClientDetailTab({
             {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
           </SelectContent>
         </Select>
+        <span className="text-sm text-muted-foreground ml-auto">
+          {txList.length} transaction{txList.length !== 1 ? "s" : ""} · {reviewedCount} reviewed
+        </span>
       </div>
 
+      {txList.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard
+            title="Income"
+            value={formatCurrency(totalIncome)}
+            subtitle={`${monthLabel} ${selectedYear}`}
+            icon={TrendingUp}
+            iconColor="text-emerald-600 dark:text-emerald-400"
+            iconBg="bg-emerald-100 dark:bg-emerald-900/40"
+          />
+          <StatCard
+            title="Expenses"
+            value={formatCurrency(totalExpenses)}
+            subtitle={`${monthLabel} ${selectedYear}`}
+            icon={TrendingDown}
+            iconColor="text-red-600 dark:text-red-400"
+            iconBg="bg-red-100 dark:bg-red-900/40"
+          />
+          <StatCard
+            title="Net Income"
+            value={formatCurrency(totalIncome - totalExpenses)}
+            subtitle={totalIncome - totalExpenses >= 0 ? "Profitable" : "Net loss"}
+            icon={DollarSign}
+            iconColor={totalIncome - totalExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
+            iconBg={totalIncome - totalExpenses >= 0 ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-red-100 dark:bg-red-900/40"}
+          />
+        </div>
+      )}
+
       <Card data-testid="card-upload-statement">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Upload Bank Statement</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Upload className="w-4 h-4" /> Upload Bank Statement
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -422,8 +500,10 @@ function ClientDetailTab({
       </Card>
 
       <Card data-testid="card-transactions">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base font-semibold">Transactions</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Receipt className="w-4 h-4" /> Transactions
+          </CardTitle>
           <Button
             size="sm"
             variant="outline"
@@ -440,10 +520,12 @@ function ClientDetailTab({
             <div className="space-y-2">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
-          ) : (transactions ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8" data-testid="text-no-transactions">
-              No transactions for this period. Upload a bank statement to get started.
-            </p>
+          ) : txList.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              title="No transactions for this period"
+              description="Upload a bank statement to get started"
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -458,26 +540,27 @@ function ClientDetailTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(transactions ?? []).map(tx => {
+                  {txList.map(tx => {
                     const amt = parseFloat(tx.amount);
                     const currentCategory = tx.manualCategory || tx.aiCategory || "";
+                    const isDebit = amt < 0;
                     return (
-                      <TableRow key={tx.id} data-testid={`row-transaction-${tx.id}`}>
+                      <TableRow key={tx.id} className={isDebit ? "" : "bg-emerald-50/30 dark:bg-emerald-950/10"} data-testid={`row-transaction-${tx.id}`}>
                         <TableCell className="text-sm whitespace-nowrap">
                           {tx.transactionDate ? format(new Date(tx.transactionDate), "MM/dd/yyyy") : "—"}
                         </TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate" data-testid={`text-tx-desc-${tx.id}`}>
                           {tx.description}
                         </TableCell>
-                        <TableCell className={`text-sm text-right font-medium ${amt < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} data-testid={`text-tx-amount-${tx.id}`}>
-                          {amt < 0 ? "-" : "+"}{formatCurrency(amt)}
+                        <TableCell className={`text-sm text-right font-semibold ${isDebit ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`} data-testid={`text-tx-amount-${tx.id}`}>
+                          {isDebit ? "-" : "+"}{formatCurrency(amt)}
                         </TableCell>
                         <TableCell>
                           <Select
                             value={currentCategory}
                             onValueChange={val => updateTransactionMutation.mutate({ id: tx.id, manualCategory: val })}
                           >
-                            <SelectTrigger className="w-[150px]" data-testid={`select-category-${tx.id}`}>
+                            <SelectTrigger className="w-[150px] h-8 text-xs" data-testid={`select-category-${tx.id}`}>
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
@@ -508,8 +591,10 @@ function ClientDetailTab({
       </Card>
 
       <Card data-testid="card-monthly-summary">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base font-semibold">Monthly Summary</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" /> Monthly Summary
+          </CardTitle>
           <Button
             size="sm"
             onClick={() => generateSummaryMutation.mutate()}
@@ -523,49 +608,39 @@ function ClientDetailTab({
           {currentSummary ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card data-testid="card-total-income">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Income</p>
-                      <p className="text-lg font-bold text-green-600 dark:text-green-400" data-testid="text-total-income">
-                        {formatCurrency(currentSummary.totalIncome)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card data-testid="card-total-expenses">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <TrendingDown className="w-6 h-6 text-red-600 dark:text-red-400" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Expenses</p>
-                      <p className="text-lg font-bold text-red-600 dark:text-red-400" data-testid="text-total-expenses">
-                        {formatCurrency(currentSummary.totalExpenses)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card data-testid="card-net-income">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <DollarSign className="w-6 h-6 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Net Income</p>
-                      <p className="text-lg font-bold" data-testid="text-net-income">
-                        {formatCurrency(currentSummary.netIncome)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <StatCard
+                  title="Income"
+                  value={formatCurrency(currentSummary.totalIncome)}
+                  icon={TrendingUp}
+                  iconColor="text-emerald-600 dark:text-emerald-400"
+                  iconBg="bg-emerald-100 dark:bg-emerald-900/40"
+                />
+                <StatCard
+                  title="Expenses"
+                  value={formatCurrency(currentSummary.totalExpenses)}
+                  icon={TrendingDown}
+                  iconColor="text-red-600 dark:text-red-400"
+                  iconBg="bg-red-100 dark:bg-red-900/40"
+                />
+                <StatCard
+                  title="Net Income"
+                  value={formatCurrency(currentSummary.netIncome)}
+                  icon={DollarSign}
+                  iconColor="text-blue-600 dark:text-blue-400"
+                  iconBg="bg-blue-100 dark:bg-blue-900/40"
+                />
               </div>
 
               {Object.keys(categoryBreakdown).length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium mb-2">Category Breakdown</h3>
+                  <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                    <Tags className="w-4 h-4" /> Category Breakdown
+                  </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-testid="section-category-breakdown">
                     {Object.entries(categoryBreakdown).map(([cat, amt]) => (
-                      <div key={cat} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
-                        <span className="truncate mr-2">{cat}</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(amt)}</span>
+                      <div key={cat} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 text-sm border">
+                        <span className="truncate mr-2 text-xs font-medium">{cat}</span>
+                        <span className="font-semibold text-xs whitespace-nowrap">{formatCurrency(amt)}</span>
                       </div>
                     ))}
                   </div>
@@ -573,9 +648,11 @@ function ClientDetailTab({
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8" data-testid="text-no-summary">
-              No summary generated for this period yet.
-            </p>
+            <EmptyState
+              icon={BarChart3}
+              title="No summary for this period"
+              description="Generate a summary to see income, expenses, and category breakdowns"
+            />
           )}
         </CardContent>
       </Card>
@@ -640,8 +717,10 @@ function CategoriesTab() {
   return (
     <div className="space-y-4">
       <Card data-testid="card-add-category">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Add Category</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Category
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-end gap-3 flex-wrap">

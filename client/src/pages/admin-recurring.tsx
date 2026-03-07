@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import type { RecurringTemplate, Client, ClientRecurringSchedule } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Pencil, Trash2, RefreshCcw, ClipboardList } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCcw, ClipboardList, Calendar, Clock, AlertTriangle, Building2, CheckCircle, AlertCircle } from "lucide-react";
 
 type ScheduleWithDetails = ClientRecurringSchedule & {
   clientName?: string;
@@ -334,115 +334,292 @@ export default function AdminRecurring() {
     },
   });
 
+  const activeTemplates = templates?.filter(t => t.isActive).length ?? 0;
+  const totalSchedules = schedules?.length ?? 0;
+  const overdueSchedules = schedules?.filter(s => s.nextDueDate && new Date(s.nextDueDate) < new Date() && s.isActive).length ?? 0;
+  const upcomingSchedules = schedules?.filter(s => {
+    if (!s.nextDueDate || !s.isActive) return false;
+    const d = differenceInDays(new Date(s.nextDueDate), new Date());
+    return d >= 0 && d <= 30;
+  }).length ?? 0;
+
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-admin-recurring">
       <PageHeader
         title="Recurring Compliance"
         description="Manage recurring compliance templates and client schedules"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              data-testid="button-add-template"
+              onClick={() => {
+                setEditingTemplate(null);
+                setTemplateDialogOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Template
+            </Button>
+            <Button
+              data-testid="button-assign-schedule"
+              onClick={() => setScheduleDialogOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Assign Schedule
+            </Button>
+          </div>
+        }
       />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle data-testid="text-templates-section-title">Recurring Compliance Templates</CardTitle>
-          <Button
-            data-testid="button-add-template"
-            onClick={() => {
-              setEditingTemplate(null);
-              setTemplateDialogOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Template
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {templatesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : !templates?.length ? (
-            <EmptyState
-              icon={ClipboardList}
-              title="No templates yet"
-              description="Click 'Add Template' to create your first recurring compliance template."
-              action={
-                <Button onClick={() => { setEditingTemplate(null); setTemplateDialogOpen(true); }} data-testid="button-empty-add-template">
-                  <Plus className="w-4 h-4 mr-2" /> Add Template
-                </Button>
-              }
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Service Type</TableHead>
-                    <TableHead>Frequency</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Days Before</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {templates.map((t) => (
-                    <TableRow key={t.id} data-testid={`row-template-${t.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-template-name-${t.id}`}>{t.name}</TableCell>
-                      <TableCell data-testid={`text-template-service-${t.id}`}>{t.serviceType}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={t.frequencyType} data-testid={`badge-template-frequency-${t.id}`} />
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={priorityStatusMap[t.priority] || t.priority} label={t.priority} />
-                      </TableCell>
-                      <TableCell data-testid={`text-template-days-${t.id}`}>{t.daysBefore}</TableCell>
-                      <TableCell>
-                        <Switch
-                          data-testid={`switch-template-active-${t.id}`}
-                          checked={t.isActive}
-                          onCheckedChange={(checked) =>
-                            toggleActiveMutation.mutate({ id: t.id, isActive: checked })
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            data-testid={`button-edit-template-${t.id}`}
-                            onClick={() => {
-                              setEditingTemplate(t);
-                              setTemplateDialogOpen(true);
-                            }}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Active Templates"
+          value={activeTemplates}
+          subtitle={`${(templates?.length ?? 0) - activeTemplates} inactive`}
+          icon={ClipboardList}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-100 dark:bg-blue-900/40"
+        />
+        <StatCard
+          title="Client Schedules"
+          value={totalSchedules}
+          icon={Calendar}
+          iconColor="text-purple-600 dark:text-purple-400"
+          iconBg="bg-purple-100 dark:bg-purple-900/40"
+        />
+        <StatCard
+          title="Due Within 30 Days"
+          value={upcomingSchedules}
+          icon={Clock}
+          iconColor="text-amber-600 dark:text-amber-400"
+          iconBg="bg-amber-100 dark:bg-amber-900/40"
+          subtitle={upcomingSchedules > 0 ? "Upcoming deadlines" : undefined}
+        />
+        <StatCard
+          title="Overdue"
+          value={overdueSchedules}
+          icon={AlertTriangle}
+          iconColor={overdueSchedules > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}
+          iconBg={overdueSchedules > 0 ? "bg-red-100 dark:bg-red-900/40" : "bg-emerald-100 dark:bg-emerald-900/40"}
+          subtitle={overdueSchedules > 0 ? "Needs attention" : "All on track"}
+        />
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2" data-testid="text-templates-section-title">
+          <ClipboardList className="w-4 h-4" /> Compliance Templates
+        </p>
+
+        {templatesLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
+          </div>
+        ) : !templates?.length ? (
+          <Card>
+            <CardContent>
+              <EmptyState
+                icon={ClipboardList}
+                title="No templates yet"
+                description="Create your first recurring compliance template"
+                action={
+                  <Button onClick={() => { setEditingTemplate(null); setTemplateDialogOpen(true); }} data-testid="button-empty-add-template">
+                    <Plus className="w-4 h-4 mr-2" /> Add Template
+                  </Button>
+                }
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {templates.map((t) => (
+              <Card key={t.id} className={`transition-colors ${!t.isActive ? "opacity-60" : ""}`} data-testid={`row-template-${t.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h3 className="font-semibold text-sm" data-testid={`text-template-name-${t.id}`}>{t.name}</h3>
+                        <StatusBadge status={t.isActive ? "active" : "inactive"} />
+                      </div>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-template-service-${t.id}`}>{t.serviceType}</p>
+                    </div>
+                    <Switch
+                      data-testid={`switch-template-active-${t.id}`}
+                      checked={t.isActive}
+                      onCheckedChange={(checked) =>
+                        toggleActiveMutation.mutate({ id: t.id, isActive: checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mb-3">
+                    <StatusBadge status={t.frequencyType} />
+                    <StatusBadge status={priorityStatusMap[t.priority] || t.priority} label={t.priority} />
+                    <span className="text-xs text-muted-foreground" data-testid={`text-template-days-${t.id}`}>{t.daysBefore}d lead</span>
+                  </div>
+                  {t.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{t.description}</p>
+                  )}
+                  <div className="flex items-center gap-1 border-t pt-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      data-testid={`button-edit-template-${t.id}`}
+                      onClick={() => {
+                        setEditingTemplate(t);
+                        setTemplateDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="w-3 h-3 mr-1" /> Edit
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-destructive hover:text-destructive"
+                          data-testid={`button-delete-template-${t.id}`}
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" /> Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{t.name}"? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel data-testid="button-cancel-delete-template">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            data-testid="button-confirm-delete-template"
+                            onClick={() => deleteTemplateMutation.mutate(t.id)}
                           >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2" data-testid="text-schedules-section-title">
+          <Calendar className="w-4 h-4" /> Client Compliance Schedules
+        </p>
+
+        {schedulesLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}
+          </div>
+        ) : !schedules?.length ? (
+          <Card>
+            <CardContent>
+              <EmptyState
+                icon={RefreshCcw}
+                title="No schedules assigned"
+                description="Assign a recurring compliance schedule to a client to get started"
+                action={
+                  <Button onClick={() => setScheduleDialogOpen(true)} data-testid="button-empty-assign-schedule">
+                    <Plus className="w-4 h-4 mr-2" /> Assign Schedule
+                  </Button>
+                }
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {schedules
+              .slice()
+              .sort((a, b) => {
+                if (!a.nextDueDate) return 1;
+                if (!b.nextDueDate) return -1;
+                return new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime();
+              })
+              .map((s) => {
+                const isOverdue = s.nextDueDate && new Date(s.nextDueDate) < new Date() && s.isActive;
+                const daysUntilDue = s.nextDueDate ? differenceInDays(new Date(s.nextDueDate), new Date()) : null;
+                const isDueSoon = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 14;
+                return (
+                  <Card
+                    key={s.id}
+                    className={`transition-colors ${isOverdue ? "border-red-200 dark:border-red-800/50 bg-red-50/30 dark:bg-red-950/10" : isDueSoon ? "border-amber-200 dark:border-amber-800/50" : ""} ${!s.isActive ? "opacity-60" : ""}`}
+                    data-testid={`row-schedule-${s.id}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${isOverdue ? "bg-red-100 dark:bg-red-900/40" : isDueSoon ? "bg-amber-100 dark:bg-amber-900/40" : "bg-muted"}`}>
+                          {isOverdue ? (
+                            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                          ) : isDueSoon ? (
+                            <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                          ) : (
+                            <CheckCircle className="w-5 h-5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <span className="text-sm font-semibold flex items-center gap-1.5" data-testid={`text-schedule-client-${s.id}`}>
+                              <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                              {s.clientName || s.clientId}
+                            </span>
+                            <span className="text-xs text-muted-foreground">·</span>
+                            <span className="text-xs text-muted-foreground" data-testid={`text-schedule-template-${s.id}`}>
+                              {s.templateName || s.templateId}
+                            </span>
+                            <StatusBadge status={s.isActive ? "active" : "inactive"} />
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                            <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400 font-semibold" : isDueSoon ? "text-amber-600 dark:text-amber-400 font-medium" : ""}`} data-testid={`text-schedule-due-${s.id}`}>
+                              <Calendar className="w-3 h-3" />
+                              {s.nextDueDate ? (
+                                isOverdue
+                                  ? `Overdue ${Math.abs(daysUntilDue!)} days — Due ${format(new Date(s.nextDueDate), "MMM d, yyyy")}`
+                                  : daysUntilDue === 0
+                                    ? "Due today"
+                                    : daysUntilDue === 1
+                                      ? "Due tomorrow"
+                                      : `Due ${format(new Date(s.nextDueDate), "MMM d, yyyy")} (${daysUntilDue}d)`
+                              ) : "No due date"}
+                            </span>
+                            {s.lastGeneratedDate && (
+                              <span className="flex items-center gap-1" data-testid={`text-schedule-generated-${s.id}`}>
+                                <RefreshCcw className="w-3 h-3" />
+                                Last: {format(new Date(s.lastGeneratedDate), "MMM d, yyyy")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0">
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                data-testid={`button-delete-template-${t.id}`}
+                                className="h-8 w-8"
+                                data-testid={`button-delete-schedule-${s.id}`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                                <AlertDialogTitle>Delete Schedule</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete "{t.name}"? This action cannot be undone.
+                                  Are you sure you want to remove this schedule assignment?
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel data-testid="button-cancel-delete-template">Cancel</AlertDialogCancel>
+                                <AlertDialogCancel data-testid="button-cancel-delete-schedule">Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  data-testid="button-confirm-delete-template"
-                                  onClick={() => deleteTemplateMutation.mutate(t.id)}
+                                  data-testid="button-confirm-delete-schedule"
+                                  onClick={() => deleteScheduleMutation.mutate(s.id)}
                                 >
                                   Delete
                                 </AlertDialogAction>
@@ -450,113 +627,14 @@ export default function AdminRecurring() {
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle data-testid="text-schedules-section-title">Client Compliance Schedules</CardTitle>
-          <Button
-            data-testid="button-assign-schedule"
-            onClick={() => setScheduleDialogOpen(true)}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Assign Schedule
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {schedulesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : !schedules?.length ? (
-            <EmptyState
-              icon={RefreshCcw}
-              title="No schedules assigned"
-              description="Assign a recurring compliance schedule to a client to get started."
-              action={
-                <Button onClick={() => setScheduleDialogOpen(true)} data-testid="button-empty-assign-schedule">
-                  <Plus className="w-4 h-4 mr-2" /> Assign Schedule
-                </Button>
-              }
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Template</TableHead>
-                    <TableHead>Next Due Date</TableHead>
-                    <TableHead>Last Generated</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {schedules.map((s) => (
-                    <TableRow key={s.id} data-testid={`row-schedule-${s.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-schedule-client-${s.id}`}>
-                        {s.clientName || s.clientId}
-                      </TableCell>
-                      <TableCell data-testid={`text-schedule-template-${s.id}`}>
-                        {s.templateName || s.templateId}
-                      </TableCell>
-                      <TableCell data-testid={`text-schedule-due-${s.id}`}>
-                        {s.nextDueDate ? format(new Date(s.nextDueDate), "MMM d, yyyy") : "—"}
-                      </TableCell>
-                      <TableCell data-testid={`text-schedule-generated-${s.id}`}>
-                        {s.lastGeneratedDate ? format(new Date(s.lastGeneratedDate), "MMM d, yyyy") : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={s.isActive ? "active" : "inactive"} />
-                      </TableCell>
-                      <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              data-testid={`button-delete-schedule-${s.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Schedule</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to remove this schedule assignment?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel data-testid="button-cancel-delete-schedule">Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                data-testid="button-confirm-delete-schedule"
-                                onClick={() => deleteScheduleMutation.mutate(s.id)}
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+          </div>
+        )}
+      </div>
 
       {templateDialogOpen && (
         <TemplateFormDialog
@@ -570,7 +648,7 @@ export default function AdminRecurring() {
         <ScheduleFormDialog
           open={scheduleDialogOpen}
           onOpenChange={setScheduleDialogOpen}
-          templates={templates || []}
+          templates={templates ?? []}
         />
       )}
     </div>

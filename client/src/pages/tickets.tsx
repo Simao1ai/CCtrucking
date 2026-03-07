@@ -130,7 +130,7 @@ function RequiredDocsSection({ ticketId }: { ticketId: string }) {
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1 mt-2" data-testid={`button-toggle-docs-${ticketId}`}>
+        <Button variant="ghost" size="sm" className="gap-1 mt-2 h-7 text-xs" data-testid={`button-toggle-docs-${ticketId}`}>
           <FileText className="w-3 h-3" />
           Required Documents
           <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -166,6 +166,7 @@ function RequiredDocsSection({ ticketId }: { ticketId: string }) {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
                           onClick={() => updateStatusMutation.mutate({ id: doc.id, status: "received" })}
                           disabled={updateStatusMutation.isPending}
                           data-testid={`button-mark-received-${doc.id}`}
@@ -176,6 +177,7 @@ function RequiredDocsSection({ ticketId }: { ticketId: string }) {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
                           onClick={() => updateStatusMutation.mutate({ id: doc.id, status: "waived" })}
                           disabled={updateStatusMutation.isPending}
                           data-testid={`button-mark-waived-${doc.id}`}
@@ -188,6 +190,7 @@ function RequiredDocsSection({ ticketId }: { ticketId: string }) {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={() => deleteMutation.mutate(doc.id)}
                       disabled={deleteMutation.isPending}
                       data-testid={`button-delete-doc-${doc.id}`}
@@ -246,7 +249,7 @@ function RequiredDocsSection({ ticketId }: { ticketId: string }) {
             <Button
               variant="outline"
               size="sm"
-              className="gap-1 mt-1"
+              className="gap-1 mt-1 h-7 text-xs"
               onClick={() => setShowAddForm(true)}
               data-testid={`button-add-doc-${ticketId}`}
             >
@@ -411,6 +414,16 @@ function TicketForm({ onSuccess, clients }: { onSuccess: () => void; clients: Cl
   );
 }
 
+function priorityIndicator(priority: string) {
+  const colors: Record<string, string> = {
+    urgent: "bg-red-500",
+    high: "bg-orange-500",
+    medium: "bg-amber-400",
+    low: "bg-gray-300 dark:bg-gray-600",
+  };
+  return colors[priority] || colors.low;
+}
+
 export default function Tickets() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -476,37 +489,37 @@ export default function Tickets() {
           value={statusCounts.open}
           icon={ClipboardList}
           iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-500/10"
+          iconBg="bg-blue-100 dark:bg-blue-900/40"
         />
         <StatCard
           title="In Progress"
           value={statusCounts.in_progress}
           icon={Clock}
           iconColor="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-500/10"
+          iconBg="bg-amber-100 dark:bg-amber-900/40"
         />
         <StatCard
           title="Completed"
           value={statusCounts.completed}
           icon={CheckCircle}
           iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-500/10"
+          iconBg="bg-emerald-100 dark:bg-emerald-900/40"
         />
         <StatCard
           title="Blocked"
           value={statusCounts.blocked}
           icon={AlertOctagon}
           iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-500/10"
+          iconBg="bg-red-100 dark:bg-red-900/40"
           subtitle={statusCounts.blocked > 0 ? "Needs attention" : undefined}
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search tickets..."
+            placeholder="Search by title, type, or client..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -516,19 +529,19 @@ export default function Tickets() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="all" data-testid="tab-all">All ({statusCounts.all})</TabsTrigger>
-          <TabsTrigger value="open" data-testid="tab-open">Open ({statusCounts.open})</TabsTrigger>
-          <TabsTrigger value="in_progress" data-testid="tab-in-progress">In Progress ({statusCounts.in_progress})</TabsTrigger>
-          <TabsTrigger value="completed" data-testid="tab-completed">Completed ({statusCounts.completed})</TabsTrigger>
-          <TabsTrigger value="on_hold" data-testid="tab-on-hold">On Hold ({statusCounts.on_hold})</TabsTrigger>
-          <TabsTrigger value="blocked" data-testid="tab-blocked">Blocked ({statusCounts.blocked})</TabsTrigger>
+        <TabsList className="flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="all" data-testid="tab-all" className="text-xs">All ({statusCounts.all})</TabsTrigger>
+          <TabsTrigger value="open" data-testid="tab-open" className="text-xs">Open ({statusCounts.open})</TabsTrigger>
+          <TabsTrigger value="in_progress" data-testid="tab-in-progress" className="text-xs">In Progress ({statusCounts.in_progress})</TabsTrigger>
+          <TabsTrigger value="completed" data-testid="tab-completed" className="text-xs">Completed ({statusCounts.completed})</TabsTrigger>
+          <TabsTrigger value="on_hold" data-testid="tab-on-hold" className="text-xs">On Hold ({statusCounts.on_hold})</TabsTrigger>
+          <TabsTrigger value="blocked" data-testid="tab-blocked" className="text-xs">Blocked ({statusCounts.blocked})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-4">
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
             </div>
           ) : filtered.length === 0 ? (
             <Card>
@@ -549,68 +562,76 @@ export default function Tickets() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
-              {filtered.map(ticket => (
-                <Card key={ticket.id} data-testid={`card-ticket-${ticket.id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <h3 className="font-semibold text-sm">{ticket.title}</h3>
-                          <StatusBadge status={ticket.status} />
-                          {ticket.status === "blocked" && (
-                            <StatusBadge status="blocked" label="Blocked" className="gap-1" />
-                          )}
-                          <StatusBadge status={ticket.priority} />
+            <div className="space-y-2">
+              {filtered.map(ticket => {
+                const client = clientMap.get(ticket.clientId);
+                const isOverdue = ticket.dueDate && new Date(ticket.dueDate) < new Date() && ticket.status !== "completed" && ticket.status !== "closed";
+                return (
+                  <Card key={ticket.id} className={`transition-colors ${ticket.status === "blocked" ? "border-orange-200 dark:border-orange-800/50" : isOverdue ? "border-red-200 dark:border-red-800/50" : ""}`} data-testid={`card-ticket-${ticket.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${priorityIndicator(ticket.priority)}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <h3 className="font-semibold text-sm">{ticket.title}</h3>
+                                <StatusBadge status={ticket.status} />
+                                {(ticket.priority === "high" || ticket.priority === "urgent") && (
+                                  <StatusBadge status={ticket.priority} />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap mt-1.5">
+                                <span className="flex items-center gap-1 font-medium text-foreground/70">
+                                  <UserIcon className="w-3 h-3" />
+                                  {client?.companyName ?? "Unknown"}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Ticket className="w-3 h-3" />
+                                  {ticket.serviceType}
+                                </span>
+                                {ticket.dueDate && (
+                                  <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400 font-medium" : ""}`}>
+                                    <Calendar className="w-3 h-3" />
+                                    {isOverdue ? "Overdue: " : "Due: "}{format(new Date(ticket.dueDate), "MMM d, yyyy")}
+                                  </span>
+                                )}
+                                {ticket.assignedTo && (
+                                  <span className="flex items-center gap-1">
+                                    <UserIcon className="w-3 h-3" />
+                                    {ticket.assignedTo}
+                                  </span>
+                                )}
+                              </div>
+                              {ticket.description && (
+                                <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{ticket.description}</p>
+                              )}
+                              <RequiredDocsSection ticketId={ticket.id} />
+                            </div>
+                            <div className="flex-shrink-0">
+                              <Select
+                                value={ticket.status}
+                                onValueChange={(status) => updateStatus.mutate({ id: ticket.id, status })}
+                              >
+                                <SelectTrigger className="w-[130px] h-8 text-xs" data-testid={`select-status-${ticket.id}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="open">Open</SelectItem>
+                                  <SelectItem value="in_progress">In Progress</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                  <SelectItem value="on_hold">On Hold</SelectItem>
+                                  <SelectItem value="blocked">Blocked</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap mt-2">
-                          <span className="flex items-center gap-1">
-                            <Ticket className="w-3 h-3" />
-                            {ticket.serviceType}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <UserIcon className="w-3 h-3" />
-                            {clientMap.get(ticket.clientId)?.companyName ?? "Unknown"}
-                          </span>
-                          {ticket.dueDate && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              Due: {format(new Date(ticket.dueDate), "MMM d, yyyy")}
-                            </span>
-                          )}
-                          {ticket.assignedTo && (
-                            <span className="flex items-center gap-1">
-                              <UserIcon className="w-3 h-3" />
-                              {ticket.assignedTo}
-                            </span>
-                          )}
-                        </div>
-                        {ticket.description && (
-                          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{ticket.description}</p>
-                        )}
-                        <RequiredDocsSection ticketId={ticket.id} />
                       </div>
-                      <div className="flex-shrink-0">
-                        <Select
-                          value={ticket.status}
-                          onValueChange={(status) => updateStatus.mutate({ id: ticket.id, status })}
-                        >
-                          <SelectTrigger className="w-[130px]" data-testid={`select-status-${ticket.id}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Open</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="on_hold">On Hold</SelectItem>
-                            <SelectItem value="blocked">Blocked</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
