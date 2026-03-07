@@ -2948,6 +2948,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         message: message.trim(),
       });
       await notifyClientUsers(clientId, "New Message", `New message from your tax preparer`, "message", `/portal/chat`);
+      const client = await storage.getClient(clientId);
+      const clientName = client?.companyName || "a client";
+      await notifyAllAdmins("Preparer Message", `${preparerName} (Preparer) sent a message to ${clientName}`, "message", `/admin/chat`);
       res.status(201).json(msg);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
