@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
@@ -490,6 +491,76 @@ export async function registerRoutes(
     await storage.deleteClientNote(noteId);
     await audit(req, "deleted", "client_note", noteId, `Deleted note from client ${param(req, "id")}`);
     res.json({ success: true });
+  });
+
+  app.post("/api/clients/:id/notes/dictate", express.json({ limit: "25mb" }), isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const client = await storage.getClient(clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+
+      const { audio } = req.body;
+      if (!audio || typeof audio !== "string") {
+        return res.status(400).json({ message: "Audio data is required" });
+      }
+
+      const audioBuffer = Buffer.from(audio, "base64");
+      const { ensureCompatibleFormat, speechToText } = await import("./replit_integrations/audio/client");
+      const { buffer: compatBuffer, format } = await ensureCompatibleFormat(audioBuffer);
+      const transcript = await speechToText(compatBuffer, format);
+
+      if (!transcript || !transcript.trim()) {
+        return res.status(400).json({ message: "Could not transcribe audio. Please try again." });
+      }
+
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a note-taking assistant for CC Trucking Services. An employee just dictated a verbal summary after a phone call or meeting with a client. Your job is to structure their dictation into a clean, professional internal note.
+
+Format the note as:
+**Call Summary** — [today's date in Month Day, Year format]
+- Key discussion points as bullet points
+
+**Action Items:** (only if mentioned)
+- List any follow-up tasks, deadlines, or commitments
+
+Keep it concise and professional. Do not add information that wasn't mentioned. If no action items were mentioned, omit that section.
+The client's company name is: ${client.companyName}
+Contact name: ${client.contactName}`
+          },
+          {
+            role: "user",
+            content: `Here is the employee's verbal dictation to summarize:\n\n"${transcript}"`
+          }
+        ],
+        temperature: 0.3,
+      });
+
+      const summary = completion.choices[0]?.message?.content || transcript;
+      const authorName = dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username;
+      const note = await storage.createClientNote({
+        clientId,
+        authorId: dbUser.id,
+        authorName,
+        content: summary,
+      });
+
+      await audit(req, "created", "client_note", note.id, `Dictated note for client ${clientId} (voice-to-text)`);
+      res.status(201).json({ note });
+    } catch (error: any) {
+      console.error("[Dictate] Error:", error.message);
+      res.status(500).json({ message: "Failed to process dictation. Please try again." });
+    }
   });
 
   app.get("/api/documents", isAuthenticated, isAdmin, async (_req, res) => {

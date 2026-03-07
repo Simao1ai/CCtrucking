@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, 
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
-  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus
+  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus, Mic, MicOff, Loader2
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -42,6 +42,11 @@ export default function AdminClientDetail() {
   const [noteContent, setNoteContent] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data, isLoading, isError } = useQuery<ClientSummary>({
     queryKey: [`/api/clients/${clientId}/summary`],
@@ -103,6 +108,82 @@ export default function AdminClientDetail() {
     },
     onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
   });
+
+  const dictateNote = useMutation({
+    mutationFn: async (audioBlob: Blob) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+      const res = await apiRequest("POST", `/api/clients/${clientId}/notes/dictate`, { audio: base64 });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      toast({ title: "Note created from dictation", description: "Your voice memo has been transcribed and summarized." });
+    },
+    onError: () => toast({ title: "Dictation failed", description: "Could not process the recording. Please try again.", variant: "destructive" }),
+  });
+
+  const cleanupRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      mediaRecorderRef.current = null;
+    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+        if (audioBlob.size > 0) {
+          dictateNote.mutate(audioBlob);
+        } else {
+          toast({ title: "Recording too short", description: "Please speak for at least a few seconds.", variant: "destructive" });
+        }
+      };
+
+      mediaRecorder.start(1000);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      timerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+    } catch {
+      toast({ title: "Microphone access denied", description: "Please allow microphone access in your browser to use voice dictation.", variant: "destructive" });
+    }
+  }, [clientId, dictateNote, toast]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   if (isLoading) {
     return (
@@ -416,6 +497,33 @@ export default function AdminClientDetail() {
                   </div>
                 </div>
 
+                {(isRecording || dictateNote.isPending) && (
+                  <div className={`mx-3 mt-3 flex items-center gap-3 px-4 py-3 rounded-lg border ${isRecording ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50" : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/50"}`}
+                    data-testid="dictation-panel">
+                    {isRecording ? (
+                      <>
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-red-700 dark:text-red-400">Recording... {formatTime(recordingSeconds)}</p>
+                          <p className="text-[11px] text-red-600/70 dark:text-red-400/70">Speak your call summary now. Click stop when done.</p>
+                        </div>
+                        <Button size="sm" variant="destructive" className="h-7 text-xs gap-1"
+                          onClick={stopRecording} data-testid="button-stop-recording">
+                          <MicOff className="w-3 h-3" /> Stop
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-400">Processing dictation...</p>
+                          <p className="text-[11px] text-blue-600/70 dark:text-blue-400/70">Transcribing and summarizing your notes with AI</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-3 border-b border-border/50">
                   <Textarea
                     value={noteContent}
@@ -424,7 +532,13 @@ export default function AdminClientDetail() {
                     className="min-h-[60px] text-sm resize-none"
                     data-testid="input-add-note"
                   />
-                  <div className="flex justify-end mt-2">
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                      disabled={isRecording || dictateNote.isPending}
+                      onClick={startRecording}
+                      data-testid="button-dictate-note">
+                      <Mic className="w-3 h-3" /> Dictate Notes
+                    </Button>
                     <Button size="sm" className="h-7 text-xs gap-1"
                       disabled={!noteContent.trim() || addNote.isPending}
                       onClick={() => noteContent.trim() && addNote.mutate(noteContent.trim())}
