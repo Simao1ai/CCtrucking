@@ -4,7 +4,7 @@ import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
-  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages,
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -29,6 +29,7 @@ import {
   type TicketRequiredDocument, type InsertTicketRequiredDocument,
   type RecurringTemplate, type InsertRecurringTemplate,
   type ClientRecurringSchedule, type InsertClientRecurringSchedule,
+  type ClientNote, type InsertClientNote,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -168,6 +169,15 @@ export interface IStorage {
   createClientRecurringSchedule(data: InsertClientRecurringSchedule): Promise<ClientRecurringSchedule>;
   updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>): Promise<ClientRecurringSchedule | undefined>;
   deleteClientRecurringSchedule(id: string): Promise<void>;
+
+  claimTicket(ticketId: string, userId: string, userName: string): Promise<ServiceTicket | undefined>;
+  releaseTicket(ticketId: string): Promise<ServiceTicket | undefined>;
+
+  getClientNotes(clientId: string): Promise<ClientNote[]>;
+  getClientNote(id: string): Promise<ClientNote | undefined>;
+  createClientNote(data: InsertClientNote): Promise<ClientNote>;
+  updateClientNote(id: string, content: string): Promise<ClientNote | undefined>;
+  deleteClientNote(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -707,6 +717,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClientRecurringSchedule(id: string): Promise<void> {
     await db.delete(clientRecurringSchedules).where(eq(clientRecurringSchedules.id, id));
+  }
+
+  async claimTicket(ticketId: string, userId: string, userName: string): Promise<ServiceTicket | undefined> {
+    const [ticket] = await db.update(serviceTickets)
+      .set({ lockedBy: userId, lockedAt: new Date(), lockedByName: userName })
+      .where(eq(serviceTickets.id, ticketId))
+      .returning();
+    return ticket;
+  }
+
+  async releaseTicket(ticketId: string): Promise<ServiceTicket | undefined> {
+    const [ticket] = await db.update(serviceTickets)
+      .set({ lockedBy: null, lockedAt: null, lockedByName: null })
+      .where(eq(serviceTickets.id, ticketId))
+      .returning();
+    return ticket;
+  }
+
+  async getClientNotes(clientId: string): Promise<ClientNote[]> {
+    return db.select().from(clientNotes).where(eq(clientNotes.clientId, clientId)).orderBy(desc(clientNotes.createdAt));
+  }
+
+  async getClientNote(id: string): Promise<ClientNote | undefined> {
+    const [note] = await db.select().from(clientNotes).where(eq(clientNotes.id, id));
+    return note;
+  }
+
+  async createClientNote(data: InsertClientNote): Promise<ClientNote> {
+    const [note] = await db.insert(clientNotes).values(data).returning();
+    return note;
+  }
+
+  async updateClientNote(id: string, content: string): Promise<ClientNote | undefined> {
+    const [note] = await db.update(clientNotes).set({ content, updatedAt: new Date() }).where(eq(clientNotes.id, id)).returning();
+    return note;
+  }
+
+  async deleteClientNote(id: string): Promise<void> {
+    await db.delete(clientNotes).where(eq(clientNotes.id, id));
   }
 }
 

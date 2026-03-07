@@ -48,6 +48,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
   - **Receipt Scanning**: Clients can photograph receipts (mobile camera capture supported), upload them, and AI (OpenAI Vision) extracts vendor, amount, date, and category. Transactions are created automatically with `source: "receipt"` and stored extraction metadata in `receiptData`. Admin can also upload receipts on behalf of clients.
   - **Stripe Scaffolding**: Code ready for Stripe subscription billing when API keys are added (manual activation for now).
 - **Preparer Portal**: Dedicated portal at /preparer/* for tax preparers to review assigned client bookkeeping data, edit transaction categories, and mark transactions as reviewed.
+- **Ticket Claim/Lock System**: Auto-expiring lock (30 min) preventing multiple employees from working on the same ticket simultaneously. Staff can "Start Working" to claim a ticket, "Release" when done. Locked tickets show a banner to other employees. Admins/owners can force-release any lock. Lock fields: `lockedBy`, `lockedAt`, `lockedByName` on `service_tickets` table. API: GET/POST `/api/tickets/:id/lock`, `/api/tickets/:id/claim`, `/api/tickets/:id/release`.
+- **Client Notes System**: Multi-employee timestamped notes on client files. Separate `client_notes` table with authorId, authorName, content, timestamps. Staff can add, edit (own only), and delete (own only) notes. Notes tab visible on admin client detail page. API: CRUD at `/api/clients/:id/notes`.
 
 ### Database Tables (Bookkeeping)
 - `bookkeeping_subscriptions`: Tracks which clients have active bookkeeping ($50/mo standard plan), Stripe IDs (nullable), preparer assignment.

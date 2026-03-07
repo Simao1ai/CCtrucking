@@ -6,18 +6,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest, FilledForm, Notarization } from "@shared/schema";
+import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest, FilledForm, Notarization, ClientNote } from "@shared/schema";
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
-  Calendar, User, Send, ClipboardList, Stamp
+  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 
 interface ClientSummary {
   client: Client;
@@ -35,7 +37,11 @@ export default function AdminClientDetail() {
   const [, params] = useRoute("/admin/clients/:id");
   const clientId = params?.id;
   const { toast } = useToast();
+  const { user } = useAuth();
   const [chatMessage, setChatMessage] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState("");
 
   const { data, isLoading, isError } = useQuery<ClientSummary>({
     queryKey: [`/api/clients/${clientId}/summary`],
@@ -55,6 +61,47 @@ export default function AdminClientDetail() {
     onError: () => {
       toast({ title: "Failed to send message", variant: "destructive" });
     },
+  });
+
+  const { data: notes = [] } = useQuery<ClientNote[]>({
+    queryKey: ["/api/clients", clientId, "notes"],
+    enabled: !!clientId,
+  });
+
+  const addNote = useMutation({
+    mutationFn: async (content: string) => {
+      await apiRequest("POST", `/api/clients/${clientId}/notes`, { content });
+    },
+    onSuccess: () => {
+      setNoteContent("");
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      toast({ title: "Note added" });
+    },
+    onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
+  });
+
+  const updateNote = useMutation({
+    mutationFn: async ({ noteId, content }: { noteId: string; content: string }) => {
+      await apiRequest("PATCH", `/api/clients/${clientId}/notes/${noteId}`, { content });
+    },
+    onSuccess: () => {
+      setEditingNoteId(null);
+      setEditingNoteContent("");
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      toast({ title: "Note updated" });
+    },
+    onError: () => toast({ title: "Failed to update note", variant: "destructive" }),
+  });
+
+  const deleteNote = useMutation({
+    mutationFn: async (noteId: string) => {
+      await apiRequest("DELETE", `/api/clients/${clientId}/notes/${noteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      toast({ title: "Note deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -197,6 +244,10 @@ export default function AdminClientDetail() {
               <TabsTrigger value="messages" data-testid="tab-messages" className="flex-1 text-xs gap-1">
                 <MessageCircle className="w-3.5 h-3.5 hidden sm:inline" />
                 Chat ({messages.length})
+              </TabsTrigger>
+              <TabsTrigger value="notes" data-testid="tab-notes" className="flex-1 text-xs gap-1">
+                <StickyNote className="w-3.5 h-3.5 hidden sm:inline" />
+                Notes ({notes.length})
               </TabsTrigger>
             </TabsList>
 
@@ -353,6 +404,96 @@ export default function AdminClientDetail() {
                     <Send className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="notes" className="mt-3">
+              <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
+                  <div className="flex items-center gap-2">
+                    <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Internal Notes</span>
+                  </div>
+                </div>
+
+                <div className="p-3 border-b border-border/50">
+                  <Textarea
+                    value={noteContent}
+                    onChange={e => setNoteContent(e.target.value)}
+                    placeholder="Add a note about this client..."
+                    className="min-h-[60px] text-sm resize-none"
+                    data-testid="input-add-note"
+                  />
+                  <div className="flex justify-end mt-2">
+                    <Button size="sm" className="h-7 text-xs gap-1"
+                      disabled={!noteContent.trim() || addNote.isPending}
+                      onClick={() => noteContent.trim() && addNote.mutate(noteContent.trim())}
+                      data-testid="button-add-note">
+                      <Plus className="w-3 h-3" />
+                      {addNote.isPending ? "Adding..." : "Add Note"}
+                    </Button>
+                  </div>
+                </div>
+
+                {notes.length === 0 ? (
+                  <div className="py-8">
+                    <EmptyState icon={StickyNote} title="No notes yet" description="Add notes to keep track of important client info" compact />
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {notes.map(note => (
+                      <div key={note.id} className="px-4 py-3 hover:bg-muted/20 transition-colors" data-testid={`note-${note.id}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold text-foreground/70">{note.authorName}</span>
+                            <span>·</span>
+                            <span title={note.createdAt ? format(new Date(note.createdAt), "PPP 'at' p") : ""}>
+                              {note.createdAt ? formatDistanceToNow(new Date(note.createdAt), { addSuffix: true }) : ""}
+                            </span>
+                            {note.updatedAt && note.createdAt && new Date(note.updatedAt).getTime() - new Date(note.createdAt).getTime() > 1000 && (
+                              <span className="italic">(edited)</span>
+                            )}
+                          </div>
+                          {note.authorId === user?.id && (
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => { setEditingNoteId(note.id); setEditingNoteContent(note.content); }}
+                                data-testid={`button-edit-note-${note.id}`}>
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-red-600"
+                                onClick={() => deleteNote.mutate(note.id)}
+                                data-testid={`button-delete-note-${note.id}`}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {editingNoteId === note.id ? (
+                          <div className="mt-2">
+                            <Textarea value={editingNoteContent} onChange={e => setEditingNoteContent(e.target.value)}
+                              className="min-h-[50px] text-sm resize-none" data-testid={`input-edit-note-${note.id}`} />
+                            <div className="flex gap-1.5 mt-1.5 justify-end">
+                              <Button size="sm" variant="ghost" className="h-6 text-[11px]"
+                                onClick={() => { setEditingNoteId(null); setEditingNoteContent(""); }}
+                                data-testid={`button-cancel-edit-${note.id}`}>
+                                Cancel
+                              </Button>
+                              <Button size="sm" className="h-6 text-[11px]"
+                                disabled={!editingNoteContent.trim() || updateNote.isPending}
+                                onClick={() => updateNote.mutate({ noteId: note.id, content: editingNoteContent.trim() })}
+                                data-testid={`button-save-note-${note.id}`}>
+                                {updateNote.isPending ? "Saving..." : "Save"}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm mt-1 whitespace-pre-wrap" data-testid={`text-note-content-${note.id}`}>{note.content}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

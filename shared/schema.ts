@@ -36,6 +36,9 @@ export const serviceTickets = pgTable("service_tickets", {
   description: text("description"),
   dueDate: timestamp("due_date"),
   assignedTo: text("assigned_to"),
+  lockedBy: varchar("locked_by"),
+  lockedAt: timestamp("locked_at"),
+  lockedByName: text("locked_by_name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -326,6 +329,18 @@ export const clientRecurringSchedules = pgTable("client_recurring_schedules", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const clientNotes = pgTable("client_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull(),
+  authorId: varchar("author_id").notNull(),
+  authorName: text("author_name").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({ id: true, createdAt: true, updatedAt: true });
+
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
 export const insertTaxDocumentSchema = createInsertSchema(taxDocuments).omit({ id: true, createdAt: true, updatedAt: true, analyzedAt: true });
@@ -387,3 +402,5 @@ export type RecurringTemplate = typeof recurringTemplates.$inferSelect;
 export type InsertRecurringTemplate = z.infer<typeof insertRecurringTemplateSchema>;
 export type ClientRecurringSchedule = typeof clientRecurringSchedules.$inferSelect;
 export type InsertClientRecurringSchedule = z.infer<typeof insertClientRecurringScheduleSchema>;
+export type ClientNote = typeof clientNotes.$inferSelect;
+export type InsertClientNote = z.infer<typeof insertClientNoteSchema>;

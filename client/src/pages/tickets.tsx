@@ -19,9 +19,10 @@ import type { User } from "@shared/models/auth";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Search, Ticket, Calendar, User as UserIcon, ChevronDown, AlertTriangle, FileText, Check, X, Trash2, ClipboardList, Clock, CheckCircle, AlertOctagon } from "lucide-react";
-import { format } from "date-fns";
+import { Plus, Search, Ticket, Calendar, User as UserIcon, ChevronDown, AlertTriangle, FileText, Check, X, Trash2, ClipboardList, Clock, CheckCircle, AlertOctagon, Lock, Unlock } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { z } from "zod";
+import { useAuth } from "@/hooks/use-auth";
 
 const SERVICE_TYPES = [
   "Business Setup",
@@ -422,10 +423,19 @@ function priorityIndicator(priority: string) {
   return colors[priority] || colors.low;
 }
 
+const LOCK_EXPIRY_MS = 30 * 60 * 1000;
+
+function isLockActive(ticket: ServiceTicket): boolean {
+  if (!ticket.lockedBy || !ticket.lockedAt) return false;
+  return Date.now() - new Date(ticket.lockedAt).getTime() < LOCK_EXPIRY_MS;
+}
+
 export default function Tickets() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tab, setTab] = useState("all");
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const { data: tickets, isLoading } = useQuery<ServiceTicket[]>({ queryKey: ["/api/tickets"] });
   const { data: clients } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
@@ -455,6 +465,33 @@ export default function Tickets() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+    },
+  });
+
+  const claimTicket = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/tickets/${id}/claim`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      toast({ title: "Ticket claimed", description: "You are now working on this ticket." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Cannot claim ticket", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const releaseTicket = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("POST", `/api/tickets/${id}/release`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      toast({ title: "Ticket released", description: "The ticket is now available for others." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -513,8 +550,27 @@ export default function Tickets() {
             {filtered.map(ticket => {
               const client = clientMap.get(ticket.clientId);
               const isOverdue = ticket.dueDate && new Date(ticket.dueDate) < new Date() && ticket.status !== "completed" && ticket.status !== "closed";
+              const locked = isLockActive(ticket);
+              const lockedByMe = locked && ticket.lockedBy === user?.id;
+              const lockedByOther = locked && ticket.lockedBy !== user?.id;
+              const canRelease = locked && (lockedByMe || user?.role === "owner" || user?.role === "admin");
               return (
                 <div key={ticket.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${isOverdue ? "bg-red-50/30 dark:bg-red-950/10" : ticket.status === "blocked" ? "bg-orange-50/20 dark:bg-orange-950/5" : ""}`} data-testid={`card-ticket-${ticket.id}`}>
+                  {lockedByOther && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg text-xs text-amber-700 dark:text-amber-400" data-testid={`lock-banner-${ticket.id}`}>
+                      <Lock className="w-3 h-3 flex-shrink-0" />
+                      <span className="flex-1">
+                        <strong>{ticket.lockedByName}</strong> is working on this ticket
+                        {ticket.lockedAt && ` (started ${formatDistanceToNow(new Date(ticket.lockedAt), { addSuffix: true })})`}
+                      </span>
+                      {canRelease && (
+                        <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px] text-amber-700 dark:text-amber-400 hover:text-amber-900"
+                          onClick={() => releaseTicket.mutate(ticket.id)} data-testid={`button-force-release-${ticket.id}`}>
+                          <Unlock className="w-3 h-3 mr-0.5" /> Release
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-start gap-3">
                     <div className={`flex-shrink-0 w-1 mt-1 h-10 rounded-full ${priorityIndicator(ticket.priority)}`} />
                     <div className="flex-1 min-w-0">
@@ -524,6 +580,12 @@ export default function Tickets() {
                             <h3 className="font-medium text-sm leading-snug">{ticket.title}</h3>
                             <StatusBadge status={ticket.status} />
                             {(ticket.priority === "high" || ticket.priority === "urgent") && <StatusBadge status={ticket.priority} />}
+                            {locked && (
+                              <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${lockedByMe ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"}`} data-testid={`badge-locked-${ticket.id}`}>
+                                <Lock className="w-2.5 h-2.5" />
+                                {lockedByMe ? "You" : ticket.lockedByName}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground mt-1">
                             <span className="font-medium text-foreground/70">{client?.companyName ?? "Unknown"}</span>
@@ -541,12 +603,26 @@ export default function Tickets() {
                           </div>
                           <RequiredDocsSection ticketId={ticket.id} />
                         </div>
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 flex items-center gap-1.5">
+                          {lockedByMe ? (
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 border-blue-200 text-blue-700 dark:text-blue-300 dark:border-blue-800"
+                              onClick={() => releaseTicket.mutate(ticket.id)} disabled={releaseTicket.isPending}
+                              data-testid={`button-release-${ticket.id}`}>
+                              <Unlock className="w-3 h-3" /> Release
+                            </Button>
+                          ) : !locked ? (
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1"
+                              onClick={() => claimTicket.mutate(ticket.id)} disabled={claimTicket.isPending}
+                              data-testid={`button-claim-${ticket.id}`}>
+                              <Lock className="w-3 h-3" /> Start Working
+                            </Button>
+                          ) : null}
                           <Select
                             value={ticket.status}
                             onValueChange={(status) => updateStatus.mutate({ id: ticket.id, status })}
+                            disabled={lockedByOther}
                           >
-                            <SelectTrigger className="w-[120px] h-7 text-[11px]" data-testid={`select-status-${ticket.id}`}>
+                            <SelectTrigger className={`w-[120px] h-7 text-[11px] ${lockedByOther ? "opacity-50" : ""}`} data-testid={`select-status-${ticket.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

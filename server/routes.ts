@@ -361,11 +361,135 @@ export async function registerRoutes(
     res.status(201).json(ticket);
   });
 
-  app.patch("/api/tickets/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const ticket = await storage.updateTicket(param(req, "id"), req.body);
+  const LOCK_EXPIRY_MS = 30 * 60 * 1000;
+
+  function isLockExpired(lockedAt: Date | null): boolean {
+    if (!lockedAt) return true;
+    return Date.now() - new Date(lockedAt).getTime() > LOCK_EXPIRY_MS;
+  }
+
+  app.get("/api/tickets/:id/lock", isAuthenticated, isAdmin, async (req, res) => {
+    const ticket = await storage.getTicket(param(req, "id"));
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-    await audit(req, "updated", "ticket", ticket.id, `Updated ticket "${ticket.title}" — status: ${ticket.status}`);
-    res.json(ticket);
+    const locked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
+    res.json({
+      locked: !!locked,
+      lockedBy: locked ? ticket.lockedBy : null,
+      lockedByName: locked ? ticket.lockedByName : null,
+      lockedAt: locked ? ticket.lockedAt : null,
+    });
+  });
+
+  app.post("/api/tickets/:id/claim", isAuthenticated, isAdmin, async (req, res) => {
+    const ticketId = param(req, "id");
+    const dbUser = (req as any).dbUser;
+    const ticket = await storage.getTicket(ticketId);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    const currentlyLocked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
+    if (currentlyLocked && ticket.lockedBy !== dbUser.id) {
+      return res.status(409).json({
+        message: `Ticket is currently being worked on by ${ticket.lockedByName}`,
+        lockedBy: ticket.lockedBy,
+        lockedByName: ticket.lockedByName,
+        lockedAt: ticket.lockedAt,
+      });
+    }
+
+    const userName = dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username;
+    const updated = await storage.claimTicket(ticketId, dbUser.id, userName);
+    await audit(req, "claimed", "ticket", ticketId, `${userName} started working on ticket "${ticket.title}"`);
+    res.json(updated);
+  });
+
+  app.post("/api/tickets/:id/release", isAuthenticated, isAdmin, async (req, res) => {
+    const ticketId = param(req, "id");
+    const dbUser = (req as any).dbUser;
+    const ticket = await storage.getTicket(ticketId);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    const isOwnerOrAdmin = dbUser.role === "owner" || dbUser.role === "admin";
+    if (ticket.lockedBy !== dbUser.id && !isOwnerOrAdmin) {
+      return res.status(403).json({ message: "Only the lock holder or an admin can release this ticket" });
+    }
+
+    const updated = await storage.releaseTicket(ticketId);
+    const userName = dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username;
+    await audit(req, "released", "ticket", ticketId, `${userName} released lock on ticket "${ticket.title}"`);
+    res.json(updated);
+  });
+
+  app.patch("/api/tickets/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const ticketId = param(req, "id");
+    const dbUser = (req as any).dbUser;
+    const ticket = await storage.getTicket(ticketId);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    const currentlyLocked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
+    if (currentlyLocked && ticket.lockedBy !== dbUser.id) {
+      return res.status(409).json({
+        message: `Ticket is locked by ${ticket.lockedByName}. Release the lock first.`,
+      });
+    }
+
+    const updated = await storage.updateTicket(ticketId, req.body);
+    if (!updated) return res.status(404).json({ message: "Ticket not found" });
+    await audit(req, "updated", "ticket", updated.id, `Updated ticket "${updated.title}" — status: ${updated.status}`);
+    res.json(updated);
+  });
+
+  app.get("/api/clients/:id/notes", isAuthenticated, isAdmin, async (req, res) => {
+    const notes = await storage.getClientNotes(param(req, "id"));
+    res.json(notes);
+  });
+
+  app.post("/api/clients/:id/notes", isAuthenticated, isAdmin, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const { content } = req.body;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ message: "Note content is required" });
+    }
+    const authorName = dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username;
+    const note = await storage.createClientNote({
+      clientId: param(req, "id"),
+      authorId: dbUser.id,
+      authorName,
+      content: content.trim(),
+    });
+    await audit(req, "created", "client_note", note.id, `Added note to client ${param(req, "id")}`);
+    res.status(201).json(note);
+  });
+
+  app.patch("/api/clients/:id/notes/:noteId", isAuthenticated, isAdmin, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const noteId = req.params.noteId;
+    const existing = await storage.getClientNote(noteId);
+    if (!existing) return res.status(404).json({ message: "Note not found" });
+    if (existing.clientId !== param(req, "id")) return res.status(404).json({ message: "Note not found" });
+    if (existing.authorId !== dbUser.id && dbUser.role !== "owner") {
+      return res.status(403).json({ message: "You can only edit your own notes" });
+    }
+    const { content } = req.body;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ message: "Note content is required" });
+    }
+    const updated = await storage.updateClientNote(noteId, content.trim());
+    await audit(req, "updated", "client_note", noteId, `Updated note on client ${param(req, "id")}`);
+    res.json(updated);
+  });
+
+  app.delete("/api/clients/:id/notes/:noteId", isAuthenticated, isAdmin, async (req, res) => {
+    const dbUser = (req as any).dbUser;
+    const noteId = req.params.noteId;
+    const existing = await storage.getClientNote(noteId);
+    if (!existing) return res.status(404).json({ message: "Note not found" });
+    if (existing.clientId !== param(req, "id")) return res.status(404).json({ message: "Note not found" });
+    if (existing.authorId !== dbUser.id && dbUser.role !== "owner") {
+      return res.status(403).json({ message: "You can only delete your own notes" });
+    }
+    await storage.deleteClientNote(noteId);
+    await audit(req, "deleted", "client_note", noteId, `Deleted note from client ${param(req, "id")}`);
+    res.json({ success: true });
   });
 
   app.get("/api/documents", isAuthenticated, isAdmin, async (_req, res) => {
