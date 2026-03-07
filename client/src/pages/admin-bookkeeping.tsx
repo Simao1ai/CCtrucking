@@ -274,6 +274,20 @@ function ClientDetailTab({
     select: (subs) => subs.filter(s => s.clientId === client.id),
   });
 
+  const { data: preparers } = useQuery<Preparer[]>({ queryKey: ["/api/admin/bookkeeping/preparers"] });
+
+  const assignPreparerMutation = useMutation({
+    mutationFn: async (preparerId: string) => {
+      const res = await apiRequest("POST", "/api/admin/bookkeeping/preparer-assignments", { preparerId, clientId: client.id });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/bookkeeping/subscriptions"] });
+      toast({ title: "Preparer assigned" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const isSubscribed = subscription && subscription.length > 0 && subscription[0].status === "active";
 
   const { data: transactions, isLoading: txLoading } = useQuery<BankTransaction[]>({
@@ -382,7 +396,7 @@ function ClientDetailTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
         <button onClick={onBack} className="hover:text-foreground transition-colors flex items-center gap-1" data-testid="button-back-to-clients">
           <ArrowLeft className="w-3.5 h-3.5" /> Bookkeeping
         </button>
@@ -393,6 +407,24 @@ function ClientDetailTab({
         ) : (
           <StatusBadge status="inactive" label="No Subscription" />
         )}
+        <div className="ml-auto flex items-center gap-2">
+          <Users className="w-3.5 h-3.5 text-muted-foreground" />
+          <Select
+            value={subscription?.[0]?.preparerId ?? ""}
+            onValueChange={val => assignPreparerMutation.mutate(val)}
+          >
+            <SelectTrigger className="w-[180px] h-8 text-xs" data-testid="select-detail-preparer">
+              <SelectValue placeholder="Assign preparer..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(preparers ?? []).map(p => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.firstName && p.lastName ? `${p.firstName} ${p.lastName}` : p.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
