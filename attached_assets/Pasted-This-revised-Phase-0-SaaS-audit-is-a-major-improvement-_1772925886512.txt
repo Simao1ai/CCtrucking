@@ -1,0 +1,41 @@
+This revised Phase 0 SaaS audit is a major improvement and the direction is approved in principle.
+
+I agree with the overall architecture and phased approach, especially:
+
+- treating this as a productization effort, not just a branding/database refactor
+- keeping the platform trucking-first rather than overgeneralizing too early
+- using shared DB + strict tenant_id isolation as the initial model
+- combining tenant architecture with role/permission redesign
+- requiring migration validation, rollback capability, and tenant-scoped testing
+
+Before Phase 1 begins, I want the following 9 items added so scope and architecture are locked down properly:
+
+1. Module dependency matrix  
+Define which modules depend on others, which are independent, which are included by plan tier, and what happens in the UI/API when a module is disabled.
+
+2. Integration tenancy matrix  
+For each integration (OpenAI, Stripe, SMTP, Google Sheets, push, storage, etc.), define whether credentials are platform-level or tenant-level, whether access is plan-based, fallback behavior, and export/offboarding implications.
+
+3. Tenant settings schema  
+Clearly define what belongs in first-class DB columns, structured settings tables, and JSON config. Avoid one large unstructured tenant config blob.
+
+4. Custom fields strategy  
+Define field types, validation, search/filter behavior, export/import support, PDF/form support, and AI-context usage.
+
+5. Import/export architecture  
+Define what can be imported/exported, supported formats, full-tenant vs module-level exports, and how documents/files are handled in onboarding and offboarding.
+
+6. Layered test strategy  
+Define unit, integration, end-to-end, migration, scheduler, branded PDF/email, and tenant-scoped AI tests explicitly.
+
+7. Observability / incident response  
+Add per-tenant error visibility, job/email/AI failure monitoring, audit logs for support actions and tenant setting changes, and incident handling for any cross-tenant data issue.
+
+8. White-label depth definition  
+Clarify what is included in standard branding vs premium white-label: logo/colors, email sender, PDFs, login page, subdomain/domain, PWA/app naming, support/contact branding.
+
+9. Strict separation between platform billing and tenant operational billing  
+Keep SaaS subscription billing separate from tenant-to-client invoicing/billing. Do not combine these in the initial SaaS conversion.
+
+Bottom line:
+The direction is strong and approved. I want these 9 items added before Phase 1 starts so this becomes a true productized, sellable SaaS platform — not just a technically multi-tenant version of the current CC Trucking system.

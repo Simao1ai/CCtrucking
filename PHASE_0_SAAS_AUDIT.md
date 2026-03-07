@@ -34,7 +34,263 @@ Per-tenant settings that are neither modules nor industry packs. These include: 
 
 ---
 
-## 2. Database Schema Inventory (30 Tables)
+## 2. Module Dependency Matrix
+
+Modules are independent feature sets, but some have dependencies. This matrix defines which modules depend on others, which are standalone, plan tier eligibility, and what happens when a module is disabled.
+
+### Dependencies
+
+| Module | Depends On | Standalone? | Notes |
+|--------|-----------|-------------|-------|
+| **Core Platform** | None | Yes | Always on. Cannot be disabled. |
+| **Bookkeeping** | None | Yes | Operates independently. Requires its own tables (`bookkeeping_subscriptions`, `bank_transactions`, `transaction_categories`, `monthly_summaries`). |
+| **Tax Preparation** | None (soft dep on Bookkeeping) | Yes | Can operate without Bookkeeping. However, the "bookkeeping summary for tax prep" feature (`/api/admin/tax-prep/bookkeeping-summary/:clientId`) only works if Bookkeeping is also enabled. If Bookkeeping is disabled, this single endpoint returns empty/unavailable — all other tax prep features work independently. |
+| **Compliance Scheduling** | None | Yes | Uses its own tables (`recurring_templates`, `client_recurring_schedules`). Generates service tickets (Core), but works independently. |
+| **Notarizations** | None | Yes | Fully standalone. Single table, single UI page. |
+| **Employee Performance** | None (reads Audit Logs) | Yes | Reads from `audit_logs` (Core) to calculate scores. Does not create its own data. If disabled, the analytics page simply hides the performance section. |
+| **Advanced Analytics** | None (reads Core data) | Yes | Reads from tickets, invoices, documents (Core). Provides enhanced views. Disabling hides the enhanced analytics page. |
+| **Preparer Portal** | Bookkeeping OR Tax Prep | No | Requires at least one of Bookkeeping or Tax Preparation to be enabled. Without either, preparers have nothing to access. |
+
+### Plan Tier Mapping (Recommended)
+
+| Module | Basic | Pro | Enterprise |
+|--------|-------|-----|-----------|
+| Core Platform | Yes | Yes | Yes |
+| Compliance Scheduling | Yes | Yes | Yes |
+| Notarizations | Yes | Yes | Yes |
+| Bookkeeping | No | Yes | Yes |
+| Tax Preparation | No | Yes | Yes |
+| Preparer Portal | No | Yes | Yes |
+| Employee Performance | No | No | Yes |
+| Advanced Analytics | No | Yes | Yes |
+| AI Features (Chat, Categorization, Receipt Scan) | Limited | Standard | Unlimited |
+| White-Label Branding | No | Basic | Full |
+
+### Behavior When Module Is Disabled
+
+| Layer | Behavior |
+|-------|----------|
+| **Sidebar/Navigation** | Menu items for disabled modules are hidden. No dead links. |
+| **API Routes** | Routes for disabled modules return `403 Forbidden` with message: "This feature is not enabled for your account. Contact your administrator to upgrade." API must check module status before processing any request. |
+| **Database** | Tables for disabled modules remain in the schema but are not queried. No data is created or modified. Existing data is preserved if a module is later re-enabled. |
+| **Background Jobs** | Schedulers skip tenants where the relevant module is disabled (e.g., compliance scheduler skips tenants without Compliance Scheduling; invoice scheduler always runs since invoicing is Core). |
+| **AI Features** | If AI module access is restricted by plan, AI routes return a clear "AI not available on your plan" message. Non-AI features continue working. |
+
+---
+
+## 3. Integration Tenancy Matrix
+
+Each external integration must be explicitly defined in terms of credential ownership, plan access, fallback behavior, and offboarding.
+
+| Integration | Credential Level | Plan Access | Fallback if Unavailable | Offboarding |
+|------------|-----------------|-------------|------------------------|-------------|
+| **OpenAI (AI Chat, Categorization, Receipt Scan, Tax Analysis, Dictation)** | **Platform-level.** Single API key owned by the platform. Per-tenant usage tracked for billing and quota enforcement. | Basic: limited (e.g., 50 AI calls/month). Pro: standard (500/month). Enterprise: unlimited or tenant-provided key. | AI features degrade gracefully: "AI temporarily unavailable" message. Non-AI features unaffected. If tenant quota exhausted: "AI quota reached for this billing period." | AI conversation history purged. Usage logs retained for billing reconciliation per retention policy. |
+| **Stripe (Platform Billing)** | **Platform-level.** Single Stripe account for platform subscription billing. | All plans. Required for paid tiers. | If Stripe unavailable: existing subscriptions continue, new signups queued. If payment fails: grace period (7 days), then feature degradation, then suspension after 30 days. | Subscription cancelled. Final invoice generated. Data retained per retention policy before deletion. |
+| **Stripe Connect (Tenant-to-Client Billing)** | **Per-tenant.** Each tenant connects their own Stripe account via Stripe Connect (optional). | Pro+ only. Not available on Basic. | Tenants without Stripe Connect can still create invoices and mark them paid manually. Stripe Connect is a convenience, not a requirement. | Tenant's Stripe Connect link severed. Outstanding invoices remain in platform for reference. |
+| **SMTP (Email)** | **Platform-level default.** Single platform sender (e.g., `noreply@platform.com`) with tenant-specific reply-to addresses. Per-tenant SMTP available on Enterprise. | All plans. Enterprise: custom SMTP. | If SMTP unavailable: emails queued for retry (3 attempts, exponential backoff). Notification system (in-app + push) continues independently. | Tenant's custom SMTP credentials deleted. Pending emails cancelled. |
+| **Google Sheets** | **Per-tenant.** Each tenant provides their own Google service account credentials or connects via OAuth. | Pro+ only. | If credentials missing or invalid: Google Sheets integration page shows "Not connected" with setup instructions. No other features affected. | Tenant's Google credentials deleted. No platform-side access to tenant sheets after disconnection. |
+| **Web Push (VAPID)** | **Platform-level.** Single VAPID key pair for the platform. Push notification content is tenant-branded. | All plans. | If push delivery fails: in-app notifications are the fallback. Push failures logged but do not block operations. | Push subscriptions for tenant's users deleted. |
+| **File Storage (Uploads)** | **Platform-level infrastructure.** Files partitioned by tenant directory (`uploads/{tenantId}/...`). | All plans. Storage quotas may vary by plan. | If storage quota exceeded: upload fails with clear message. Existing files remain accessible. | All files in `uploads/{tenantId}/` deleted after retention period. Tenant notified before deletion with export window. |
+
+---
+
+## 4. Tenant Settings Schema
+
+Tenant configuration must be structured intentionally. Avoid a single large JSON blob — use first-class columns for critical/indexed fields, structured settings tables for typed configuration, and JSON only for extensible/rarely-queried data.
+
+### `tenants` Table — First-Class Columns
+
+These fields are queried frequently, used in middleware, or needed for indexing:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `name` | text, NOT NULL | Company display name (used in UI, emails, PDFs) |
+| `slug` | varchar, UNIQUE, NOT NULL | URL-safe identifier (e.g., `cc-trucking`). Used for subdomain routing or URL paths. |
+| `status` | text, NOT NULL, default `active` | `active`, `suspended`, `trial`, `cancelled` |
+| `plan` | text, NOT NULL, default `basic` | `basic`, `pro`, `enterprise` |
+| `industry` | text | Industry vertical identifier (e.g., `trucking`, `construction`). Determines which industry pack content is loaded. |
+| `contactEmail` | text, NOT NULL | Primary contact/billing email |
+| `contactPhone` | text | Primary contact phone |
+| `ownerUserId` | varchar | FK to `users.id` — the tenant owner |
+| `createdAt` | timestamp, NOT NULL | |
+| `updatedAt` | timestamp, NOT NULL | |
+
+### `tenant_branding` Table — Structured Branding Config
+
+Separate table because branding is a distinct concern, queried on every page load, and may have its own access control (white-label features gated by plan):
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `tenantId` | varchar, FK, UNIQUE | One-to-one with tenants |
+| `companyName` | text | Display name override (may differ from tenant.name) |
+| `logoUrl` | text | URL to uploaded logo |
+| `primaryColor` | text | HSL or hex primary brand color |
+| `accentColor` | text | HSL or hex accent color |
+| `tagline` | text | Company tagline (used in emails, PDF footers) |
+| `sidebarIcon` | text | Icon name from icon library (default: building icon) |
+| `loginMessage` | text | Custom message shown on login page |
+| `supportEmail` | text | Where clients send support inquiries |
+| `supportPhone` | text | Support phone number |
+| `websiteUrl` | text | Tenant's own website URL |
+| `address` | text | Company address (for invoices/PDFs) |
+
+### `tenant_settings` Table — Typed Key-Value Configuration
+
+For settings that are typed, enumerable, and may grow over time without schema migration:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `tenantId` | varchar, FK | |
+| `key` | text, NOT NULL | Setting identifier (e.g., `email.smtp_host`, `ai.custom_instructions`) |
+| `value` | text, NOT NULL | Setting value (stored as text, parsed by application based on key) |
+| `type` | text, NOT NULL | Data type hint: `string`, `boolean`, `number`, `json` |
+| `updatedAt` | timestamp | |
+| `updatedBy` | varchar | User who last changed this setting |
+
+**Predefined setting keys (initial set):**
+
+| Key | Type | Default | Purpose |
+|-----|------|---------|---------|
+| `email.smtp_host` | string | (platform default) | Custom SMTP server |
+| `email.smtp_port` | number | 587 | |
+| `email.smtp_user` | string | (platform default) | |
+| `email.smtp_password` | string | (encrypted) | |
+| `email.from_name` | string | (tenant companyName) | |
+| `email.reply_to` | string | (tenant contactEmail) | |
+| `ai.custom_instructions` | string | (none) | Tenant-owner-editable AI prompt additions |
+| `ai.model_preference` | string | `default` | `default`, `fast`, `advanced` |
+| `ai.monthly_quota` | number | (plan default) | AI call quota per month |
+| `billing.stripe_customer_id` | string | | Platform billing customer |
+| `billing.stripe_subscription_id` | string | | Platform billing subscription |
+| `billing.grace_period_days` | number | 7 | Days before feature degradation on failed payment |
+| `modules.bookkeeping` | boolean | false | Is bookkeeping module enabled? |
+| `modules.tax_preparation` | boolean | false | Is tax prep module enabled? |
+| `modules.compliance_scheduling` | boolean | true | Is compliance scheduling enabled? |
+| `modules.notarizations` | boolean | true | Is notarization tracking enabled? |
+| `modules.employee_performance` | boolean | false | Is employee performance enabled? |
+| `modules.advanced_analytics` | boolean | false | Is advanced analytics enabled? |
+
+### JSON Fields — Extensible Data
+
+Used only on the `tenants` table for rarely-queried, extensible data:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `metadata` | jsonb | Freeform metadata: onboarding completion flags, feature usage stats, internal notes from platform support. NOT used for configuration that affects application behavior. |
+
+**Rule:** If a setting affects application behavior (routing, feature gating, branding, AI behavior), it belongs in a first-class column or `tenant_settings`. JSON is for supplementary/metadata purposes only.
+
+---
+
+## 5. Custom Fields Strategy
+
+The current platform has trucking-specific fields (`dotNumber`, `mcNumber`, `einNumber`) hardcoded on the `clients` table. To support multiple verticals, a custom fields system is needed.
+
+### Architecture
+
+**`custom_field_definitions` table:**
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `tenantId` | varchar, FK | Which tenant this field belongs to |
+| `entityType` | text, NOT NULL | Which entity this field is for: `client`, `ticket`, `invoice` |
+| `fieldName` | text, NOT NULL | Internal field identifier (e.g., `dot_number`) |
+| `fieldLabel` | text, NOT NULL | Display label (e.g., "DOT Number") |
+| `fieldType` | text, NOT NULL | `text`, `number`, `date`, `select`, `multiselect`, `boolean`, `url`, `email`, `phone` |
+| `options` | jsonb | For `select`/`multiselect`: array of allowed values |
+| `required` | boolean, default false | Is this field required when creating/editing the entity? |
+| `sortOrder` | integer, default 0 | Display order in forms and detail views |
+| `isSearchable` | boolean, default true | Can this field be searched/filtered? |
+| `isVisibleInList` | boolean, default false | Show this field in list/table views? |
+| `industryPackSource` | text | If this field came from an industry pack (e.g., `trucking`), record that here. NULL for custom-created fields. |
+| `createdAt` | timestamp | |
+
+**`custom_field_values` table:**
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `tenantId` | varchar, FK | Denormalized for query safety |
+| `fieldDefinitionId` | varchar, FK | Which field this value is for |
+| `entityType` | text, NOT NULL | Matches definition's entityType |
+| `entityId` | varchar, NOT NULL | ID of the client/ticket/invoice this value belongs to |
+| `value` | text | The actual field value (stored as text, parsed by application based on fieldType) |
+| `createdAt` | timestamp | |
+| `updatedAt` | timestamp | |
+
+**Unique constraint:** (`fieldDefinitionId`, `entityId`) — one value per field per entity.
+
+### Capabilities
+
+| Capability | Supported | Notes |
+|-----------|-----------|-------|
+| **Validation** | Yes | `required` flag enforced on create/update. `fieldType` determines validation rules (e.g., `number` must be numeric, `email` must be valid format, `select` must be from options list). |
+| **Search/Filter** | Yes | `isSearchable` fields indexed via a GIN index on `(tenantId, entityType, fieldDefinitionId, value)`. Supports exact match and ILIKE text search. |
+| **Export (CSV/JSON)** | Yes | Custom fields included as additional columns in CSV exports and as nested objects in JSON exports. |
+| **Import** | Yes | Import files can include custom field columns. Unrecognized columns are ignored with a warning. |
+| **PDF/Form support** | Yes | Custom fields rendered in invoice PDFs, form templates, and client detail views. Position determined by `sortOrder`. |
+| **AI context** | Yes | Custom field values for a client are included in AI prompt context when the AI assistant is asked about that client. Field labels and values are passed, not internal identifiers. |
+| **Industry pack seeding** | Yes | When a trucking industry pack is applied to a tenant, it creates field definitions for DOT Number, MC Number, EIN with `industryPackSource: "trucking"`. Pack-sourced fields can be modified but carry the source tag for reference. |
+
+### Migration from Hardcoded Fields
+
+The existing `dotNumber`, `mcNumber`, `einNumber` columns on the `clients` table will be migrated as follows:
+1. Create custom field definitions for CC Trucking's tenant (DOT Number, MC Number, EIN)
+2. Copy existing values from `clients.dotNumber/mcNumber/einNumber` into `custom_field_values`
+3. Update all UI components to read from custom fields instead of hardcoded columns
+4. Keep the hardcoded columns in the schema temporarily for backward compatibility, with a deprecation plan to remove them after all tenants are migrated
+
+---
+
+## 6. Import/Export Architecture
+
+### Exportable Data
+
+| Data Type | Formats | Scope | Notes |
+|-----------|---------|-------|-------|
+| **Clients** | CSV, JSON | Per-tenant | Includes all client fields + custom field values |
+| **Service Tickets** | CSV, JSON | Per-tenant, or per-client | Includes status, dates, assignee, custom fields |
+| **Invoices** | CSV, JSON, PDF (individual) | Per-tenant, or per-client | CSV: summary rows. PDF: individual invoice documents. |
+| **Invoice Line Items** | CSV | Per-tenant, or per-invoice | Detailed line item export |
+| **Documents** | JSON (metadata) + ZIP (files) | Per-tenant, or per-client | Metadata as JSON, actual files as ZIP archive |
+| **Bank Transactions** | CSV, JSON | Per-tenant, or per-client, or per-month | Standard bank transaction format |
+| **Tax Documents** | JSON (metadata) + ZIP (files) | Per-tenant, or per-client, or per-year | Metadata + physical files |
+| **Knowledge Base Articles** | JSON, Markdown | Per-tenant | Full article content |
+| **Form Templates** | JSON | Per-tenant | Template content and metadata |
+| **Audit Logs** | CSV, JSON | Per-tenant, date-filtered | Action history |
+| **Custom Field Definitions** | JSON | Per-tenant | Field schema only (values exported with entities) |
+| **Monthly Summaries** | CSV, JSON | Per-tenant, or per-client | Financial summary data |
+| **Full Tenant Export** | ZIP archive | Entire tenant | All of the above in a single structured archive. Directory structure: `/clients/`, `/invoices/`, `/documents/`, `/bookkeeping/`, `/tax/`, `/config/`, `/audit/` |
+
+### Importable Data
+
+| Data Type | Formats | Notes |
+|-----------|---------|-------|
+| **Clients** | CSV | Column mapping UI. Custom fields matched by field label. Unrecognized columns ignored with warning. Duplicate detection by company name + email. |
+| **Bank Transactions** | CSV | Existing bank statement parser. Supports date/description/amount and debit/credit column formats. |
+| **Service Catalog** | JSON | Industry pack installer uses this format. Custom import also supported. |
+| **Knowledge Base Articles** | JSON, Markdown | Bulk article import for onboarding. |
+| **Form Templates** | JSON | Template import during onboarding setup. |
+| **Transaction Categories** | JSON | Category set import (from industry pack or custom). |
+| **Recurring Templates** | JSON | Compliance schedule import (from industry pack or custom). |
+
+### File Handling During Export/Import
+
+| Scenario | Handling |
+|----------|---------|
+| **Export with files** | Physical files (tax docs, receipts) bundled as ZIP. Metadata references relative file paths within the ZIP. |
+| **Export without files** | Metadata-only export (CSV/JSON) includes file names and sizes but not the actual files. Useful for data auditing. |
+| **Import with files** | ZIP upload with metadata JSON + files directory. Files stored in tenant-partitioned storage. |
+| **Onboarding import** | Guided wizard: upload CSV of clients → map columns → preview → confirm. Custom fields auto-detected or mapped manually. |
+| **Offboarding export** | Full tenant export triggered by tenant owner or platform admin. Generates complete ZIP archive. Available for download for 30 days after account closure. |
+
+---
+
+## 7. Database Schema Inventory (30 Tables)
 
 ### Core Platform Tables (No Industry-Specific Logic)
 
@@ -43,7 +299,7 @@ Per-tenant settings that are neither modules nor industry packs. These include: 
 | `users` | id, username, password, email, firstName, lastName, profileImageUrl, role, clientId, createdAt, updatedAt | CORE | Add `tenantId`. Role model needs redesign. |
 | `sessions` | sid, sess, expire | CORE | No schema change required. However, tenant context resolution from session data, impersonation behavior for platform admins, stale-session invalidation on tenant suspension or role change, and support/admin cross-tenant access patterns all need explicit design and testing. |
 | `clients` | id, companyName, contactName, email, phone, address, city, state, zipCode, status, notes, pipelineStage, nextActionDate, nextActionNote | CORE (mostly) | Add `tenantId`. See below for CC-specific columns. |
-| `clients` (cont.) | dotNumber, mcNumber, einNumber | CC-SPECIFIC | These are trucking-specific fields. Move to a `client_custom_fields` system or implement vertical-specific field sets driven by industry pack configuration. |
+| `clients` (cont.) | dotNumber, mcNumber, einNumber | CC-SPECIFIC | These are trucking-specific fields. Migrate to custom fields system (see Section 5). |
 | `service_tickets` | id, clientId, title, serviceType, status, priority, description, dueDate, assignedTo, lockedBy, lockedAt, lockedByName, createdAt | CORE | Add `tenantId`. `serviceType` values are currently trucking-specific but the field itself is generic. |
 | `documents` | id, clientId, ticketId, name, type, status, uploadedAt | CORE | Add `tenantId`. |
 | `invoices` | id, clientId, ticketId, invoiceNumber, amount, status, dueDate, paidDate, description, lastReminderSent, reminderCount, createdAt | CORE | Add `tenantId`. |
@@ -87,9 +343,21 @@ Per-tenant settings that are neither modules nor industry packs. These include: 
 | `client_recurring_schedules` | id, clientId, templateId, nextDueDate, lastGeneratedDate, isActive, createdAt | CONFIGURABLE | Scoped via client's tenantId. |
 | `ticket_required_documents` | id, ticketId, documentName, documentType, status, documentId, createdAt | CORE | Scoped via ticket's tenantId. |
 
+### New Tables for Multi-Tenant Architecture
+
+| Table | Purpose |
+|-------|---------|
+| `tenants` | Core tenant identity, status, plan, industry (see Section 4) |
+| `tenant_branding` | Per-tenant branding configuration (see Section 4) |
+| `tenant_settings` | Key-value typed settings per tenant (see Section 4) |
+| `custom_field_definitions` | Custom field schema per tenant (see Section 5) |
+| `custom_field_values` | Custom field data per entity (see Section 5) |
+| `ai_usage_logs` | Per-tenant AI call tracking for billing and audit (see Section 10) |
+| `platform_audit_logs` | Platform-level actions (tenant creation, impersonation, etc.) separate from tenant audit logs |
+
 ### Direct vs. Inherited Tenant Ownership
 
-**Direct tenantId needed (17 tables):** users, clients, service_tickets, documents, invoices, staff_messages, form_templates, notarizations, audit_logs, service_items, knowledge_articles, bookkeeping_subscriptions, transaction_categories, tax_documents, recurring_templates, preparer_assignments, client_recurring_schedules
+**Direct tenantId needed (17+ tables):** users, clients, service_tickets, documents, invoices, staff_messages, form_templates, notarizations, audit_logs, service_items, knowledge_articles, bookkeeping_subscriptions, transaction_categories, tax_documents, recurring_templates, preparer_assignments, client_recurring_schedules
 
 **Scoped via parent relationship (13 tables):** invoice_line_items (via invoice), chat_messages (via client), filled_forms (via client), signature_requests (via client), notifications (via user), client_notes (via client), push_subscriptions (via user), bank_transactions (via client), monthly_summaries (via client), ticket_required_documents (via ticket), sessions (via user), conversations, messages
 
@@ -104,7 +372,7 @@ Adding direct `tenantId` to these tables costs minimal storage but significantly
 
 ---
 
-## 3. API Route Inventory (90+ Routes)
+## 8. API Route Inventory (90+ Routes)
 
 ### Authentication & User Management (6 routes)
 
@@ -224,7 +492,7 @@ All preparer routes validate assignment via `getPreparerAssignments(dbUser.id)`.
 
 ---
 
-## 4. AI Integration Audit (6 AI Features)
+## 9. AI Integration Audit (6 AI Features)
 
 | Feature | Model | Data Accessed | Classification | Tenant Risk |
 |---------|-------|--------------|---------------|-------------|
@@ -246,7 +514,7 @@ All preparer routes validate assignment via `getPreparerAssignments(dbUser.id)`.
 
 ---
 
-## 5. AI Governance & Safety Rules
+## 10. AI Governance & Safety Rules
 
 AI is one of the highest-risk areas for data leakage, inconsistent behavior, and tenant trust violations. This section defines the governance model that must be designed before any multi-tenant AI code is written.
 
@@ -285,7 +553,7 @@ AI is one of the highest-risk areas for data leakage, inconsistent behavior, and
 
 ---
 
-## 6. Role & Permission Model Audit
+## 11. Role & Permission Model Audit
 
 ### Current Roles (4)
 
@@ -332,7 +600,7 @@ Current middleware functions that need tenant awareness:
 
 ---
 
-## 7. Storage, Jobs, Notifications & Integrations Audit
+## 12. Storage, Jobs, Notifications & Integrations Audit
 
 ### File Storage
 
@@ -382,7 +650,61 @@ Both schedulers currently run a single global query. In multi-tenant mode, they 
 
 ---
 
-## 8. Hardcoded CC Trucking References
+## 13. White-Label Depth Definition
+
+White-labeling has multiple levels of depth. This section defines what is included in standard branding (available to all tenants) versus premium white-label features (gated by plan tier).
+
+### Standard Branding (All Plans)
+
+Available to every tenant at no additional cost:
+
+| Element | What's Customizable |
+|---------|-------------------|
+| **Company name** | Displayed in sidebar headers, page titles, login page |
+| **Primary color** | Applied to sidebar, buttons, and accent elements via CSS variable override |
+| **Contact info** | Email, phone, address shown in portal footer and contact pages |
+| **Tagline** | Short tagline shown in email footers and PDF invoices |
+
+### Pro Branding (Pro Plan)
+
+Available on Pro tier and above:
+
+| Element | What's Customizable |
+|---------|-------------------|
+| **Logo** | Custom logo replaces default icon in sidebars, login page, and email headers |
+| **Accent color** | Secondary color for additional brand consistency |
+| **PDF invoices** | Company logo, name, address, and tagline rendered on invoice PDFs |
+| **Email sender name** | Custom "From" name on invoice and notification emails (uses platform sender address with custom reply-to) |
+| **Login page message** | Custom welcome/instructions text on the login page |
+| **Knowledge base branding** | Articles and search page show tenant's company name |
+
+### Enterprise White-Label (Enterprise Plan)
+
+Full white-label experience:
+
+| Element | What's Customizable |
+|---------|-------------------|
+| **Custom subdomain** | `cctrucking.platform.com` or similar. Tenant accessed via their own subdomain. |
+| **Custom domain** | `app.cctruckingservices.com` — full custom domain with platform-managed SSL. |
+| **Custom SMTP** | Emails sent from tenant's own email server/address. No platform branding visible in email headers. |
+| **PWA branding** | Custom PWA name, icons, and splash screen. App installs as tenant's brand on mobile/desktop. |
+| **Service worker branding** | Push notification titles and icons use tenant branding. |
+| **Support/contact branding** | "Powered by [Platform]" footer can be hidden. All support references point to tenant's own support channels. |
+| **Favicon** | Custom browser tab icon |
+
+### What Is NOT Customizable (Platform-Controlled)
+
+| Element | Reason |
+|---------|--------|
+| **UI layout and component structure** | Consistency, maintainability, and testing. Tenants get branding, not custom UIs. |
+| **Feature behavior** | How invoicing, ticketing, bookkeeping, etc. work is platform-defined. Tenants cannot change business logic. |
+| **AI base prompt** | Platform safety and quality rules are not tenant-editable (see AI Governance). |
+| **Data schema** | Tenants cannot add database tables. Custom fields cover extensibility. |
+| **Security policies** | Session handling, password requirements, encryption are platform-controlled. |
+
+---
+
+## 14. Hardcoded CC Trucking References
 
 ### Server-Side (Must Change)
 
@@ -420,11 +742,56 @@ Both schedulers currently run a single global query. In multi-tenant mode, they 
 | Service Items | 10 trucking services (IFTA Filing, MCS-150, UCR, DOT, etc.) | CC-SPECIFIC — becomes part of "Trucking Industry Pack" |
 | Transaction Categories | 19 categories (Fuel, Tolls, Freight Revenue, etc.) | CC-SPECIFIC — becomes part of "Trucking Bookkeeping Pack" |
 | Recurring Templates | 4 templates (IFTA quarterly, UCR annual, MCS-150, DOT) | CC-SPECIFIC — becomes part of "Trucking Compliance Pack" |
-| Client Fields | DOT Number, MC Number on the clients table | CC-SPECIFIC — should be custom/extensible fields |
+| Client Fields | DOT Number, MC Number on the clients table | CC-SPECIFIC — migrated to custom fields system |
 
 ---
 
-## 9. CC Trucking to "Tenant 1" Migration Plan
+## 15. Platform Billing vs. Tenant Operational Billing
+
+These are two completely separate billing systems that must never be combined. Mixing them creates architectural confusion, accounting complexity, and audit nightmares.
+
+### Platform Billing (SaaS Subscription)
+
+This is how YOU bill tenants for using the platform.
+
+| Aspect | Detail |
+|--------|--------|
+| **What it is** | Monthly/annual subscription fee for platform access |
+| **Who pays** | Tenant owner pays you |
+| **Stripe account** | Your platform Stripe account |
+| **Managed by** | Platform owner / platform admin |
+| **Tables** | `tenants.plan`, `tenant_settings` (billing keys), Stripe webhook data |
+| **Features** | Plan selection, tier upgrades/downgrades, payment processing, failed payment handling, subscription lifecycle |
+| **Visible to** | Platform owner sees all subscriptions. Tenant owner sees their own plan/billing. Tenant admins and clients do NOT see platform billing. |
+| **Invoice numbering** | Platform invoice numbers (PLAT-0001, etc.) |
+
+### Tenant Operational Billing (Client Invoicing)
+
+This is how tenants bill THEIR clients for services rendered.
+
+| Aspect | Detail |
+|--------|--------|
+| **What it is** | Invoices generated by tenant staff for work done (IFTA filing, bookkeeping, etc.) |
+| **Who pays** | Tenant's clients pay the tenant |
+| **Stripe account** | Tenant's own Stripe account (via Stripe Connect, optional) OR manual payment tracking |
+| **Managed by** | Tenant owner / tenant admin |
+| **Tables** | `invoices`, `invoice_line_items`, `service_items` (all tenant-scoped) |
+| **Features** | Invoice creation, PDF generation, email sending, payment status tracking, AR aging, reminders |
+| **Visible to** | Tenant staff and their clients. Platform has NO involvement in tenant-client financial transactions. |
+| **Invoice numbering** | Tenant-defined format (INV-0001, etc.) — per tenant sequence |
+
+### Strict Separation Rules
+
+1. **No shared tables.** Platform billing data and tenant invoicing data must never be stored in the same tables.
+2. **No shared routes.** Platform billing routes (`/api/platform/billing/*`) and tenant invoice routes (`/api/invoices/*`) are completely separate.
+3. **No shared UI.** Platform billing pages and tenant invoice pages are different screens in different portals.
+4. **No shared Stripe accounts.** Platform billing uses the platform's Stripe account. Tenant billing uses the tenant's own Stripe Connect account (or manual tracking).
+5. **Bookkeeping module billing is tenant operational billing.** The existing bookkeeping subscription ($50/month) that tenants charge their clients is part of tenant operational billing, not platform billing. It stays in the tenant-scoped `bookkeeping_subscriptions` table.
+6. **Platform billing comes first.** In the implementation roadmap, platform billing (Phase 4) is built independently of tenant operational billing (which already exists). Do not refactor existing invoice/billing code to accommodate platform billing — they are separate systems.
+
+---
+
+## 16. CC Trucking to "Tenant 1" Migration Plan
 
 ### What Happens to Existing Data
 
@@ -437,6 +804,7 @@ Both schedulers currently run a single global query. In multi-tenant mode, they 
 7. **Knowledge base** — existing articles get CC Trucking's tenant ID
 8. **Recurring templates** — existing templates get CC Trucking's tenant ID
 9. **Transaction categories** — existing categories get CC Trucking's tenant ID
+10. **Custom fields** — DOT Number, MC Number, EIN values migrated from `clients` columns to `custom_field_values`
 
 ### Migration Safety Rules
 - All existing data MUST remain accessible to CC Trucking after migration
@@ -447,7 +815,7 @@ Both schedulers currently run a single global query. In multi-tenant mode, they 
 
 ---
 
-## 10. Migration Validation Checklist
+## 17. Migration Validation Checklist
 
 This checklist defines the explicit verification steps that must be completed before, during, and after the CC Trucking to Tenant 1 migration.
 
@@ -469,6 +837,8 @@ This checklist defines the explicit verification steps that must be completed be
 - [ ] File storage reorganized into tenant-partitioned directories
 - [ ] User roles migrated (existing `owner` → `tenant_owner`, your account → `platform_owner`)
 - [ ] NOT NULL constraint added to `tenant_id` columns after backfill is verified
+- [ ] Custom field definitions created for DOT Number, MC Number, EIN
+- [ ] Custom field values populated from existing `clients` columns
 
 ### Post-Migration Verification
 
@@ -483,6 +853,7 @@ This checklist defines the explicit verification steps that must be completed be
 - [ ] **Email/PDF:** Invoice emails and PDFs show CC Trucking branding (not generic/broken)
 - [ ] **Push notifications:** Notifications deliver correctly to CC Trucking users
 - [ ] **File downloads:** Tax documents and receipts download from new tenant-partitioned paths
+- [ ] **Custom fields:** DOT Number, MC Number, EIN display correctly on client detail pages
 
 ### CC Trucking Acceptance Testing
 
@@ -511,15 +882,131 @@ If any of the following occur, migration should be rolled back:
 
 ---
 
-## 11. Major Risks & Blockers
+## 18. Layered Test Strategy
+
+Testing a multi-tenant SaaS platform requires multiple layers of testing, each targeting different risk areas.
+
+### Unit Tests
+
+| Target | What to Test | Tools |
+|--------|-------------|-------|
+| **Tenant scope middleware** | Correctly injects `tenantId` into request context; rejects requests without valid tenant | Jest/Vitest |
+| **Role permission checks** | Each middleware function (`isTenantOwner`, `isTenantAdmin`, `isPlatformAdmin`) correctly grants/denies access | Jest/Vitest |
+| **Module feature gates** | Module-disabled tenants get 403 on module routes; module-enabled tenants get through | Jest/Vitest |
+| **Custom field validation** | Field type validation (number must be numeric, select must be from options, required fields enforced) | Jest/Vitest |
+| **AI prompt construction** | Prompt builder correctly injects tenant name, industry pack content, custom instructions, and scoped data — no global data leakage | Jest/Vitest |
+
+### Integration Tests
+
+| Target | What to Test | Tools |
+|--------|-------------|-------|
+| **Cross-tenant data isolation** | Create two tenants with separate data. For every API route, verify Tenant A cannot access Tenant B's data. This is the most critical test suite in the entire platform. | Supertest + Jest |
+| **Storage layer tenant scoping** | Every `storage.getX()` method returns only data for the specified tenant | Supertest + Jest |
+| **Cascade operations** | Deleting a client cascades correctly within tenant scope; does not affect other tenants | Supertest + Jest |
+| **Custom field CRUD** | Creating, reading, updating, and deleting custom fields works correctly per tenant | Supertest + Jest |
+
+### End-to-End Tests
+
+| Target | What to Test | Tools |
+|--------|-------------|-------|
+| **Tenant onboarding flow** | Create a new tenant → set branding → add service catalog → invite first user → user logs in → sees correct brand | Playwright |
+| **Admin portal full workflow** | Login → create client → create ticket → create invoice → send email → mark paid | Playwright |
+| **Client portal full workflow** | Login → view dashboard → view invoices → sign document → send message | Playwright |
+| **Preparer portal workflow** | Login → view assigned clients → review transactions → upload tax doc | Playwright |
+| **Cross-portal interaction** | Admin sends signature request → client receives notification → client signs → admin sees signed status | Playwright |
+| **Module enable/disable** | Enable bookkeeping module → sidebar shows bookkeeping → disable → sidebar hides bookkeeping → API returns 403 | Playwright |
+
+### Migration Tests
+
+| Target | What to Test |
+|--------|-------------|
+| **Schema migration** | `tenant_id` column added correctly to all 17+ tables |
+| **Data backfill** | All existing rows have correct `tenant_id` after migration |
+| **Row count verification** | Pre-migration and post-migration row counts match per table |
+| **Custom field migration** | DOT/MC/EIN values correctly migrated to `custom_field_values` |
+| **File storage migration** | Files accessible from new tenant-partitioned paths |
+| **Rollback** | Migration can be fully reversed without data loss |
+
+### Scheduler Tests
+
+| Target | What to Test |
+|--------|-------------|
+| **Invoice reminder scheduler** | Sends reminders with correct tenant branding; skips suspended tenants; uses correct SMTP settings per tenant |
+| **Compliance scheduler** | Creates tickets for correct tenant; skips tenants without compliance module; respects tenant-specific templates |
+| **Multi-tenant scheduler run** | With 3+ tenants, scheduler processes all tenants correctly in a single run without cross-contamination |
+
+### Branded Output Tests
+
+| Target | What to Test |
+|--------|-------------|
+| **PDF invoice** | Generated PDF contains correct tenant logo, company name, address, and tagline — not platform defaults or another tenant's branding |
+| **Email templates** | Invoice emails, reminder emails, notification emails all use correct tenant branding and sender identity |
+| **Push notifications** | Push notification payloads include correct tenant name |
+
+### Tenant-Scoped AI Tests
+
+| Target | What to Test |
+|--------|-------------|
+| **Admin AI chat** | AI response references only the requesting tenant's clients, invoices, and documents. Create identical client names across two tenants — AI must reference the correct one. |
+| **Client portal AI chat** | AI response references only the authenticated client's data within their tenant |
+| **AI categorization** | Uses only the requesting tenant's transaction categories |
+| **AI quota enforcement** | AI calls are counted per tenant; quota exhaustion returns graceful error, not failure |
+
+---
+
+## 19. Observability & Incident Response
+
+### Per-Tenant Error Visibility
+
+| Capability | Detail |
+|-----------|--------|
+| **Tenant health dashboard** | Platform admin dashboard shows per-tenant metrics: error rate (last 24h), API response times, active users, last login, storage usage, AI call count |
+| **Error aggregation** | Errors are tagged with `tenantId` and can be filtered/grouped by tenant in the platform admin view |
+| **Tenant status indicators** | Traffic light status per tenant: Green (healthy), Yellow (elevated errors or approaching limits), Red (critical errors or suspended) |
+
+### Job, Email, and AI Failure Monitoring
+
+| System | Monitoring Approach |
+|--------|-------------------|
+| **Background jobs (schedulers)** | Each scheduler run logs: start time, tenants processed, actions taken per tenant, errors encountered, end time. Failed tenant operations do not block processing of other tenants. Failures logged with tenantId and retried on next cycle. |
+| **Email delivery** | Email send attempts logged with: tenantId, recipient, template type, success/failure, SMTP error (if any). Failed emails queued for retry (3 attempts). Platform admin can view email delivery status per tenant. |
+| **AI calls** | Every AI call logged to `ai_usage_logs` table: tenantId, userId, feature, model, token count, latency, success/failure, error message. Aggregate dashboards show AI health per tenant and platform-wide. |
+| **Push notifications** | Push delivery attempts logged. Failed pushes (expired subscriptions) automatically cleaned up. Delivery stats visible per tenant. |
+
+### Audit Logging for Support and Settings
+
+| Event | Logged Where | Detail |
+|-------|-------------|--------|
+| **Platform admin impersonation** | `platform_audit_logs` | Who impersonated, which tenant, start/end time, read-only vs. write access |
+| **Tenant setting changes** | `tenant_settings` (updatedAt, updatedBy) + `audit_logs` | Which setting changed, old value, new value, who changed it |
+| **Module enable/disable** | `audit_logs` + `platform_audit_logs` | Which module, which tenant, who toggled it |
+| **Tenant creation/suspension/cancellation** | `platform_audit_logs` | Lifecycle events with actor and reason |
+| **Role changes** | `audit_logs` | User role promotions/demotions within tenant |
+| **AI instruction changes** | `audit_logs` | Custom AI prompt modifications by tenant owner |
+| **Billing events** | `platform_audit_logs` | Plan changes, payment failures, grace period triggers |
+
+### Incident Response: Cross-Tenant Data Issue
+
+If a cross-tenant data leak is detected (tenant A sees tenant B's data), the following protocol applies:
+
+1. **Immediate:** Affected route(s) disabled via feature flag. Both affected tenants notified.
+2. **Investigation:** Audit logs reviewed to determine scope (which data was exposed, which users accessed it, time window).
+3. **Containment:** If the issue is in a specific module, disable that module platform-wide until fixed. If systemic, enable maintenance mode.
+4. **Fix & verify:** Root cause identified. Fix deployed. Cross-tenant test suite run. Manual verification on affected tenants.
+5. **Disclosure:** Affected tenants receive a written incident report within 48 hours: what happened, what data was exposed, what was done to fix it, what prevents recurrence.
+6. **Post-mortem:** Internal post-mortem documented. Test coverage expanded to prevent similar issues.
+
+---
+
+## 20. Major Risks & Blockers
 
 ### High Risk
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| **Cross-tenant data leakage** | Security breach — tenant A sees tenant B's data | Every query must be scoped. Automated cross-tenant tests. |
+| **Cross-tenant data leakage** | Security breach — tenant A sees tenant B's data | Every query must be scoped. Automated cross-tenant tests. Incident response protocol defined. |
 | **AI prompt data leakage** | AI assistant references wrong tenant's clients/invoices | Strict tenant-scoped data loading before prompt construction. See AI Governance section. |
-| **Global scheduler acting on wrong tenant** | Invoice reminders sent with wrong branding/email | Scheduler must load tenant config per operation. |
+| **Global scheduler acting on wrong tenant** | Invoice reminders sent with wrong branding/email | Scheduler must load tenant config per operation. Scheduler tests required. |
 | **Breaking CC Trucking's live production** | Primary customer loses access during migration | Feature-flag the multi-tenant code. Run both paths until stable. See Migration Validation Checklist. |
 
 ### Medium Risk
@@ -528,7 +1015,7 @@ If any of the following occur, migration should be rolled back:
 |------|--------|-----------|
 | **Performance degradation** | Adding tenant_id to every query adds overhead | Add database indexes on tenant_id for all major tables. |
 | **Role permission complexity** | 6 launch roles increases auth surface area | Design and test permission matrix before implementation. Launch-only roles first, optional roles later. |
-| **Billing integration complexity** | Two-tier Stripe (platform + tenant) is architecturally complex | Build platform billing first, tenant billing (bookkeeping) second. |
+| **Billing integration complexity** | Two-tier Stripe (platform + tenant) is architecturally complex | Build platform billing first, tenant billing (bookkeeping) second. Keep strictly separated. |
 | **Knowledge base content exposure** | Tenant's internal articles accidentally shared with wrong tenant | Strict tenantId filtering on all KB queries. |
 
 ### Blockers
@@ -541,15 +1028,21 @@ If any of the following occur, migration should be rolled back:
 
 ---
 
-## 12. Phased Implementation Roadmap
+## 21. Phased Implementation Roadmap
 
 **Timeline note:** The estimates below assume the architecture is as clean in practice as it appears in this audit, and that decisions on blockers (pricing model, platform brand name) are made promptly. A realistic planning range is **5-8 months** once hidden dependencies, migration edge cases, testing depth, and billing integration complexity are accounted for. The lower end of each phase estimate assumes focused full-time work; the upper end accounts for the iteration, debugging, and rework that is normal in a project of this scope.
 
 ### Phase 0: Productization Audit (This Document) — COMPLETE
 - Inventory all features, tables, routes, AI integrations
 - Classify everything as core/configurable/module/CC-specific
-- Define product layer architecture
+- Define product layer architecture and module dependencies
+- Define tenant settings schema and custom fields strategy
+- Define integration tenancy matrix
 - Define AI governance model
+- Define import/export architecture
+- Define white-label depth levels
+- Define test strategy and observability requirements
+- Define billing separation rules
 - Define migration plan and validation checklist
 - Identify risks and blockers
 - **Effort: 1-2 days**
@@ -561,16 +1054,17 @@ If any of the following occur, migration should be rolled back:
 - Centralize PDF branding into a single config
 - Extract trucking industry AI knowledge into a separate industry pack config file
 - Make seed data into importable "starter packs" (Trucking Industry Pack is the first)
-- Make client schema fields extensible (custom fields system or vertical-specific field sets)
+- Implement custom fields system (schema + storage + UI rendering)
+- Migrate DOT Number, MC Number, EIN to custom fields
 - **Effort: 2-4 weeks**
-- **Risk: Low** — no database structure changes
+- **Risk: Low** — no database structure changes (except custom fields tables)
 
 ### Phase 2: Tenant Architecture + Role & Permission Redesign (Combined)
 
 These two phases are combined because tenant structure and access control are tightly coupled. Designing tenant isolation without the permission model, or vice versa, risks rework. Both should be designed together even if some UI elements land later.
 
 - **Tenant Architecture:**
-  - Create `tenants` table (id, name, slug, logo, colors, contactEmail, industry, plan, settings JSON, aiInstructions, createdAt)
+  - Create `tenants`, `tenant_branding`, `tenant_settings` tables
   - Add `tenant_id` to 17+ tables via migration
   - Set all existing data to CC Trucking's tenant ID
   - Create `tenantScope` middleware that automatically injects tenant filter
@@ -580,6 +1074,7 @@ These two phases are combined because tenant structure and access control are ti
   - Make schedulers tenant-aware
   - Make notifications tenant-aware
   - Make AI data loading tenant-scoped with governance rules
+  - Implement module feature gates (check `tenant_settings.modules.*` before processing module routes)
   - Implement cross-tenant isolation tests
 
 - **Role & Permission Redesign:**
@@ -598,14 +1093,15 @@ These two phases are combined because tenant structure and access control are ti
 - Support impersonation / safe admin assist mode (with audit logging)
 - Feature flags per tenant (enable/disable modules)
 - Platform-wide analytics (revenue across tenants, active users, AI usage)
-- Tenant health monitoring
+- Tenant health monitoring and observability dashboard
 - Tenant analytics vs. platform analytics separation
+- AI usage tracking and quota enforcement
 - **Effort: 3-4 weeks**
 - **Risk: Low-Medium**
 
 ### Phase 4: Commercial Layer
 - Define pricing model (prerequisite decision — must be made before this phase starts)
-- Stripe integration for platform billing (tenant subscriptions)
+- Stripe integration for platform billing (tenant subscriptions) — SEPARATE from existing tenant invoicing
 - Plan tiers with feature gating (Basic: core only, Pro: + bookkeeping + tax, Enterprise: + AI + custom branding)
 - Usage tracking (clients, users, AI calls, storage)
 - Payment failure handling (grace period, feature degradation, suspension)
@@ -622,13 +1118,15 @@ These two phases are combined because tenant structure and access control are ti
 - Bookkeeping/preparer setup wizard
 - AI instructions and company knowledge setup
 - Form template setup
-- Optional data import/migration tools
+- Import tools (client CSV import, bulk data onboarding)
+- Export tools (full tenant export, per-entity exports)
 - Guided setup walkthrough
 - **Effort: 3-4 weeks**
 - **Risk: Low-Medium**
 
 ### Phase 6: Hardening & Launch
 - Security audit (cross-tenant penetration testing)
+- Execute full layered test strategy (unit, integration, e2e, migration, scheduler, branded output, AI)
 - Execute Migration Validation Checklist
 - Performance testing (100+ tenants simulation)
 - Documentation (admin guide, API docs, onboarding guide)
@@ -644,7 +1142,7 @@ This estimate assumes the architecture is as clean in practice as it appears in 
 
 ---
 
-## 13. Ownership, Data Rights & Commercial Rules
+## 22. Ownership, Data Rights & Commercial Rules
 
 These decisions must be made before launch. This is not legal drafting, but identifies the major questions that need answers from a business and legal perspective.
 
@@ -680,7 +1178,7 @@ These decisions must be made before launch. This is not legal drafting, but iden
 | **Pricing model** | Per-tenant flat fee? Per-seat? Per-module? Usage-based? Hybrid? This affects Phase 4 architecture. |
 | **Plan tiers** | What features are included in each tier? What are the upgrade triggers? |
 | **Industry pack pricing** | Are industry packs included in the base price or add-ons? |
-| **White-label pricing** | Is custom branding included or a premium feature? |
+| **White-label pricing** | Standard branding is free. Pro branding on Pro plan. Full white-label on Enterprise. |
 | **Payment terms** | Monthly? Annual? Annual discount? |
 | **Failed payment policy** | Grace period length? Feature degradation vs. full suspension? Data retention during suspension? |
 | **Refund policy** | Under what circumstances are refunds offered? |
@@ -688,7 +1186,7 @@ These decisions must be made before launch. This is not legal drafting, but iden
 
 ---
 
-## 14. Success Criteria
+## 23. Success Criteria
 
 The following are measurable criteria that define what "done" looks like for the SaaS conversion. All must be true before the platform can be considered ready for commercial launch.
 
@@ -731,9 +1229,14 @@ The following are measurable criteria that define what "done" looks like for the
 - [ ] Plan tier restrictions correctly gate features
 - [ ] Payment failure triggers appropriate degradation/suspension behavior
 
+### Import/Export
+- [ ] Full tenant export generates a complete, well-structured archive
+- [ ] Client CSV import works with column mapping and custom field support
+- [ ] Offboarding export is available for 30 days after account closure
+
 ---
 
-## 15. Vertical Strategy Recommendation
+## 24. Vertical Strategy Recommendation
 
 ### Should this remain trucking-specific or go broader?
 
@@ -784,5 +1287,5 @@ This approach lets you sell immediately while building the foundation for expans
 | **Transaction Categories** | Fuel, Maintenance & Repairs, Tolls, Insurance Premiums, Payroll & Driver Pay, Permits & Licensing, Equipment & Parts, Meals & Per Diem, Parking & Scales, License & Registration, Lease/Loan Payments, Office & Administrative, Professional Services, Taxes & Fees, Freight Revenue, Fuel Surcharge Revenue, Accessorial Income, Other Income, Other Expense |
 | **Compliance Templates** | IFTA (quarterly), UCR (annual), MCS-150 (biennial), DOT Compliance Review (annual) |
 | **AI Knowledge** | FMCSA regulations, DOT compliance requirements, IFTA filing deadlines, UCR registration rules, Form 2290 heavy vehicle tax, MCS-150 biennial update, BOC-3 process agent, government website links |
-| **Custom Client Fields** | DOT Number, MC Number, EIN |
+| **Custom Client Fields** | DOT Number (text), MC Number (text), EIN (text) |
 | **FAQ Content** | Trucking-specific questions about IFTA, DOT numbers, carrier regulations |
