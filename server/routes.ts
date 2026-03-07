@@ -506,19 +506,23 @@ export async function registerRoutes(
       }
 
       const audioBuffer = Buffer.from(audio, "base64");
-      const { ensureCompatibleFormat, speechToText } = await import("./replit_integrations/audio/client");
-      const { buffer: compatBuffer, format } = await ensureCompatibleFormat(audioBuffer);
-      const transcript = await speechToText(compatBuffer, format);
 
-      if (!transcript || !transcript.trim()) {
-        return res.status(400).json({ message: "Could not transcribe audio. Please try again." });
-      }
-
-      const { default: OpenAI } = await import("openai");
+      const { default: OpenAI, toFile } = await import("openai");
       const openai = new OpenAI({
         apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
         baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
       });
+
+      const audioFile = await toFile(audioBuffer, "recording.webm");
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioFile,
+        model: "gpt-4o-mini-transcribe",
+      });
+      const transcript = transcription.text;
+
+      if (!transcript || !transcript.trim()) {
+        return res.status(400).json({ message: "Could not transcribe audio. Please try again." });
+      }
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
