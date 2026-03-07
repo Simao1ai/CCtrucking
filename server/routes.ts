@@ -966,6 +966,17 @@ Contact name: ${client.contactName}`
     const msg = await storage.createChatMessage(parsed.data);
     const client = await storage.getClient(req.clientId);
     notifyAllAdmins("New Client Message", `New message from ${client?.companyName || "a client"}.`, "chat", "/admin/chat");
+    const preparerAssignments = await storage.getPreparerAssignmentsByClient(req.clientId);
+    for (const assignment of preparerAssignments) {
+      await storage.createNotification({
+        userId: assignment.preparerId,
+        title: "New Client Message",
+        message: `New message from ${client?.companyName || "your client"}.`,
+        type: "message",
+        link: `/preparer/client/${req.clientId}`,
+        read: "false",
+      });
+    }
     res.status(201).json(msg);
   });
 

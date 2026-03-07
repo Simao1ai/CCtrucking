@@ -16,7 +16,7 @@ const typeIcons: Record<string, typeof Info> = {
   info: Info,
 };
 
-export function NotificationBell({ basePath }: { basePath: "/admin" | "/portal" }) {
+export function NotificationBell({ basePath }: { basePath: "/admin" | "/portal" | "/preparer" }) {
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
 

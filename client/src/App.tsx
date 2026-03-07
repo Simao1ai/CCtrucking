@@ -151,6 +151,7 @@ function PreparerLayout({ children }: { children: React.ReactNode }) {
           <header className="flex items-center justify-between gap-2 p-2 border-b">
             <SidebarTrigger data-testid="button-preparer-sidebar-toggle" />
             <div className="flex items-center gap-1">
+              <NotificationBell basePath="/preparer" />
               <ThemeToggle />
             </div>
           </header>
