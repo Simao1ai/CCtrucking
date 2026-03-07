@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,14 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertServiceTicketSchema, type ServiceTicket, type InsertServiceTicket, type Client, type TicketRequiredDocument } from "@shared/schema";
 import type { User } from "@shared/models/auth";
-import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -461,181 +459,114 @@ export default function Tickets() {
   });
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-tickets">
-      <PageHeader
-        title="Service Tickets"
-        description="Track trucking compliance and service workflows"
-        actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-ticket">
-                <Plus className="w-4 h-4 mr-2" />
-                New Ticket
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create Service Ticket</DialogTitle>
-              </DialogHeader>
-              <TicketForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-            </DialogContent>
-          </Dialog>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Open Tickets"
-          value={statusCounts.open}
-          icon={ClipboardList}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-900/40"
-        />
-        <StatCard
-          title="In Progress"
-          value={statusCounts.in_progress}
-          icon={Clock}
-          iconColor="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-100 dark:bg-amber-900/40"
-        />
-        <StatCard
-          title="Completed"
-          value={statusCounts.completed}
-          icon={CheckCircle}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-900/40"
-        />
-        <StatCard
-          title="Blocked"
-          value={statusCounts.blocked}
-          icon={AlertOctagon}
-          iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-100 dark:bg-red-900/40"
-          subtitle={statusCounts.blocked > 0 ? "Needs attention" : undefined}
-        />
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by title, type, or client..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-tickets"
-          />
+    <div className="p-4 lg:p-6 space-y-4 max-w-[1400px] mx-auto" data-testid="page-tickets">
+      <div className="flex items-center justify-between" data-testid="page-header">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="page-title">Service Tickets</h1>
+          <p className="text-[13px] text-muted-foreground" data-testid="page-description">{statusCounts.all} total · {statusCounts.open} open · {statusCounts.blocked} blocked</p>
         </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-8 text-xs" data-testid="button-add-ticket"><Plus className="w-3.5 h-3.5 mr-1" />New Ticket</Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Create Service Ticket</DialogTitle></DialogHeader>
+            <TicketForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="all" data-testid="tab-all" className="text-xs">All ({statusCounts.all})</TabsTrigger>
-          <TabsTrigger value="open" data-testid="tab-open" className="text-xs">Open ({statusCounts.open})</TabsTrigger>
-          <TabsTrigger value="in_progress" data-testid="tab-in-progress" className="text-xs">In Progress ({statusCounts.in_progress})</TabsTrigger>
-          <TabsTrigger value="completed" data-testid="tab-completed" className="text-xs">Completed ({statusCounts.completed})</TabsTrigger>
-          <TabsTrigger value="on_hold" data-testid="tab-on-hold" className="text-xs">On Hold ({statusCounts.on_hold})</TabsTrigger>
-          <TabsTrigger value="blocked" data-testid="tab-blocked" className="text-xs">Blocked ({statusCounts.blocked})</TabsTrigger>
-        </TabsList>
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4" data-testid="stat-cards-row">
+        <StatCard title="Open" value={statusCounts.open} icon={ClipboardList} iconColor="text-blue-600 dark:text-blue-400" iconBg="bg-blue-100 dark:bg-blue-900/40" accent="bg-blue-500" />
+        <StatCard title="In Progress" value={statusCounts.in_progress} icon={Clock} iconColor="text-amber-600 dark:text-amber-400" iconBg="bg-amber-100 dark:bg-amber-900/40" accent="bg-amber-500" />
+        <StatCard title="Completed" value={statusCounts.completed} icon={CheckCircle} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-100 dark:bg-emerald-900/40" accent="bg-emerald-500" />
+        <StatCard title="Blocked" value={statusCounts.blocked} icon={AlertOctagon} iconColor="text-red-600 dark:text-red-400" iconBg="bg-red-100 dark:bg-red-900/40" accent={statusCounts.blocked > 0 ? "bg-red-500" : undefined} subtitle={statusCounts.blocked > 0 ? "Needs attention" : undefined} />
+      </div>
 
-        <TabsContent value={tab} className="mt-4">
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <Card>
-              <CardContent>
-                <EmptyState
-                  icon={Ticket}
-                  title="No tickets found"
-                  description={search ? "Try adjusting your search" : "Create a service ticket to get started"}
-                  action={
-                    !search ? (
-                      <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-ticket">
-                        <Plus className="w-4 h-4 mr-2" />
-                        New Ticket
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map(ticket => {
-                const client = clientMap.get(ticket.clientId);
-                const isOverdue = ticket.dueDate && new Date(ticket.dueDate) < new Date() && ticket.status !== "completed" && ticket.status !== "closed";
-                return (
-                  <Card key={ticket.id} className={`transition-colors ${ticket.status === "blocked" ? "border-orange-200 dark:border-orange-800/50" : isOverdue ? "border-red-200 dark:border-red-800/50" : ""}`} data-testid={`card-ticket-${ticket.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${priorityIndicator(ticket.priority)}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3 className="font-semibold text-sm">{ticket.title}</h3>
-                                <StatusBadge status={ticket.status} />
-                                {(ticket.priority === "high" || ticket.priority === "urgent") && (
-                                  <StatusBadge status={ticket.priority} />
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap mt-1.5">
-                                <span className="flex items-center gap-1 font-medium text-foreground/70">
-                                  <UserIcon className="w-3 h-3" />
-                                  {client?.companyName ?? "Unknown"}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Ticket className="w-3 h-3" />
-                                  {ticket.serviceType}
-                                </span>
-                                {ticket.dueDate && (
-                                  <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400 font-medium" : ""}`}>
-                                    <Calendar className="w-3 h-3" />
-                                    {isOverdue ? "Overdue: " : "Due: "}{format(new Date(ticket.dueDate), "MMM d, yyyy")}
-                                  </span>
-                                )}
-                                {ticket.assignedTo && (
-                                  <span className="flex items-center gap-1">
-                                    <UserIcon className="w-3 h-3" />
-                                    {ticket.assignedTo}
-                                  </span>
-                                )}
-                              </div>
-                              {ticket.description && (
-                                <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{ticket.description}</p>
-                              )}
-                              <RequiredDocsSection ticketId={ticket.id} />
-                            </div>
-                            <div className="flex-shrink-0">
-                              <Select
-                                value={ticket.status}
-                                onValueChange={(status) => updateStatus.mutate({ id: ticket.id, status })}
-                              >
-                                <SelectTrigger className="w-[130px] h-8 text-xs" data-testid={`select-status-${ticket.id}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="open">Open</SelectItem>
-                                  <SelectItem value="in_progress">In Progress</SelectItem>
-                                  <SelectItem value="completed">Completed</SelectItem>
-                                  <SelectItem value="on_hold">On Hold</SelectItem>
-                                  <SelectItem value="blocked">Blocked</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input placeholder="Search tickets..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm" data-testid="input-search-tickets" />
+        </div>
+        <Tabs value={tab} onValueChange={setTab} className="flex-1">
+          <TabsList className="h-8 gap-0.5 p-0.5">
+            <TabsTrigger value="all" data-testid="tab-all" className="text-[11px] h-7 px-2.5">All</TabsTrigger>
+            <TabsTrigger value="open" data-testid="tab-open" className="text-[11px] h-7 px-2.5">Open</TabsTrigger>
+            <TabsTrigger value="in_progress" data-testid="tab-in-progress" className="text-[11px] h-7 px-2.5">In Progress</TabsTrigger>
+            <TabsTrigger value="completed" data-testid="tab-completed" className="text-[11px] h-7 px-2.5">Completed</TabsTrigger>
+            <TabsTrigger value="blocked" data-testid="tab-blocked" className="text-[11px] h-7 px-2.5">Blocked</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div>
+        {isLoading ? (
+          <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-card border border-card-border rounded-xl">
+            <EmptyState icon={Ticket} title="No tickets found" description={search ? "Try adjusting your search" : "Create a service ticket to get started"} compact
+              action={!search ? <Button size="sm" className="h-7 text-xs" onClick={() => setDialogOpen(true)} data-testid="button-empty-add-ticket"><Plus className="w-3 h-3 mr-1" />New Ticket</Button> : undefined}
+            />
+          </div>
+        ) : (
+          <div className="bg-card border border-card-border rounded-xl overflow-hidden divide-y divide-border/40">
+            {filtered.map(ticket => {
+              const client = clientMap.get(ticket.clientId);
+              const isOverdue = ticket.dueDate && new Date(ticket.dueDate) < new Date() && ticket.status !== "completed" && ticket.status !== "closed";
+              return (
+                <div key={ticket.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${isOverdue ? "bg-red-50/30 dark:bg-red-950/10" : ticket.status === "blocked" ? "bg-orange-50/20 dark:bg-orange-950/5" : ""}`} data-testid={`card-ticket-${ticket.id}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`flex-shrink-0 w-1 mt-1 h-10 rounded-full ${priorityIndicator(ticket.priority)}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-sm leading-snug">{ticket.title}</h3>
+                            <StatusBadge status={ticket.status} />
+                            {(ticket.priority === "high" || ticket.priority === "urgent") && <StatusBadge status={ticket.priority} />}
                           </div>
+                          <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground mt-1">
+                            <span className="font-medium text-foreground/70">{client?.companyName ?? "Unknown"}</span>
+                            <span>·</span>
+                            <span>{ticket.serviceType}</span>
+                            {ticket.dueDate && (
+                              <>
+                                <span>·</span>
+                                <span className={isOverdue ? "text-red-600 dark:text-red-400 font-semibold" : ""}>
+                                  {isOverdue ? "Overdue " : "Due "}{format(new Date(ticket.dueDate), "MMM d")}
+                                </span>
+                              </>
+                            )}
+                            {ticket.assignedTo && (<><span>·</span><span>{ticket.assignedTo}</span></>)}
+                          </div>
+                          <RequiredDocsSection ticketId={ticket.id} />
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Select
+                            value={ticket.status}
+                            onValueChange={(status) => updateStatus.mutate({ id: ticket.id, status })}
+                          >
+                            <SelectTrigger className="w-[120px] h-7 text-[11px]" data-testid={`select-status-${ticket.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="on_hold">On Hold</SelectItem>
+                              <SelectItem value="blocked">Blocked</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

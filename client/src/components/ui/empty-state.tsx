@@ -6,17 +6,18 @@ interface EmptyStateProps {
   title: string;
   description: string;
   action?: ReactNode;
+  compact?: boolean;
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, action, compact }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4" data-testid="empty-state">
-      <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-        <Icon className="w-7 h-7 text-muted-foreground/50" />
+    <div className={`flex flex-col items-center justify-center ${compact ? "py-8" : "py-12"} px-4`} data-testid="empty-state">
+      <div className={`${compact ? "w-10 h-10 rounded-xl" : "w-12 h-12 rounded-xl"} bg-muted/80 flex items-center justify-center mb-3`}>
+        <Icon className={`${compact ? "w-5 h-5" : "w-6 h-6"} text-muted-foreground/40`} />
       </div>
-      <h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
-      <p className="text-sm text-muted-foreground text-center max-w-sm">{description}</p>
-      {action && <div className="mt-4">{action}</div>}
+      <h3 className="text-sm font-medium text-foreground mb-0.5">{title}</h3>
+      <p className="text-xs text-muted-foreground text-center max-w-xs">{description}</p>
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }

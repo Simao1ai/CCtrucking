@@ -2,18 +2,16 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertDocumentSchema, type Document as DocType, type Client } from "@shared/schema";
-import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -174,159 +172,89 @@ export default function Documents() {
   });
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-documents">
-      <PageHeader
-        title="Documents"
-        description="Track compliance documents and client files"
-        actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-doc">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Document
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Track Document</DialogTitle>
-              </DialogHeader>
-              <DocumentForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-            </DialogContent>
-          </Dialog>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Documents"
-          value={statusCounts.all}
-          icon={FileText}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-900/40"
-        />
-        <StatCard
-          title="Pending Review"
-          value={statusCounts.pending}
-          icon={Clock}
-          iconColor="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-100 dark:bg-amber-900/40"
-          subtitle={statusCounts.pending > 0 ? "Awaiting review" : undefined}
-        />
-        <StatCard
-          title="Approved"
-          value={statusCounts.approved}
-          icon={CheckCircle}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-900/40"
-        />
-        <StatCard
-          title="Rejected"
-          value={statusCounts.rejected}
-          icon={AlertCircle}
-          iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-100 dark:bg-red-900/40"
-        />
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, type, or client..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-docs"
-          />
+    <div className="p-4 lg:p-6 space-y-4 max-w-[1400px] mx-auto" data-testid="page-documents">
+      <div className="flex items-center justify-between" data-testid="page-header">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="page-title">Documents</h1>
+          <p className="text-[13px] text-muted-foreground" data-testid="page-description">{statusCounts.all} tracked · {statusCounts.pending} pending review</p>
         </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-8 text-xs" data-testid="button-add-doc"><Plus className="w-3.5 h-3.5 mr-1" />Add Document</Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Track Document</DialogTitle></DialogHeader>
+            <DocumentForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="all" data-testid="tab-all-docs" className="text-xs">All ({statusCounts.all})</TabsTrigger>
-          <TabsTrigger value="pending" data-testid="tab-pending-docs" className="text-xs">Pending ({statusCounts.pending})</TabsTrigger>
-          <TabsTrigger value="approved" data-testid="tab-approved-docs" className="text-xs">Approved ({statusCounts.approved})</TabsTrigger>
-          <TabsTrigger value="rejected" data-testid="tab-rejected-docs" className="text-xs">Rejected ({statusCounts.rejected})</TabsTrigger>
-        </TabsList>
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Total" value={statusCounts.all} icon={FileText} iconColor="text-blue-600 dark:text-blue-400" iconBg="bg-blue-100 dark:bg-blue-900/40" accent="bg-blue-500" />
+        <StatCard title="Pending" value={statusCounts.pending} icon={Clock} iconColor="text-amber-600 dark:text-amber-400" iconBg="bg-amber-100 dark:bg-amber-900/40" accent={statusCounts.pending > 0 ? "bg-amber-500" : undefined} subtitle={statusCounts.pending > 0 ? "Awaiting review" : undefined} />
+        <StatCard title="Approved" value={statusCounts.approved} icon={CheckCircle} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-100 dark:bg-emerald-900/40" accent="bg-emerald-500" />
+        <StatCard title="Rejected" value={statusCounts.rejected} icon={AlertCircle} iconColor="text-red-600 dark:text-red-400" iconBg="bg-red-100 dark:bg-red-900/40" accent={statusCounts.rejected > 0 ? "bg-red-500" : undefined} />
+      </div>
 
-        <TabsContent value={tab} className="mt-4">
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <Card>
-              <CardContent>
-                <EmptyState
-                  icon={FolderOpen}
-                  title="No documents found"
-                  description={search || tab !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"}
-                  action={
-                    !search && tab === "all" ? (
-                      <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-doc">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Document
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map(doc => {
-                const client = clientMap.get(doc.clientId);
-                return (
-                  <Card key={doc.id} data-testid={`card-doc-${doc.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${doc.status === "approved" ? "bg-emerald-100 dark:bg-emerald-900/40" : doc.status === "rejected" ? "bg-red-100 dark:bg-red-900/40" : "bg-amber-100 dark:bg-amber-900/40"}`}>
-                          {doc.status === "approved" ? (
-                            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                          ) : doc.status === "rejected" ? (
-                            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                          ) : (
-                            <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                            <p className="text-sm font-medium truncate">{doc.name}</p>
-                            <StatusBadge status={doc.type.toLowerCase().replace(/\s+/g, '_')} label={doc.type} />
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                            <span className="flex items-center gap-1">
-                              <Building2 className="w-3 h-3" />
-                              {client?.companyName ?? "Unknown"}
-                            </span>
-                            <span>·</span>
-                            <span>{format(new Date(doc.uploadedAt), "MMM d, yyyy")}</span>
-                          </div>
-                        </div>
-                        <div className="flex-shrink-0">
-                          <Select
-                            value={doc.status}
-                            onValueChange={(status) => updateStatus.mutate({ id: doc.id, status })}
-                          >
-                            <SelectTrigger className="w-[120px] h-8 text-xs" data-testid={`select-doc-status-${doc.id}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="approved">Approved</SelectItem>
-                              <SelectItem value="rejected">Rejected</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input placeholder="Search documents..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm" data-testid="input-search-docs" />
+        </div>
+        <Tabs value={tab} onValueChange={setTab} className="flex-1">
+          <TabsList className="h-8 gap-0.5 p-0.5">
+            <TabsTrigger value="all" data-testid="tab-all-docs" className="text-[11px] h-7 px-2.5">All</TabsTrigger>
+            <TabsTrigger value="pending" data-testid="tab-pending-docs" className="text-[11px] h-7 px-2.5">Pending</TabsTrigger>
+            <TabsTrigger value="approved" data-testid="tab-approved-docs" className="text-[11px] h-7 px-2.5">Approved</TabsTrigger>
+            <TabsTrigger value="rejected" data-testid="tab-rejected-docs" className="text-[11px] h-7 px-2.5">Rejected</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div>
+        {isLoading ? (
+          <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-card border border-card-border rounded-xl">
+            <EmptyState icon={FolderOpen} title="No documents found" description={search || tab !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"} compact
+              action={!search && tab === "all" ? <Button size="sm" className="h-7 text-xs" onClick={() => setDialogOpen(true)} data-testid="button-empty-add-doc"><Plus className="w-3 h-3 mr-1" />Add Document</Button> : undefined}
+            />
+          </div>
+        ) : (
+          <div className="bg-card border border-card-border rounded-xl overflow-hidden divide-y divide-border/40">
+            {filtered.map(doc => {
+              const client = clientMap.get(doc.clientId);
+              return (
+                <div key={doc.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`card-doc-${doc.id}`}>
+                  <div className={`flex-shrink-0 w-1.5 h-8 rounded-full ${doc.status === "approved" ? "bg-emerald-500" : doc.status === "rejected" ? "bg-red-500" : "bg-amber-500"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{doc.name}</p>
+                      <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0 rounded font-medium">{doc.type}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                      <span>{client?.companyName ?? "Unknown"}</span>
+                      <span>·</span>
+                      <span>{format(new Date(doc.uploadedAt), "MMM d, yyyy")}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <StatusBadge status={doc.status} />
+                    <Select value={doc.status} onValueChange={(status) => updateStatus.mutate({ id: doc.id, status })}>
+                      <SelectTrigger className="w-[100px] h-7 text-[11px]" data-testid={`select-doc-status-${doc.id}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
