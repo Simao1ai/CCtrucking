@@ -3,7 +3,13 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Loader2, Sparkles, X, MessageSquare, ExternalLink } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, MessageSquare, ExternalLink, FileDown, Check } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 const NavigateContext = createContext<(path: string) => void>(() => {});
 
@@ -14,10 +20,12 @@ interface ChatMessage {
 
 const SUGGESTED_QUESTIONS = [
   "Show overdue invoices",
-  "Revenue this month",
   "List active clients",
   "Open tickets summary",
-  "Top revenue clients",
+  "IFTA filing deadlines",
+  "MCS-150 update requirements",
+  "Form 2290 HVUT guide",
+  "DOT compliance checklist",
 ];
 
 let globalMessages: ChatMessage[] = [];
@@ -139,6 +147,127 @@ function InlineContent({ text }: { text: string }) {
         return <span key={i}>{part}</span>;
       })}
     </span>
+  );
+}
+
+function SaveToDocumentsButton({ content }: { content: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState("Compliance Guide");
+  const [saving, setSaving] = useState(false);
+
+  const { data: clients = [] } = useQuery<any[]>({
+    queryKey: ["/api/clients"],
+    enabled: open,
+  });
+
+  const handleSave = async () => {
+    if (!docName.trim()) {
+      toast({ title: "Please enter a document name", variant: "destructive" });
+      return;
+    }
+    if (!clientId || clientId === "none") {
+      toast({ title: "Please select a client", description: "Documents must be linked to a client", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiRequest("POST", "/api/documents", {
+        clientId,
+        name: docName.trim(),
+        type: docType,
+        status: "approved",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      toast({ title: "Saved to Documents" });
+      setOpen(false);
+      setDocName("");
+      setClientId("");
+    } catch (e: any) {
+      toast({ title: "Failed to save", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 text-[10px] text-muted-foreground hover:text-foreground px-1.5 gap-1"
+        onClick={() => {
+          const firstLine = content.split("\n")[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(0, 60);
+          setDocName(firstLine || "AI Research");
+          setOpen(true);
+        }}
+        data-testid="button-save-to-documents"
+      >
+        <FileDown className="w-3 h-3" />
+        Save to Documents
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save to Documents</DialogTitle>
+            <DialogDescription>Save this AI response as a document for your records.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Document Name</Label>
+              <Input
+                value={docName}
+                onChange={e => setDocName(e.target.value)}
+                className="mt-1"
+                data-testid="input-save-doc-name"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Document Type</Label>
+              <Select value={docType} onValueChange={setDocType}>
+                <SelectTrigger className="mt-1" data-testid="select-save-doc-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Compliance Guide">Compliance Guide</SelectItem>
+                  <SelectItem value="Regulatory Reference">Regulatory Reference</SelectItem>
+                  <SelectItem value="Tax Guide">Tax Guide</SelectItem>
+                  <SelectItem value="FMCSA Reference">FMCSA Reference</SelectItem>
+                  <SelectItem value="DOT Reference">DOT Reference</SelectItem>
+                  <SelectItem value="IFTA Reference">IFTA Reference</SelectItem>
+                  <SelectItem value="State Regulation">State Regulation</SelectItem>
+                  <SelectItem value="Internal Procedure">Internal Procedure</SelectItem>
+                  <SelectItem value="Research Notes">Research Notes</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Link to Client</Label>
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger className="mt-1" data-testid="select-save-doc-client">
+                  <SelectValue placeholder="Select a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel-save">Cancel</Button>
+            <Button onClick={handleSave} disabled={saving} data-testid="button-confirm-save">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+              Save Document
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -323,7 +452,7 @@ export function AiChatWidget() {
                 </div>
                 <div className="text-center">
                   <p className="font-medium text-sm" data-testid="text-ai-empty-state">How can I help you today?</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ask about clients, invoices, tickets, or revenue</p>
+                  <p className="text-xs text-muted-foreground mt-1">Ask about clients, invoices, or research trucking regulations</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 justify-center max-w-[320px]">
                   {SUGGESTED_QUESTIONS.map((q) => (
@@ -363,7 +492,14 @@ export function AiChatWidget() {
                             <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                           </div>
                         ) : (
-                          <RichContent content={msg.content} />
+                          <>
+                            <RichContent content={msg.content} />
+                            {msg.content && !isStreaming && (
+                              <div className="mt-1.5 pt-1.5 border-t border-border/30">
+                                <SaveToDocumentsButton content={msg.content} />
+                              </div>
+                            )}
+                          </>
                         )
                       ) : (
                         <p className="text-sm">{msg.content}</p>
