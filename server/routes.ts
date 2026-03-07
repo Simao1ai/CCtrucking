@@ -2382,6 +2382,10 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     try {
       const { preparerId, clientId } = req.body;
       if (!preparerId || !clientId) return res.status(400).json({ message: "preparerId and clientId required" });
+      const prepUser = await storage.getUser(preparerId);
+      if (!prepUser || prepUser.role !== "preparer") return res.status(400).json({ message: "Invalid preparer user" });
+      const client = await storage.getClient(clientId);
+      if (!client) return res.status(400).json({ message: "Client not found" });
       const dbUser = (req as any).dbUser;
       const assignment = await storage.createPreparerAssignment({
         preparerId,

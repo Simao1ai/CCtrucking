@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +18,7 @@ import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, 
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
-  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus, Mic, MicOff, Loader2
+  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus, Mic, MicOff, Loader2, BookOpen
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -51,6 +52,31 @@ export default function AdminClientDetail() {
   const { data, isLoading, isError } = useQuery<ClientSummary>({
     queryKey: [`/api/clients/${clientId}/summary`],
     enabled: !!clientId,
+  });
+
+  const { data: bookkeepingSub, isLoading: isLoadingBookkeeping } = useQuery<{ id: string; status: string; preparerId: string | null } | null>({
+    queryKey: ["/api/admin/bookkeeping/subscriptions", clientId],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/bookkeeping/subscriptions");
+      const subs = await res.json();
+      return subs.find((s: any) => s.clientId === clientId) ?? null;
+    },
+    enabled: !!clientId,
+  });
+
+  const { data: preparerUsers = [] } = useQuery<{ id: string; username: string; firstName: string; lastName: string }[]>({
+    queryKey: ["/api/admin/bookkeeping/preparers"],
+  });
+
+  const assignPreparerMutation = useMutation({
+    mutationFn: async (preparerId: string) => {
+      await apiRequest("POST", "/api/admin/bookkeeping/preparer-assignments", { preparerId, clientId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/bookkeeping/subscriptions", clientId] });
+      toast({ title: "Preparer assigned" });
+    },
+    onError: () => toast({ title: "Failed to assign preparer", variant: "destructive" }),
   });
 
   const sendMessage = useMutation({
@@ -179,6 +205,12 @@ export default function AdminClientDetail() {
     setRecordingSeconds(0);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      cleanupRecording();
+    };
+  }, [cleanupRecording]);
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -295,6 +327,46 @@ export default function AdminClientDetail() {
                 </div>
               </>
             )}
+
+            <Separator />
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3" />
+                Bookkeeping & Preparer
+              </p>
+              {isLoadingBookkeeping ? (
+                <Skeleton className="h-8 w-full" />
+              ) : bookkeepingSub ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Status</span>
+                    <StatusBadge status={bookkeepingSub.status} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Assigned Preparer</label>
+                    <Select
+                      value={bookkeepingSub.preparerId ?? ""}
+                      onValueChange={val => assignPreparerMutation.mutate(val)}
+                    >
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-preparer-assignment">
+                        <SelectValue placeholder="Select preparer..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {preparerUsers.map(p => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.firstName && p.lastName ? `${p.firstName} ${p.lastName}` : p.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground" data-testid="text-no-bookkeeping">
+                  No bookkeeping subscription. Activate from the <button onClick={() => navigate("/admin/bookkeeping")} className="text-primary hover:underline font-medium">Bookkeeping</button> page.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
