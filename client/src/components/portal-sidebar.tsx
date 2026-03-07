@@ -11,18 +11,56 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const navItems = [
+const mainNavItems = [
   { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
   { title: "Services", url: "/portal/services", icon: Plus },
+];
+
+const docsNavItems = [
   { title: "Documents", url: "/portal/documents", icon: FileText },
-  { title: "Invoices", url: "/portal/invoices", icon: Receipt },
   { title: "Sign Documents", url: "/portal/signatures", icon: PenLine },
+];
+
+const financialNavItems = [
+  { title: "Invoices", url: "/portal/invoices", icon: Receipt },
+  { title: "Bookkeeping", url: "/portal/bookkeeping", icon: BookOpen },
+];
+
+const communicationNavItems = [
   { title: "Messages", url: "/portal/chat", icon: MessageCircle },
 ];
+
+function NavGroup({ label, items, location }: { label: string; items: typeof mainNavItems; location: string }) {
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => {
+            const isActive = item.url === "/portal"
+              ? location === "/portal"
+              : location.startsWith(item.url);
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild data-active={isActive}>
+                  <Link href={item.url} data-testid={`portal-nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
 
 export function PortalSidebar() {
   const [location] = useLocation();
@@ -44,36 +82,11 @@ export function PortalSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive = item.url === "/portal"
-                  ? location === "/portal"
-                  : location.startsWith(item.url);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild data-active={isActive}>
-                      <Link href={item.url} data-testid={`portal-nav-${item.title.toLowerCase()}`}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild data-active={location.startsWith("/portal/bookkeeping")}>
-                  <Link href="/portal/bookkeeping" data-testid="portal-nav-bookkeeping">
-                    <BookOpen className="w-4 h-4" />
-                    <span>Bookkeeping</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <NavGroup label="Overview" items={mainNavItems} location={location} />
+        <NavGroup label="Documents" items={docsNavItems} location={location} />
+        <NavGroup label="Financial" items={financialNavItems} location={location} />
+        <NavGroup label="Communication" items={communicationNavItems} location={location} />
+        <SidebarSeparator />
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>

@@ -3,20 +3,24 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertClientSchema, type Client, type InsertClient } from "@shared/schema";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { format } from "date-fns";
-import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Eye, Calendar } from "lucide-react";
+import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Calendar, Users, UserCheck, UserPlus } from "lucide-react";
 
 const PIPELINE_STAGES = [
   { value: "new", label: "New" },
@@ -27,16 +31,6 @@ const PIPELINE_STAGES = [
   { value: "won", label: "Won" },
   { value: "lost", label: "Lost" },
 ];
-
-const PIPELINE_STAGE_COLORS: Record<string, string> = {
-  new: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  contacted: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  quoted: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-  proposal_sent: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  negotiating: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
-  won: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  lost: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-};
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -267,14 +261,24 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | undefined>();
+  const [tab, setTab] = useState("all");
 
   const { data: clients, isLoading } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
 
-  const filtered = clients?.filter(c =>
-    c.companyName.toLowerCase().includes(search.toLowerCase()) ||
-    c.contactName.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase())
-  ) ?? [];
+  const statusCounts = {
+    all: clients?.length ?? 0,
+    active: clients?.filter(c => c.status === "active").length ?? 0,
+    prospect: clients?.filter(c => c.status === "prospect").length ?? 0,
+    inactive: clients?.filter(c => c.status === "inactive").length ?? 0,
+  };
+
+  const filtered = clients?.filter(c => {
+    const matchesSearch = c.companyName.toLowerCase().includes(search.toLowerCase()) ||
+      c.contactName.toLowerCase().includes(search.toLowerCase()) ||
+      c.email.toLowerCase().includes(search.toLowerCase());
+    const matchesTab = tab === "all" || c.status === tab;
+    return matchesSearch && matchesTab;
+  }) ?? [];
 
   const handleOpenEdit = (client: Client) => {
     setEditingClient(client);
@@ -288,120 +292,166 @@ export default function Clients() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-clients">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your trucking company accounts</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleClose(); else setDialogOpen(true); }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditingClient(undefined); setDialogOpen(true); }} data-testid="button-add-client">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Client
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingClient ? "Edit Client" : "Add New Client"}</DialogTitle>
-            </DialogHeader>
-            <ClientForm onSuccess={handleClose} existingClient={editingClient} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Manage your trucking company accounts"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleClose(); else setDialogOpen(true); }}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setEditingClient(undefined); setDialogOpen(true); }} data-testid="button-add-client">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Client
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingClient ? "Edit Client" : "Add New Client"}</DialogTitle>
+              </DialogHeader>
+              <ClientForm onSuccess={handleClose} existingClient={editingClient} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search clients..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-          data-testid="input-search-clients"
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Clients"
+          value={statusCounts.all}
+          icon={Users}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-500/10"
+        />
+        <StatCard
+          title="Active"
+          value={statusCounts.active}
+          icon={UserCheck}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+        <StatCard
+          title="Prospects"
+          value={statusCounts.prospect}
+          icon={UserPlus}
+          iconColor="text-purple-600 dark:text-purple-400"
+          iconBg="bg-purple-500/10"
+        />
+        <StatCard
+          title="Inactive"
+          value={statusCounts.inactive}
+          icon={Building2}
+          iconColor="text-gray-500 dark:text-gray-400"
+          iconBg="bg-gray-500/10"
         />
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map(i => (
-            <Card key={i}><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></div></CardContent></Card>
-          ))}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search clients..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-clients"
+          />
         </div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">
-              {search ? "No matching clients" : "No clients yet"}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {search ? "Try adjusting your search" : "Add your first trucking client to get started"}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(client => (
-            <Card
-              key={client.id}
-              className="hover-elevate active-elevate-2 cursor-pointer"
-              onClick={() => navigate(`/admin/clients/${client.id}`)}
-              data-testid={`card-client-${client.id}`}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-sm truncate">{client.companyName}</h3>
-                    <p className="text-xs text-muted-foreground truncate">{client.contactName}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <Badge variant={client.status === "active" ? "default" : "secondary"} className="text-xs" data-testid={`badge-status-${client.id}`}>
-                      {client.status}
-                    </Badge>
-                    {client.status === "prospect" && client.pipelineStage && (
-                      <Badge className={`text-xs no-default-hover-elevate no-default-active-elevate ${PIPELINE_STAGE_COLORS[client.pipelineStage] ?? ""}`} data-testid={`badge-pipeline-${client.id}`}>
-                        {PIPELINE_STAGES.find(s => s.value === client.pipelineStage)?.label ?? client.pipelineStage}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="truncate">{client.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>{client.phone}</span>
-                  </div>
-                  {client.city && client.state && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>{client.city}, {client.state}</span>
-                    </div>
-                  )}
-                  {client.dotNumber && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Hash className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>DOT: {client.dotNumber}</span>
-                    </div>
-                  )}
-                  {client.status === "prospect" && client.nextActionDate && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={`text-next-action-date-${client.id}`}>
-                      <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>Next: {format(new Date(client.nextActionDate), "MMM d, yyyy")}</span>
-                    </div>
-                  )}
-                  {client.status === "prospect" && client.nextActionNote && (
-                    <p className="text-xs text-muted-foreground truncate" data-testid={`text-next-action-note-${client.id}`}>
-                      {client.nextActionNote}
-                    </p>
-                  )}
-                </div>
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="all" data-testid="tab-clients-all">All ({statusCounts.all})</TabsTrigger>
+          <TabsTrigger value="active" data-testid="tab-clients-active">Active ({statusCounts.active})</TabsTrigger>
+          <TabsTrigger value="prospect" data-testid="tab-clients-prospect">Prospects ({statusCounts.prospect})</TabsTrigger>
+          <TabsTrigger value="inactive" data-testid="tab-clients-inactive">Inactive ({statusCounts.inactive})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={tab} className="mt-4">
+          {isLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map(i => (
+                <Card key={i}><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></div></CardContent></Card>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <Card>
+              <CardContent>
+                <EmptyState
+                  icon={Building2}
+                  title={search ? "No matching clients" : "No clients yet"}
+                  description={search ? "Try adjusting your search" : "Add your first trucking client to get started"}
+                  action={
+                    !search ? (
+                      <Button onClick={() => { setEditingClient(undefined); setDialogOpen(true); }} data-testid="button-empty-add-client">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Client
+                      </Button>
+                    ) : undefined
+                  }
+                />
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filtered.map(client => (
+                <Card
+                  key={client.id}
+                  className="hover-elevate active-elevate-2 cursor-pointer"
+                  onClick={() => navigate(`/admin/clients/${client.id}`)}
+                  data-testid={`card-client-${client.id}`}
+                >
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-sm truncate">{client.companyName}</h3>
+                        <p className="text-xs text-muted-foreground truncate">{client.contactName}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <StatusBadge status={client.status} data-testid={`badge-status-${client.id}`} />
+                        {client.status === "prospect" && client.pipelineStage && (
+                          <StatusBadge status={client.pipelineStage} data-testid={`badge-pipeline-${client.id}`} />
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{client.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{client.phone}</span>
+                      </div>
+                      {client.city && client.state && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{client.city}, {client.state}</span>
+                        </div>
+                      )}
+                      {client.dotNumber && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Hash className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>DOT: {client.dotNumber}</span>
+                        </div>
+                      )}
+                      {client.status === "prospect" && client.nextActionDate && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={`text-next-action-date-${client.id}`}>
+                          <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>Next: {format(new Date(client.nextActionDate), "MMM d, yyyy")}</span>
+                        </div>
+                      )}
+                      {client.status === "prospect" && client.nextActionNote && (
+                        <p className="text-xs text-muted-foreground truncate" data-testid={`text-next-action-note-${client.id}`}>
+                          {client.nextActionNote}
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

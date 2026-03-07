@@ -13,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { FormTemplate, FilledForm, Client } from "@shared/schema";
 import { Plus, FileText, ClipboardList, Search, Send, CheckCircle, Clock, Pencil, Eye, Trash2 } from "lucide-react";
 import { format } from "date-fns";
@@ -41,13 +44,17 @@ function replacePlaceholders(content: string, client: Client): string {
     .replace(/\{\{date\}\}/g, format(new Date(), "MM/dd/yyyy"));
 }
 
-function statusBadge(status: string) {
-  switch (status) {
-    case "draft": return <Badge variant="secondary" className="text-xs"><Clock className="w-3 h-3 mr-1" />Draft</Badge>;
-    case "complete": return <Badge variant="default" className="text-xs"><CheckCircle className="w-3 h-3 mr-1" />Complete</Badge>;
-    case "sent_for_signature": return <Badge className="text-xs bg-blue-600"><Send className="w-3 h-3 mr-1" />Sent for Signature</Badge>;
-    default: return <Badge variant="outline" className="text-xs">{status}</Badge>;
-  }
+function formStatusBadge(status: string) {
+  const statusMap: Record<string, string> = {
+    complete: "completed",
+    sent_for_signature: "sent",
+  };
+  const mappedStatus = statusMap[status] || status;
+  const labelMap: Record<string, string> = {
+    complete: "Complete",
+    sent_for_signature: "Sent for Signature",
+  };
+  return <StatusBadge status={mappedStatus} label={labelMap[status]} />;
 }
 
 export default function AdminForms() {
@@ -177,12 +184,11 @@ export default function AdminForms() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-forms-title">Forms</h1>
-          <p className="text-sm text-muted-foreground">Manage form templates and fill out forms for clients</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+      <PageHeader
+        title="Forms"
+        description="Manage form templates and fill out forms for clients"
+        actions={
+          <div className="flex gap-2 flex-wrap">
           <Dialog open={fillDialog} onOpenChange={setFillDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-fill-form">
@@ -357,8 +363,9 @@ export default function AdminForms() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Tabs defaultValue="templates">
         <TabsList data-testid="tabs-forms">
@@ -389,9 +396,17 @@ export default function AdminForms() {
             </div>
           ) : filteredTemplates.length === 0 ? (
             <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No templates yet. Create your first form template to get started.</p>
+              <CardContent>
+                <EmptyState
+                  icon={ClipboardList}
+                  title={search ? "No matching templates" : "No templates yet"}
+                  description={search ? "No templates match your search." : "Create your first form template to get started."}
+                  action={!search ? (
+                    <Button onClick={() => setTemplateDialog(true)} data-testid="button-empty-create-template">
+                      <Plus className="w-4 h-4 mr-2" /> New Template
+                    </Button>
+                  ) : undefined}
+                />
               </CardContent>
             </Card>
           ) : (
@@ -443,9 +458,17 @@ export default function AdminForms() {
             </div>
           ) : filledForms.length === 0 ? (
             <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No filled forms yet. Click "Fill Form" to get started.</p>
+              <CardContent>
+                <EmptyState
+                  icon={FileText}
+                  title="No filled forms yet"
+                  description="Click 'Fill Form' to fill out a template for a client."
+                  action={
+                    <Button variant="outline" onClick={() => setFillDialog(true)} data-testid="button-empty-fill-form">
+                      <Pencil className="w-4 h-4 mr-2" /> Fill Form
+                    </Button>
+                  }
+                />
               </CardContent>
             </Card>
           ) : (
@@ -467,7 +490,7 @@ export default function AdminForms() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {statusBadge(form.status)}
+                        {formStatusBadge(form.status)}
                       </div>
                     </div>
                   </CardContent>
@@ -542,7 +565,7 @@ export default function AdminForms() {
             <div className="space-y-4">
               <div className="flex items-center gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">Client: <span className="font-medium text-foreground">{getClientName(viewForm.clientId)}</span></p>
-                {statusBadge(viewForm.status)}
+                {formStatusBadge(viewForm.status)}
               </div>
               <div>
                 <Label>Content</Label>

@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -13,11 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertServiceTicketSchema, type ServiceTicket, type InsertServiceTicket, type Client, type TicketRequiredDocument } from "@shared/schema";
 import type { User } from "@shared/models/auth";
-import { Plus, Search, Ticket, Calendar, User as UserIcon, ChevronDown, AlertTriangle, FileText, Check, X, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Search, Ticket, Calendar, User as UserIcon, ChevronDown, AlertTriangle, FileText, Check, X, Trash2, ClipboardList, Clock, CheckCircle, AlertOctagon } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
 
@@ -47,36 +51,6 @@ const REQUIRED_DOC_TYPES = [
   "Tax Return",
   "Other",
 ];
-
-function statusColor(status: string): "default" | "secondary" | "destructive" {
-  switch (status) {
-    case "open": return "default";
-    case "in_progress": return "default";
-    case "completed": return "secondary";
-    case "on_hold": return "secondary";
-    case "blocked": return "destructive";
-    default: return "secondary";
-  }
-}
-
-function priorityColor(priority: string): "default" | "secondary" | "destructive" {
-  switch (priority) {
-    case "urgent": return "destructive";
-    case "high": return "destructive";
-    case "medium": return "default";
-    case "low": return "secondary";
-    default: return "secondary";
-  }
-}
-
-function docStatusBadgeVariant(status: string): "default" | "secondary" | "destructive" {
-  switch (status) {
-    case "received": return "default";
-    case "waived": return "secondary";
-    case "pending": return "destructive";
-    default: return "secondary";
-  }
-}
 
 function docStatusBadgeClass(status: string): string {
   switch (status) {
@@ -410,7 +384,7 @@ function TicketForm({ onSuccess, clients }: { onSuccess: () => void; clients: Cl
               </FormControl>
               <SelectContent>
                 {teamMembers.map(member => (
-                  <SelectItem key={member.id} value={`${member.firstName || ''} ${member.lastName || ''}`.trim() || member.username} data-testid={`option-member-${member.id}`}>
+                  <SelectItem key={member.id} value={`${member.firstName || ''} ${member.lastName || ''}`.trim() || member.username || `user-${member.id}`} data-testid={`option-member-${member.id}`}>
                     {`${member.firstName || ''} ${member.lastName || ''}`.trim() || member.username}
                     {member.role === "owner" ? " (Owner)" : ""}
                   </SelectItem>
@@ -475,25 +449,57 @@ export default function Tickets() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-tickets">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Service Tickets</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track trucking compliance and service workflows</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-ticket">
-              <Plus className="w-4 h-4 mr-2" />
-              New Ticket
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Service Ticket</DialogTitle>
-            </DialogHeader>
-            <TicketForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-          </DialogContent>
-        </Dialog>
+      <PageHeader
+        title="Service Tickets"
+        description="Track trucking compliance and service workflows"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-ticket">
+                <Plus className="w-4 h-4 mr-2" />
+                New Ticket
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Service Ticket</DialogTitle>
+              </DialogHeader>
+              <TicketForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Open Tickets"
+          value={statusCounts.open}
+          icon={ClipboardList}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-500/10"
+        />
+        <StatCard
+          title="In Progress"
+          value={statusCounts.in_progress}
+          icon={Clock}
+          iconColor="text-amber-600 dark:text-amber-400"
+          iconBg="bg-amber-500/10"
+        />
+        <StatCard
+          title="Completed"
+          value={statusCounts.completed}
+          icon={CheckCircle}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+        <StatCard
+          title="Blocked"
+          value={statusCounts.blocked}
+          icon={AlertOctagon}
+          iconColor="text-red-600 dark:text-red-400"
+          iconBg="bg-red-500/10"
+          subtitle={statusCounts.blocked > 0 ? "Needs attention" : undefined}
+        />
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
@@ -526,12 +532,20 @@ export default function Tickets() {
             </div>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <Ticket className="w-12 h-12 text-muted-foreground/40 mb-4" />
-                <h3 className="text-lg font-semibold mb-1">No tickets found</h3>
-                <p className="text-sm text-muted-foreground">
-                  {search ? "Try adjusting your search" : "Create a service ticket to get started"}
-                </p>
+              <CardContent>
+                <EmptyState
+                  icon={Ticket}
+                  title="No tickets found"
+                  description={search ? "Try adjusting your search" : "Create a service ticket to get started"}
+                  action={
+                    !search ? (
+                      <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-ticket">
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Ticket
+                      </Button>
+                    ) : undefined
+                  }
+                />
               </CardContent>
             </Card>
           ) : (
@@ -543,18 +557,11 @@ export default function Tickets() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-semibold text-sm">{ticket.title}</h3>
-                          <Badge variant={statusColor(ticket.status)} className="text-xs" data-testid={`badge-status-${ticket.id}`}>
-                            {ticket.status.replace("_", " ")}
-                          </Badge>
+                          <StatusBadge status={ticket.status} />
                           {ticket.status === "blocked" && (
-                            <Badge variant="destructive" className="text-xs gap-1" data-testid={`badge-blocked-warning-${ticket.id}`}>
-                              <AlertTriangle className="w-3 h-3" />
-                              Blocked
-                            </Badge>
+                            <StatusBadge status="blocked" label="Blocked" className="gap-1" />
                           )}
-                          <Badge variant={priorityColor(ticket.priority)} className="text-xs">
-                            {ticket.priority}
-                          </Badge>
+                          <StatusBadge status={ticket.priority} />
                         </div>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap mt-2">
                           <span className="flex items-center gap-1">

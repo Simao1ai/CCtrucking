@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { Client, BookkeepingSubscription, BankTransaction, TransactionCategory, MonthlySummary } from "@shared/schema";
 import {
   BookOpen, Search, Upload, Brain, Plus, Trash2, ArrowLeft,
@@ -43,12 +45,8 @@ function formatCurrency(value: number | string) {
 }
 
 function subscriptionStatusBadge(status: string | undefined) {
-  switch (status) {
-    case "active": return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" data-testid="badge-status-active">Active</Badge>;
-    case "inactive": return <Badge variant="secondary" data-testid="badge-status-inactive">Inactive</Badge>;
-    case "pending": return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid="badge-status-pending">Pending</Badge>;
-    default: return <Badge variant="outline" data-testid="badge-status-none">No Subscription</Badge>;
-  }
+  if (!status) return <StatusBadge status="inactive" label="No Subscription" />;
+  return <StatusBadge status={status} />;
 }
 
 function ClientsTab({
@@ -812,12 +810,10 @@ export default function AdminBookkeeping() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-admin-bookkeeping">
-      <div data-testid="section-header">
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Bookkeeping</h1>
-        <p className="text-muted-foreground text-sm mt-1" data-testid="text-page-subtitle">
-          Manage client bookkeeping subscriptions, transactions, and categories
-        </p>
-      </div>
+      <PageHeader
+        title="Bookkeeping"
+        description="Manage client bookkeeping subscriptions, transactions, and categories"
+      />
 
       <Tabs value={activeTab} onValueChange={v => {
         if (v === "clients") setSelectedClient(null);

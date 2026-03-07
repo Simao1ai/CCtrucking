@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PenLine, Plus, Send, Clock, CheckCircle, Bell, Eye, Mail, MessageSquare, Upload, FileText, Building2, User, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import type { SignatureRequest, Client, Document as DocType } from "@shared/schema";
@@ -195,50 +199,39 @@ export default function AdminSignatures() {
   const signedCount = signatures.filter(s => s.status === "signed").length;
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-admin-signatures">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <PenLine className="w-6 h-6" />
-            Document Signing
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">Send documents for client signatures and track status</p>
-        </div>
-        <Button onClick={() => { resetForm(); setCreateOpen(true); }} data-testid="button-send-for-signature">
-          <Plus className="w-4 h-4 mr-1" />
-          Send for Signature
-        </Button>
-      </div>
+    <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-admin-signatures">
+      <PageHeader
+        title="Document Signing"
+        description="Send documents for client signatures and track status"
+        actions={
+          <Button onClick={() => { resetForm(); setCreateOpen(true); }} data-testid="button-send-for-signature">
+            <Plus className="w-4 h-4 mr-1" />
+            Send for Signature
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold">{signatures.length}</div>
-            <div className="text-sm text-muted-foreground">Total Documents</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold text-orange-500">{pendingCount}</div>
-            <div className="text-sm text-muted-foreground">Awaiting Signature</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold text-green-600">{signedCount}</div>
-            <div className="text-sm text-muted-foreground">Signed</div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        <StatCard title="Total Documents" value={signatures.length} icon={FileText} />
+        <StatCard title="Awaiting Signature" value={pendingCount} icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-100 dark:bg-amber-900/30" />
+        <StatCard title="Signed" value={signedCount} icon={CheckCircle} iconColor="text-emerald-600" iconBg="bg-emerald-100 dark:bg-emerald-900/30" />
       </div>
 
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
       ) : signatures.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <PenLine className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground">No documents sent for signature yet.</p>
-            <p className="text-sm text-muted-foreground mt-1">Click "Send for Signature" to get started.</p>
+          <CardContent>
+            <EmptyState
+              icon={PenLine}
+              title="No documents sent yet"
+              description="Click 'Send for Signature' to send your first document for client signing."
+              action={
+                <Button onClick={() => { resetForm(); setCreateOpen(true); }} data-testid="button-empty-send-sig">
+                  <Plus className="w-4 h-4 mr-2" /> Send for Signature
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -275,9 +268,7 @@ export default function AdminSignatures() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={sig.status === "signed" ? "default" : "secondary"}>
-                        {sig.status === "signed" ? "Signed" : "Pending"}
-                      </Badge>
+                      <StatusBadge status={sig.status === "signed" ? "signed" : "pending"} />
                       <Button variant="ghost" size="sm" onClick={() => setViewDoc(sig)} data-testid={`button-view-sig-${sig.id}`}>
                         <Eye className="w-4 h-4" />
                       </Button>

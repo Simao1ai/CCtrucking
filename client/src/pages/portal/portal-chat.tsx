@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Send, MessageCircle } from "lucide-react";
 import { format } from "date-fns";
@@ -42,13 +44,15 @@ export default function PortalChat() {
   return (
     <div className="p-6 h-full flex flex-col" data-testid="page-portal-chat">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold">Messages</h1>
-        <p className="text-muted-foreground">Chat with your CC Trucking Services team</p>
+        <PageHeader
+          title="Messages"
+          description="Chat with your CC Trucking Services team"
+        />
       </div>
 
       <Card className="flex-1 flex flex-col min-h-0">
         <CardHeader className="border-b py-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+          <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
             <MessageCircle className="w-4 h-4" />
             Support Chat
           </CardTitle>
@@ -57,11 +61,11 @@ export default function PortalChat() {
           {isLoading ? (
             <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-3/4" />)}</div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-12">
-              <MessageCircle className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No messages yet. Start a conversation!</p>
-              <p className="text-xs text-muted-foreground mt-1">Our team typically responds within 24 hours.</p>
-            </div>
+            <EmptyState
+              icon={MessageCircle}
+              title="No messages yet"
+              description="Start a conversation! Our team typically responds within 24 hours."
+            />
           ) : (
             messages.map(msg => (
               <div

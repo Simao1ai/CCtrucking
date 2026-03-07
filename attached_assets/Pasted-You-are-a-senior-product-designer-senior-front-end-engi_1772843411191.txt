@@ -1,0 +1,130 @@
+You are a senior product designer + senior front-end engineer. Redesign and modernize the UI/UX of this internal platform for CC Trucking Services.
+
+IMPORTANT CONTEXT:
+- This is NOT a public multi-tenant SaaS.
+- This is an internal operations platform used by CC Trucking admin/staff, plus a client portal.
+- The business provides trucking industry services such as IFTA filing, UCR, MCS-150, DOT compliance, permits, plates/tags, BOC-3, LLC/business setup, bookkeeping, tax prep, signatures, and document collection.
+- Bookkeeping connects to Plaid, receipt uploads, AI categorization, and feeds the tax prep workflow.
+- Signature requests are sent by email and also appear in the client portal.
+- Staff does NOT have access to internal analytics and employee performance. Those are owner/admin only.
+
+PRIMARY GOAL:
+Modernize the entire product so it feels like a polished, premium, efficient operations platform with strong visual hierarchy, better spacing, better component consistency, and clearer “what needs attention now” signals.
+
+DESIGN DIRECTION:
+- Clean, modern, premium B2B admin aesthetic
+- Minimal but not empty
+- Strong hierarchy
+- More confidence, less generic template feel
+- Use subtle depth, better card structure, cleaner spacing, improved typography
+- Professional and trustworthy, not flashy
+- Prioritize speed, clarity, urgency, and usability over decoration
+- Make the interface feel like an “operations command center”
+
+STYLE REQUIREMENTS:
+- Use a modern design system with consistent spacing, typography, radii, shadows, borders, and states
+- Improve alignment and reduce dead space
+- Use better status colors for: open, in progress, completed, overdue, blocked, pending, approved, rejected
+- Improve tables, cards, filters, modals, tabs, badges, empty states, and forms
+- Create a stronger distinction between primary actions, secondary actions, and passive information
+- Keep the left sidebar but modernize it with better grouping and visual rhythm
+- Make dashboards more scannable and more action-oriented
+- Make the client portal cleaner, simpler, and easier for non-technical trucking clients
+
+UX IMPROVEMENTS REQUIRED:
+1. Add stronger “Needs Attention” sections on admin and client dashboards
+2. Surface missing documents, overdue invoices, pending signatures, upcoming compliance deadlines, and blocked items more clearly
+3. Improve page-level hierarchy so users instantly know:
+   - what this page is for
+   - what actions can be taken
+   - what is urgent
+4. Make forms and modals feel more modern and easier to complete
+5. Improve client portal actionability:
+   - what the client needs to upload
+   - what needs signature
+   - what needs payment
+   - what services are in progress
+6. Improve bookkeeping UI to support:
+   - Plaid connection state
+   - account sync status
+   - receipt uploads
+   - AI categorization progress
+   - monthly summary readiness
+   - tax-prep readiness
+7. Improve signature UI to support:
+   - draft, sent, viewed, signed, expired
+   - email + portal delivery visibility
+8. Improve compliance UI so recurring templates and client schedules feel more operational and less static
+
+INFORMATION ARCHITECTURE GUIDANCE:
+Preserve the existing feature set, but improve organization and grouping in the sidebar. Suggested grouping:
+- Operations: Dashboard, Clients, Service Tickets, Documents, Invoices
+- Services: Service Catalog, Compliance, Forms, Signatures, Notarizations
+- Financial: Bookkeeping, Tax Prep
+- Communication: Client Messages, Staff Chat
+- Admin: Analytics, Audit Log, Users, Employee Performance, Google Sheets
+Use role-based visibility where appropriate.
+
+COMPONENT REQUIREMENTS:
+- Build/rework a reusable component system
+- Reusable page headers
+- Better stat cards
+- Better table/list cards
+- Better empty states
+- Better filter bars
+- Better modal layouts
+- Better tabs/segmented controls
+- Better activity timelines
+- Better badge/status system
+- Better right-sized spacing across desktop layouts
+
+DASHBOARD REQUIREMENTS:
+Admin dashboard should feel like a true operations center and emphasize:
+- overdue items
+- upcoming deadlines
+- pending docs
+- open tickets
+- blocked by client
+- unpaid invoices
+- recent operational activity
+
+Client dashboard should emphasize:
+- actions needed now
+- open service requests
+- outstanding invoices
+- pending signatures
+- requested documents
+- bookkeeping readiness / uploads if active
+
+TECHNICAL REQUIREMENTS:
+- Keep the app responsive
+- Use modern React patterns and clean component structure
+- Refactor existing layouts where necessary
+- Do not break business logic
+- Prefer reusable shared UI primitives
+- Improve accessibility, focus states, and form clarity
+- Maintain performance
+- Keep all current features intact while improving presentation and usability
+
+DELIVERABLES:
+1. First, audit the current UI and identify the biggest design/system issues
+2. Then propose a refreshed design system
+3. Then implement the redesign across:
+   - admin dashboard
+   - client dashboard
+   - clients
+   - client detail
+   - service tickets
+   - documents
+   - invoices
+   - service catalog
+   - compliance
+   - bookkeeping
+   - tax prep
+   - signatures
+   - client portal core pages
+4. Prioritize the highest-impact screens first
+5. Show all code changes needed
+
+CRITICAL INSTRUCTION:
+Do not just apply cosmetic styling. Improve UX hierarchy, scannability, action visibility, and consistency across the whole product. Make it feel like a professionally designed internal operations platform for a trucking services company.

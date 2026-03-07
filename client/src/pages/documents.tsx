@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -13,9 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertDocumentSchema, type Document as DocType, type Client } from "@shared/schema";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Plus, Search, FileText, Clock, CheckCircle, AlertCircle, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
-import { z } from "zod";
 
 const DOC_TYPES = [
   "EIN Letter",
@@ -37,19 +39,10 @@ const DOC_TYPES = [
 
 function statusIcon(status: string) {
   switch (status) {
-    case "approved": return <CheckCircle className="w-3.5 h-3.5 text-chart-2" />;
-    case "pending": return <Clock className="w-3.5 h-3.5 text-chart-3" />;
+    case "approved": return <CheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
+    case "pending": return <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
     case "rejected": return <AlertCircle className="w-3.5 h-3.5 text-destructive" />;
     default: return <FileText className="w-3.5 h-3.5 text-muted-foreground" />;
-  }
-}
-
-function statusBadge(status: string): "default" | "secondary" | "destructive" {
-  switch (status) {
-    case "approved": return "secondary";
-    case "pending": return "default";
-    case "rejected": return "destructive";
-    default: return "secondary";
   }
 }
 
@@ -164,6 +157,13 @@ export default function Documents() {
 
   const clientMap = new Map(clients?.map(c => [c.id, c]) ?? []);
 
+  const statusCounts = {
+    all: documents?.length ?? 0,
+    pending: documents?.filter(d => d.status === "pending").length ?? 0,
+    approved: documents?.filter(d => d.status === "approved").length ?? 0,
+    rejected: documents?.filter(d => d.status === "rejected").length ?? 0,
+  };
+
   const filtered = documents?.filter(d => {
     const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.type.toLowerCase().includes(search.toLowerCase()) ||
@@ -183,25 +183,57 @@ export default function Documents() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-documents">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track compliance documents and client files</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-doc">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Document
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Track Document</DialogTitle>
-            </DialogHeader>
-            <DocumentForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-          </DialogContent>
-        </Dialog>
+      <PageHeader
+        title="Documents"
+        description="Track compliance documents and client files"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-doc">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Document
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Track Document</DialogTitle>
+              </DialogHeader>
+              <DocumentForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Documents"
+          value={statusCounts.all}
+          icon={FileText}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-500/10"
+        />
+        <StatCard
+          title="Pending Review"
+          value={statusCounts.pending}
+          icon={Clock}
+          iconColor="text-amber-600 dark:text-amber-400"
+          iconBg="bg-amber-500/10"
+          subtitle={statusCounts.pending > 0 ? "Awaiting review" : undefined}
+        />
+        <StatCard
+          title="Approved"
+          value={statusCounts.approved}
+          icon={CheckCircle}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+        <StatCard
+          title="Rejected"
+          value={statusCounts.rejected}
+          icon={AlertCircle}
+          iconColor="text-red-600 dark:text-red-400"
+          iconBg="bg-red-500/10"
+        />
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
@@ -234,12 +266,20 @@ export default function Documents() {
         </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <FolderOpen className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">No documents found</h3>
-            <p className="text-sm text-muted-foreground">
-              {search || filterType !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"}
-            </p>
+          <CardContent>
+            <EmptyState
+              icon={FolderOpen}
+              title="No documents found"
+              description={search || filterType !== "all" ? "Try adjusting your filters" : "Start tracking compliance documents"}
+              action={
+                !search && filterType === "all" ? (
+                  <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-doc">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Document
+                  </Button>
+                ) : undefined
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -262,9 +302,7 @@ export default function Documents() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge variant={statusBadge(doc.status)} className="text-xs">
-                      {doc.status}
-                    </Badge>
+                    <StatusBadge status={doc.status} />
                     <Select
                       value={doc.status}
                       onValueChange={(status) => updateStatus.mutate({ id: doc.id, status })}

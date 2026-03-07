@@ -14,6 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { TaxDocument, Client } from "@shared/schema";
 import { insertTaxDocumentSchema } from "@shared/schema";
 import {
@@ -35,21 +38,25 @@ const DOC_TYPES = [
 const TAX_YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
 function confidenceBadge(level: string | null) {
-  switch (level) {
-    case "high": return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" data-testid="badge-confidence">High Confidence</Badge>;
-    case "medium": return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid="badge-confidence">Medium Confidence</Badge>;
-    case "low": return <Badge variant="destructive" data-testid="badge-confidence">Low Confidence</Badge>;
-    default: return null;
-  }
+  if (!level) return null;
+  const labelMap: Record<string, string> = {
+    high: "High Confidence",
+    medium: "Medium Confidence",
+    low: "Low Confidence",
+  };
+  return <StatusBadge status={level} label={labelMap[level] || level} />;
 }
 
-function statusBadge(status: string) {
-  switch (status) {
-    case "analyzed": return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Analyzed</Badge>;
-    case "pending": return <Badge variant="secondary">Pending</Badge>;
-    case "review": return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Needs Review</Badge>;
-    default: return <Badge variant="secondary">{status}</Badge>;
-  }
+function taxStatusBadge(status: string) {
+  const statusMap: Record<string, string> = {
+    analyzed: "completed",
+    review: "pending",
+  };
+  const labelMap: Record<string, string> = {
+    analyzed: "Analyzed",
+    review: "Needs Review",
+  };
+  return <StatusBadge status={statusMap[status] || status} label={labelMap[status]} />;
 }
 
 function maskSSN(ssn: string | null) {
@@ -733,32 +740,32 @@ export default function AdminTaxPrep() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-tax-prep">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tax Preparation</h1>
-          <p className="text-muted-foreground text-sm mt-1">Collect and analyze tax documents year-round</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0} data-testid="button-export-csv">
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-tax-doc">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Document
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add Tax Document</DialogTitle>
-              </DialogHeader>
-              <TaxDocForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      <PageHeader
+        title="Tax Preparation"
+        description="Collect and analyze tax documents year-round"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0} data-testid="button-export-csv">
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-tax-doc">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Document
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Add Tax Document</DialogTitle>
+                </DialogHeader>
+                <TaxDocForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+              </DialogContent>
+            </Dialog>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -887,7 +894,7 @@ export default function AdminTaxPrep() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold">{doc.documentType}</p>
-                          {statusBadge(doc.status)}
+                          {taxStatusBadge(doc.status)}
                           {doc.fileName && (
                             <Badge variant="outline" className="text-xs gap-1">
                               <Paperclip className="w-3 h-3" />File

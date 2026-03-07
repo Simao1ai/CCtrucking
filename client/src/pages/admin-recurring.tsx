@@ -10,13 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, RefreshCcw } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Pencil, Trash2, RefreshCcw, ClipboardList } from "lucide-react";
 
 type ScheduleWithDetails = ClientRecurringSchedule & {
   clientName?: string;
@@ -27,12 +29,11 @@ const SERVICE_TYPES = ["IFTA Permit", "UCR Registration", "MCS-150 Update", "DOT
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 const FREQUENCY_TYPES = ["quarterly", "annual", "biennial"];
 
-const priorityVariant = (p: string) => {
-  switch (p) {
-    case "urgent": return "destructive";
-    case "high": return "destructive";
-    default: return "secondary";
-  }
+const priorityStatusMap: Record<string, string> = {
+  urgent: "urgent",
+  high: "high",
+  medium: "medium",
+  low: "low",
 };
 
 function TemplateFormDialog({
@@ -335,10 +336,10 @@ export default function AdminRecurring() {
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
-      <div className="flex items-center gap-2 flex-wrap">
-        <RefreshCcw className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-bold" data-testid="text-page-title">Recurring Compliance</h1>
-      </div>
+      <PageHeader
+        title="Recurring Compliance"
+        description="Manage recurring compliance templates and client schedules"
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -362,9 +363,16 @@ export default function AdminRecurring() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : !templates?.length ? (
-            <p className="text-muted-foreground text-center py-8" data-testid="text-no-templates">
-              No templates yet. Click "Add Template" to create one.
-            </p>
+            <EmptyState
+              icon={ClipboardList}
+              title="No templates yet"
+              description="Click 'Add Template' to create your first recurring compliance template."
+              action={
+                <Button onClick={() => { setEditingTemplate(null); setTemplateDialogOpen(true); }} data-testid="button-empty-add-template">
+                  <Plus className="w-4 h-4 mr-2" /> Add Template
+                </Button>
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -385,14 +393,10 @@ export default function AdminRecurring() {
                       <TableCell className="font-medium" data-testid={`text-template-name-${t.id}`}>{t.name}</TableCell>
                       <TableCell data-testid={`text-template-service-${t.id}`}>{t.serviceType}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary" data-testid={`badge-template-frequency-${t.id}`}>
-                          {t.frequencyType}
-                        </Badge>
+                        <StatusBadge status={t.frequencyType} data-testid={`badge-template-frequency-${t.id}`} />
                       </TableCell>
                       <TableCell>
-                        <Badge variant={priorityVariant(t.priority)} data-testid={`badge-template-priority-${t.id}`}>
-                          {t.priority}
-                        </Badge>
+                        <StatusBadge status={priorityStatusMap[t.priority] || t.priority} label={t.priority} />
                       </TableCell>
                       <TableCell data-testid={`text-template-days-${t.id}`}>{t.daysBefore}</TableCell>
                       <TableCell>
@@ -474,9 +478,16 @@ export default function AdminRecurring() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : !schedules?.length ? (
-            <p className="text-muted-foreground text-center py-8" data-testid="text-no-schedules">
-              No schedules assigned yet.
-            </p>
+            <EmptyState
+              icon={RefreshCcw}
+              title="No schedules assigned"
+              description="Assign a recurring compliance schedule to a client to get started."
+              action={
+                <Button onClick={() => setScheduleDialogOpen(true)} data-testid="button-empty-assign-schedule">
+                  <Plus className="w-4 h-4 mr-2" /> Assign Schedule
+                </Button>
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -506,9 +517,7 @@ export default function AdminRecurring() {
                         {s.lastGeneratedDate ? format(new Date(s.lastGeneratedDate), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={s.isActive ? "secondary" : "outline"} data-testid={`badge-schedule-active-${s.id}`}>
-                          {s.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        <StatusBadge status={s.isActive ? "active" : "inactive"} />
                       </TableCell>
                       <TableCell>
                         <AlertDialog>

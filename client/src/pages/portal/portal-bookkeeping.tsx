@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, AlertCircle, CheckCircle, CreditCard, Camera, Receipt, Loader2, X, ImageIcon } from "lucide-react";
+import { BookOpen, Upload, TrendingUp, TrendingDown, DollarSign, CheckCircle, CreditCard, Camera, Receipt, Loader2, X, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { BookkeepingSubscription, BankTransaction, MonthlySummary } from "@shared/schema";
 
@@ -180,12 +184,15 @@ export default function PortalBookkeeping() {
     Net: parseFloat(String(s.netIncome)),
   }));
 
+  const latestSummary = summaries.length > 0 ? summaries[summaries.length - 1] : null;
+
   return (
     <div className="p-6 space-y-6" data-testid="page-portal-bookkeeping">
-      <div>
-        <h1 className="text-2xl font-bold">Bookkeeping</h1>
-        <p className="text-muted-foreground">Manage your bank statements and view financial summaries</p>
-      </div>
+      <PageHeader
+        title="Bookkeeping"
+        description="Manage your bank statements and view financial summaries"
+        badge={isActive ? <StatusBadge status="active" /> : undefined}
+      />
 
       {loadingSub ? (
         <Skeleton className="h-24 w-full" data-testid="skeleton-subscription" />
@@ -193,7 +200,7 @@ export default function PortalBookkeeping() {
         <Card className="border-2 border-primary/20" data-testid="card-subscribe-bookkeeping">
           <CardContent className="py-10">
             <div className="max-w-lg mx-auto text-center space-y-6">
-              <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
                 <BookOpen className="w-8 h-8 text-primary" />
               </div>
               <div>
@@ -208,23 +215,23 @@ export default function PortalBookkeeping() {
                 </div>
                 <ul className="text-sm text-left space-y-2 max-w-xs mx-auto">
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                     Bank statement CSV upload & processing
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                     AI-powered transaction categorization
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                     Monthly income & expense summaries
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                     Professional financial reporting
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                     Dedicated tax preparer assignment
                   </li>
                 </ul>
@@ -247,18 +254,42 @@ export default function PortalBookkeeping() {
         </Card>
       ) : (
         <>
+          {isActive && latestSummary && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard
+                title="Monthly Income"
+                value={`$${parseFloat(String(latestSummary.totalIncome)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                icon={TrendingUp}
+                iconColor="text-emerald-600"
+                iconBg="bg-emerald-100 dark:bg-emerald-950"
+                subtitle={`${MONTHS.find(m => m.value === String(latestSummary.month))?.label || ""} ${latestSummary.year}`}
+              />
+              <StatCard
+                title="Monthly Expenses"
+                value={`$${parseFloat(String(latestSummary.totalExpenses)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                icon={TrendingDown}
+                iconColor="text-red-600"
+                iconBg="bg-red-100 dark:bg-red-950"
+                subtitle={`${MONTHS.find(m => m.value === String(latestSummary.month))?.label || ""} ${latestSummary.year}`}
+              />
+              <StatCard
+                title="Net Income"
+                value={`$${parseFloat(String(latestSummary.netIncome)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                icon={DollarSign}
+                iconColor={parseFloat(String(latestSummary.netIncome)) >= 0 ? "text-emerald-600" : "text-red-600"}
+                iconBg={parseFloat(String(latestSummary.netIncome)) >= 0 ? "bg-emerald-100 dark:bg-emerald-950" : "bg-red-100 dark:bg-red-950"}
+                subtitle={`${MONTHS.find(m => m.value === String(latestSummary.month))?.label || ""} ${latestSummary.year}`}
+              />
+            </div>
+          )}
+
           <Card data-testid="card-subscription">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
                 <BookOpen className="w-5 h-5" />
                 Subscription
               </CardTitle>
-              <Badge
-                variant={subscription.status === "active" ? "default" : "secondary"}
-                data-testid="badge-subscription-status"
-              >
-                {subscription.status}
-              </Badge>
+              <StatusBadge status={subscription.status} />
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6 flex-wrap">
@@ -283,7 +314,7 @@ export default function PortalBookkeeping() {
           {isActive && (
             <Card data-testid="card-upload-statement">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
                   <Upload className="w-5 h-5" />
                   Upload Bank Statement
                 </CardTitle>
@@ -363,7 +394,7 @@ export default function PortalBookkeeping() {
           {isActive && (
             <Card data-testid="card-scan-receipt">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
                   <Receipt className="w-5 h-5" />
                   Scan Receipt
                 </CardTitle>
@@ -385,7 +416,7 @@ export default function PortalBookkeeping() {
                     />
                     {!receiptPreview ? (
                       <div
-                        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
                         onClick={() => receiptInputRef.current?.click()}
                         data-testid="dropzone-receipt"
                       >
@@ -404,7 +435,7 @@ export default function PortalBookkeeping() {
                         <Button
                           variant="destructive"
                           size="icon"
-                          className="absolute top-2 right-2 h-7 w-7"
+                          className="absolute top-2 right-2"
                           onClick={clearReceipt}
                           data-testid="button-clear-receipt"
                         >
@@ -435,10 +466,10 @@ export default function PortalBookkeeping() {
                   </div>
 
                   {receiptResult && (
-                    <div className="flex-1 p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900" data-testid="card-receipt-result">
+                    <div className="flex-1 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900" data-testid="card-receipt-result">
                       <div className="flex items-center gap-2 mb-3">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <p className="font-medium text-green-800 dark:text-green-300">Expense Added</p>
+                        <CheckCircle className="w-5 h-5 text-emerald-600" />
+                        <p className="font-medium text-emerald-800 dark:text-emerald-300">Expense Added</p>
                       </div>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
@@ -518,9 +549,11 @@ export default function PortalBookkeeping() {
                     ))}
                   </div>
                 ) : transactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8" data-testid="text-no-transactions">
-                    No transactions found for this period.
-                  </p>
+                  <EmptyState
+                    icon={FileText}
+                    title="No transactions"
+                    description="No transactions found for this period. Upload a bank statement to get started."
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm" data-testid="table-transactions">
@@ -541,13 +574,11 @@ export default function PortalBookkeeping() {
                               {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString() : "N/A"}
                             </td>
                             <td className="p-2">{tx.description}</td>
-                            <td className={`p-2 text-right font-medium ${parseFloat(String(tx.amount)) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            <td className={`p-2 text-right font-medium ${parseFloat(String(tx.amount)) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                               ${Math.abs(parseFloat(String(tx.amount))).toFixed(2)}
                             </td>
                             <td className="p-2">
-                              <Badge variant="secondary">
-                                {tx.manualCategory || tx.aiCategory || tx.originalCategory || "Uncategorized"}
-                              </Badge>
+                              <StatusBadge status={tx.manualCategory || tx.aiCategory || tx.originalCategory || "uncategorized"} />
                             </td>
                             <td className="p-2">
                               {tx.source === "receipt" ? (
@@ -584,8 +615,12 @@ export default function PortalBookkeeping() {
                   </div>
                 ) : summaries.length === 0 ? (
                   <Card>
-                    <CardContent className="py-8 text-center">
-                      <p className="text-sm text-muted-foreground" data-testid="text-no-summaries">No monthly summaries available yet.</p>
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={DollarSign}
+                        title="No summaries yet"
+                        description="Monthly summaries will appear here after you upload bank statements."
+                      />
                     </CardContent>
                   </Card>
                 ) : (
@@ -603,9 +638,9 @@ export default function PortalBookkeeping() {
                             <CardContent className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="flex items-center gap-1 text-sm">
-                                  <TrendingUp className="w-4 h-4 text-green-500" /> Income
+                                  <TrendingUp className="w-4 h-4 text-emerald-500" /> Income
                                 </span>
-                                <span className="font-medium text-green-600 dark:text-green-400" data-testid={`text-income-${s.id}`}>
+                                <span className="font-medium text-emerald-600 dark:text-emerald-400" data-testid={`text-income-${s.id}`}>
                                   ${parseFloat(String(s.totalIncome)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                                 </span>
                               </div>
@@ -622,7 +657,7 @@ export default function PortalBookkeeping() {
                                   <DollarSign className="w-4 h-4" /> Net
                                 </span>
                                 <span
-                                  className={`font-bold ${parseFloat(String(s.netIncome)) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                                  className={`font-bold ${parseFloat(String(s.netIncome)) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                                   data-testid={`text-net-${s.id}`}
                                 >
                                   ${parseFloat(String(s.netIncome)).toLocaleString("en-US", { minimumFractionDigits: 2 })}

@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PenLine, CheckCircle, Clock, FileText, AlertCircle } from "lucide-react";
@@ -106,10 +108,10 @@ function SignaturePad({ onSave }: { onSave: (dataUrl: string) => void }) {
         />
       </div>
       <div className="flex gap-3">
-        <Button type="button" variant="outline" onClick={clear} className="flex-1 h-12 text-base" data-testid="button-clear-signature">
+        <Button type="button" variant="outline" onClick={clear} className="flex-1" data-testid="button-clear-signature">
           Clear
         </Button>
-        <Button type="button" onClick={save} disabled={!hasDrawn} className="flex-1 h-12 text-base" data-testid="button-use-signature">
+        <Button type="button" onClick={save} disabled={!hasDrawn} className="flex-1" data-testid="button-use-signature">
           Use This Signature
         </Button>
       </div>
@@ -157,29 +159,29 @@ export default function PortalSignatures() {
 
   return (
     <div className="p-6 space-y-6" data-testid="page-portal-signatures">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <PenLine className="w-6 h-6" />
-          Documents to Sign
-        </h1>
-        <p className="text-muted-foreground mt-1">Review and sign documents sent by CC Trucking Services</p>
-      </div>
+      <PageHeader
+        title="Documents to Sign"
+        description="Review and sign documents sent by CC Trucking Services"
+        badge={pending.length > 0 ? <StatusBadge status="pending" label={`${pending.length} awaiting signature`} /> : undefined}
+      />
 
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}</div>
       ) : signatures.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center">
-            <FileText className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground">No documents to sign right now.</p>
-            <p className="text-sm text-muted-foreground mt-1">You'll see documents here when they're sent to you.</p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={FileText}
+              title="No documents to sign"
+              description="You'll see documents here when they're sent to you for signature."
+            />
           </CardContent>
         </Card>
       ) : (
         <>
           {pending.length > 0 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
+              <h2 className="text-lg font-semibold flex items-center gap-2 flex-wrap">
                 <AlertCircle className="w-5 h-5 text-orange-500" />
                 Needs Your Signature ({pending.length})
               </h2>
@@ -188,14 +190,14 @@ export default function PortalSignatures() {
                   <Card key={sig.id} className="border-orange-200 dark:border-orange-800" data-testid={`sig-pending-${sig.id}`}>
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center justify-center w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 shrink-0">
-                            <Clock className="w-7 h-7 text-orange-500" />
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-lg bg-orange-100 dark:bg-orange-900/30">
+                            <Clock className="w-6 h-6 text-orange-500" />
                           </div>
-                          <div>
-                            <p className="text-lg font-semibold">{sig.documentName}</p>
+                          <div className="min-w-0">
+                            <p className="text-lg font-semibold truncate" data-testid={`text-sig-name-${sig.id}`}>{sig.documentName}</p>
                             {sig.documentDescription && (
-                              <p className="text-sm text-muted-foreground mt-0.5">{sig.documentDescription}</p>
+                              <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{sig.documentDescription}</p>
                             )}
                             <p className="text-xs text-muted-foreground mt-1">
                               Sent on {format(new Date(sig.sentAt), "MMMM d, yyyy")}
@@ -204,7 +206,7 @@ export default function PortalSignatures() {
                         </div>
                         <Button
                           size="lg"
-                          className="h-14 px-8 text-lg font-semibold shrink-0"
+                          className="shrink-0"
                           onClick={() => openSignDialog(sig)}
                           data-testid={`button-sign-${sig.id}`}
                         >
@@ -221,8 +223,8 @@ export default function PortalSignatures() {
 
           {signed.length > 0 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600" />
+              <h2 className="text-lg font-semibold flex items-center gap-2 flex-wrap">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
                 Completed ({signed.length})
               </h2>
               <div className="space-y-3">
@@ -230,18 +232,18 @@ export default function PortalSignatures() {
                   <Card key={sig.id} data-testid={`sig-signed-${sig.id}`}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30">
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                            <CheckCircle className="w-5 h-5 text-emerald-600" />
                           </div>
-                          <div>
-                            <p className="font-medium">{sig.documentName}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{sig.documentName}</p>
                             <p className="text-xs text-muted-foreground">
                               Signed by {sig.signerName} on {sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : ""}
                             </p>
                           </div>
                         </div>
-                        <Badge variant="default" className="bg-green-600">Signed</Badge>
+                        <StatusBadge status="signed" />
                       </div>
                     </CardContent>
                   </Card>
@@ -274,7 +276,7 @@ export default function PortalSignatures() {
                   </div>
                   <Button
                     size="lg"
-                    className="w-full h-14 text-lg font-semibold"
+                    className="w-full"
                     onClick={() => setStep("sign")}
                     data-testid="button-ready-to-sign"
                   >
@@ -292,7 +294,6 @@ export default function PortalSignatures() {
                       value={signerName}
                       onChange={(e) => setSignerName(e.target.value)}
                       placeholder="Type your full legal name"
-                      className="h-12 text-base"
                       data-testid="input-signer-name"
                     />
                   </div>
@@ -303,15 +304,15 @@ export default function PortalSignatures() {
               {step === "confirm" && (
                 <>
                   <div className="text-center space-y-4">
-                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                      <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                      <p className="text-base font-medium text-green-800 dark:text-green-200">Ready to submit your signature</p>
+                    <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
+                      <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                      <p className="text-base font-medium text-emerald-800 dark:text-emerald-200">Ready to submit your signature</p>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Name: <strong>{signerName}</strong></p>
                       <p className="text-sm text-muted-foreground">Document: <strong>{signDoc.documentName}</strong></p>
                       {signatureData && (
-                        <div className="border rounded p-3 bg-white inline-block">
+                        <div className="border rounded-md p-3 bg-white inline-block">
                           <img src={signatureData} alt="Your signature" className="max-h-16" />
                         </div>
                       )}
@@ -321,7 +322,7 @@ export default function PortalSignatures() {
                     <Button
                       variant="outline"
                       size="lg"
-                      className="flex-1 h-14 text-base"
+                      className="flex-1"
                       onClick={() => { setSignatureData(""); setStep("sign"); }}
                       data-testid="button-redo-signature"
                     >
@@ -329,7 +330,7 @@ export default function PortalSignatures() {
                     </Button>
                     <Button
                       size="lg"
-                      className="flex-1 h-14 text-base font-semibold"
+                      className="flex-1"
                       onClick={() => signMutation.mutate({ id: signDoc.id, signerName, signatureData })}
                       disabled={!signerName.trim() || signMutation.isPending}
                       data-testid="button-submit-signature"

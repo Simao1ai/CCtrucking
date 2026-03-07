@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Receipt, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Download } from "lucide-react";
@@ -73,56 +76,53 @@ export default function PortalInvoices() {
   const totalPending = pending.reduce((s, i) => s + parseFloat(i.amount), 0);
   const totalOverdue = overdue.reduce((s, i) => s + parseFloat(i.amount), 0);
 
+  const actionNeeded = invoices.filter(i => i.status === "sent" || i.status === "overdue");
+
   return (
     <div className="p-6 space-y-6" data-testid="page-portal-invoices">
-      <div>
-        <h1 className="text-2xl font-bold">My Invoices</h1>
-        <p className="text-muted-foreground">View and manage your invoices</p>
-      </div>
+      <PageHeader
+        title="My Invoices"
+        description="View and manage your invoices"
+        badge={actionNeeded.length > 0 ? <StatusBadge status="pending" label={`${actionNeeded.length} need attention`} /> : undefined}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-8 h-8 text-green-500" />
-              <div>
-                <div className="text-sm text-muted-foreground">Total Paid</div>
-                <div className="text-2xl font-bold text-green-600">${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <Clock className="w-8 h-8 text-yellow-500" />
-              <div>
-                <div className="text-sm text-muted-foreground">Pending</div>
-                <div className="text-2xl font-bold text-yellow-600">${totalPending.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-8 h-8 text-red-500" />
-              <div>
-                <div className="text-sm text-muted-foreground">Overdue</div>
-                <div className="text-2xl font-bold text-red-600">${totalOverdue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          title="Total Paid"
+          value={`$${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={CheckCircle}
+          iconColor="text-emerald-600"
+          iconBg="bg-emerald-100 dark:bg-emerald-950"
+          subtitle={`${paid.length} invoice${paid.length !== 1 ? "s" : ""}`}
+        />
+        <StatCard
+          title="Pending"
+          value={`$${totalPending.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={Clock}
+          iconColor="text-amber-600"
+          iconBg="bg-amber-100 dark:bg-amber-950"
+          subtitle={`${pending.length} invoice${pending.length !== 1 ? "s" : ""}`}
+        />
+        <StatCard
+          title="Overdue"
+          value={`$${totalOverdue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={AlertTriangle}
+          iconColor="text-red-600"
+          iconBg="bg-red-100 dark:bg-red-950"
+          subtitle={overdue.length > 0 ? `${overdue.length} need${overdue.length === 1 ? "s" : ""} payment` : "All caught up"}
+        />
       </div>
 
       {isLoading ? (
         <div className="space-y-4">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
       ) : invoices.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <Receipt className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No invoices yet.</p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Receipt}
+              title="No invoices yet"
+              description="Your invoices will appear here once they are created by your service team."
+            />
           </CardContent>
         </Card>
       ) : (
@@ -131,25 +131,25 @@ export default function PortalInvoices() {
             <Card key={invoice.id} data-testid={`invoice-${invoice.id}`}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="cursor-pointer flex-1" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                    <div className="font-medium">{invoice.invoiceNumber}</div>
-                    <div className="text-sm text-muted-foreground">{invoice.description}</div>
+                  <div className="cursor-pointer flex-1 min-w-0" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
+                    <div className="font-medium" data-testid={`text-invoice-number-${invoice.id}`}>{invoice.invoiceNumber}</div>
+                    <div className="text-sm text-muted-foreground truncate">{invoice.description}</div>
                     {invoice.dueDate && (
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
                         Due: {format(new Date(invoice.dueDate), "MMM d, yyyy")}
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap">
                     <div className="text-right">
-                      <div className="font-semibold text-lg">${parseFloat(invoice.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-                      <Badge variant={
-                        invoice.status === "paid" ? "default" :
-                        invoice.status === "overdue" ? "destructive" :
-                        invoice.status === "approved" ? "default" : "secondary"
-                      }>
-                        {invoice.status === "approved" ? "Approved - Processing" : invoice.status}
-                      </Badge>
+                      <div className="font-semibold text-lg" data-testid={`text-invoice-amount-${invoice.id}`}>
+                        ${parseFloat(invoice.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </div>
+                      <StatusBadge
+                        status={invoice.status === "approved" ? "approved" : invoice.status}
+                        label={invoice.status === "approved" ? "Approved - Processing" : undefined}
+                      />
                     </div>
                     <Button
                       variant="outline"
@@ -170,7 +170,7 @@ export default function PortalInvoices() {
                         Approve Payment
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)} data-testid={`button-expand-portal-invoice-${invoice.id}`}>
+                    <Button variant="ghost" size="icon" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)} data-testid={`button-expand-portal-invoice-${invoice.id}`}>
                       {expandedId === invoice.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </Button>
                   </div>

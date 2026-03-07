@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,17 +10,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Notarization, Client } from "@shared/schema";
 import { Plus, Search, Stamp, CheckCircle, Clock, XCircle, Calendar, User, Eye } from "lucide-react";
 import { format } from "date-fns";
 
 function notaryStatusBadge(status: string) {
-  switch (status) {
-    case "pending": return <Badge variant="secondary" className="text-xs"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
-    case "notarized": return <Badge variant="default" className="text-xs"><CheckCircle className="w-3 h-3 mr-1" />Notarized</Badge>;
-    case "rejected": return <Badge variant="destructive" className="text-xs"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
-    default: return <Badge variant="outline" className="text-xs">{status}</Badge>;
-  }
+  const labelMap: Record<string, string> = {
+    notarized: "Notarized",
+  };
+  const statusMap: Record<string, string> = {
+    notarized: "completed",
+  };
+  return <StatusBadge status={statusMap[status] || status} label={labelMap[status]} />;
 }
 
 export default function AdminNotarizations() {
@@ -95,17 +99,16 @@ export default function AdminNotarizations() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-notarizations-title">Notarizations</h1>
-          <p className="text-sm text-muted-foreground">Track in-house notarization of client documents</p>
-        </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-notarization">
-              <Plus className="w-4 h-4 mr-2" /> New Notarization
-            </Button>
-          </DialogTrigger>
+      <PageHeader
+        title="Notarizations"
+        description="Track in-house notarization of client documents"
+        actions={
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-notarization">
+                <Plus className="w-4 h-4 mr-2" /> New Notarization
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Record Notarization</DialogTitle>
@@ -220,46 +223,15 @@ export default function AdminNotarizations() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
-      </div>
+          </Dialog>
+        }
+      />
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card data-testid="card-stat-total-notarizations">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Stamp className="w-4 h-4" />
-              <span className="text-xs font-medium">Total Records</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Clock className="w-4 h-4" />
-              <span className="text-xs font-medium">Pending</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.pending}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <CheckCircle className="w-4 h-4" />
-              <span className="text-xs font-medium">Notarized</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.notarized}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <XCircle className="w-4 h-4" />
-              <span className="text-xs font-medium">Rejected</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.rejected}</p>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Records" value={stats.total} icon={Stamp} />
+        <StatCard title="Pending" value={stats.pending} icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-100 dark:bg-amber-900/30" />
+        <StatCard title="Notarized" value={stats.notarized} icon={CheckCircle} iconColor="text-emerald-600" iconBg="bg-emerald-100 dark:bg-emerald-900/30" />
+        <StatCard title="Rejected" value={stats.rejected} icon={XCircle} iconColor="text-red-600" iconBg="bg-red-100 dark:bg-red-900/30" />
       </div>
 
       <div className="relative max-w-sm">
@@ -277,9 +249,17 @@ export default function AdminNotarizations() {
         <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-24" />)}</div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            <Stamp className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>{search ? "No matching records found." : "No notarization records yet."}</p>
+          <CardContent>
+            <EmptyState
+              icon={Stamp}
+              title={search ? "No matching records" : "No notarization records yet"}
+              description={search ? "No records match your search criteria." : "Click 'New Notarization' to record your first notarization."}
+              action={!search ? (
+                <Button onClick={() => setCreateOpen(true)} data-testid="button-empty-create-notarization">
+                  <Plus className="w-4 h-4 mr-2" /> New Notarization
+                </Button>
+              ) : undefined}
+            />
           </CardContent>
         </Card>
       ) : (

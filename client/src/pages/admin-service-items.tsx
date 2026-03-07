@@ -3,15 +3,19 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { ServiceItem } from "@shared/schema";
 import { Plus, Search, Package, CheckCircle, DollarSign, Pencil, Trash2, Tag } from "lucide-react";
 
@@ -127,123 +131,95 @@ export default function AdminServiceItems() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-service-items">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-service-catalog-title">Service Catalog</h1>
-          <p className="text-sm text-muted-foreground">Manage your service fees and pricing</p>
-        </div>
-        <Dialog open={createDialog} onOpenChange={setCreateDialog}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-new-service">
-              <Plus className="w-4 h-4 mr-2" /> New Service
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Service Item</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Name</Label>
-                <Input
-                  value={formState.name}
-                  onChange={e => setFormState(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., DOT Compliance Filing"
-                  data-testid="input-service-name"
-                />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea
-                  value={formState.description}
-                  onChange={e => setFormState(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Brief description of this service..."
-                  data-testid="input-service-description"
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+      <PageHeader
+        title="Service Catalog"
+        description="Manage your service fees and pricing"
+        actions={
+          <Dialog open={createDialog} onOpenChange={setCreateDialog}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-new-service">
+                <Plus className="w-4 h-4 mr-2" /> New Service
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Service Item</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
-                  <Label>Category</Label>
-                  <Select value={formState.category} onValueChange={v => setFormState(prev => ({ ...prev, category: v }))}>
-                    <SelectTrigger data-testid="select-service-category">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map(c => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Default Price ($)</Label>
+                  <Label>Name</Label>
                   <Input
-                    type="number"
-                    step="0.01"
-                    value={formState.defaultPrice}
-                    onChange={e => setFormState(prev => ({ ...prev, defaultPrice: e.target.value }))}
-                    placeholder="0.00"
-                    data-testid="input-service-price"
+                    value={formState.name}
+                    onChange={e => setFormState(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., DOT Compliance Filing"
+                    data-testid="input-service-name"
                   />
                 </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formState.description}
+                    onChange={e => setFormState(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of this service..."
+                    data-testid="input-service-description"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label>Category</Label>
+                    <Select value={formState.category} onValueChange={v => setFormState(prev => ({ ...prev, category: v }))}>
+                      <SelectTrigger data-testid="select-service-category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Default Price ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formState.defaultPrice}
+                      onChange={e => setFormState(prev => ({ ...prev, defaultPrice: e.target.value }))}
+                      placeholder="0.00"
+                      data-testid="input-service-price"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={formState.isActive}
+                    onCheckedChange={v => setFormState(prev => ({ ...prev, isActive: v }))}
+                    data-testid="switch-service-active"
+                  />
+                  <Label>Active</Label>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending}
+                  data-testid="button-confirm-create-service"
+                >
+                  {createMutation.isPending ? "Creating..." : "Create Service"}
+                </Button>
               </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={formState.isActive}
-                  onCheckedChange={v => setFormState(prev => ({ ...prev, isActive: v }))}
-                  data-testid="switch-service-active"
-                />
-                <Label>Active</Label>
-              </div>
-              <Button
-                className="w-full"
-                onClick={handleCreate}
-                disabled={createMutation.isPending}
-                data-testid="button-confirm-create-service"
-              >
-                {createMutation.isPending ? "Creating..." : "Create Service"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Services</p>
-                <p className="text-xl font-bold" data-testid="text-total-services">{totalServices}</p>
-              </div>
-              <Package className="w-5 h-5 text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Active</p>
-                <p className="text-xl font-bold text-chart-2" data-testid="text-active-services">{activeServices}</p>
-              </div>
-              <CheckCircle className="w-5 h-5 text-chart-2" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Average Price</p>
-                <p className="text-xl font-bold" data-testid="text-avg-price">
-                  ${avgPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <DollarSign className="w-5 h-5 text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Services" value={totalServices} icon={Package} />
+        <StatCard title="Active" value={activeServices} icon={CheckCircle} iconColor="text-emerald-600" iconBg="bg-emerald-100 dark:bg-emerald-900/30" />
+        <StatCard
+          title="Average Price"
+          value={`$${avgPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          icon={DollarSign}
+        />
       </div>
 
       <div className="relative max-w-sm">
@@ -263,9 +239,17 @@ export default function AdminServiceItems() {
         </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>{search ? "No services match your search." : "No service items yet. Create your first service to get started."}</p>
+          <CardContent>
+            <EmptyState
+              icon={Package}
+              title={search ? "No matching services" : "No service items yet"}
+              description={search ? "No services match your search criteria." : "Create your first service to get started."}
+              action={!search ? (
+                <Button onClick={() => setCreateDialog(true)} data-testid="button-empty-new-service">
+                  <Plus className="w-4 h-4 mr-2" /> New Service
+                </Button>
+              ) : undefined}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -275,9 +259,7 @@ export default function AdminServiceItems() {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-semibold text-sm" data-testid={`text-service-name-${item.id}`}>{item.name}</h3>
-                  <Badge variant={item.isActive ? "default" : "secondary"} className="text-xs flex-shrink-0" data-testid={`badge-status-${item.id}`}>
-                    {item.isActive ? "Active" : "Inactive"}
-                  </Badge>
+                  <StatusBadge status={item.isActive ? "active" : "inactive"} className="flex-shrink-0" />
                 </div>
                 {item.description && (
                   <p className="text-xs text-muted-foreground mb-3 line-clamp-2" data-testid={`text-service-desc-${item.id}`}>{item.description}</p>

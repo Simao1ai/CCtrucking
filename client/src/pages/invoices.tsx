@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,19 +15,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertInvoiceSchema, type Invoice, type Client, type ServiceItem, type InvoiceLineItem } from "@shared/schema";
-import { Plus, Search, Receipt, DollarSign, Calendar, X, ChevronDown, ChevronUp, Download, Send, Loader2, FileText } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Search, Receipt, DollarSign, Calendar, X, ChevronDown, ChevronUp, Download, Send, Loader2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
-
-function statusColor(status: string): "default" | "secondary" | "destructive" {
-  switch (status) {
-    case "paid": return "secondary";
-    case "sent": return "default";
-    case "overdue": return "destructive";
-    case "draft": return "secondary";
-    default: return "secondary";
-  }
-}
 
 interface LineItemEntry {
   serviceItemId: string | null;
@@ -89,7 +83,7 @@ function LineItemsEditor({ lineItems, setLineItems, serviceItems }: {
           <div className="flex items-start gap-2">
             <div className="flex-1 space-y-2">
               <Select value={li.serviceItemId || "custom"} onValueChange={(v) => v === "custom" ? updateItem(i, { serviceItemId: null }) : selectServiceItem(i, v)}>
-                <SelectTrigger className="text-xs h-8" data-testid={`select-service-item-${i}`}>
+                <SelectTrigger className="text-xs" data-testid={`select-service-item-${i}`}>
                   <SelectValue placeholder="Select service..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -103,11 +97,11 @@ function LineItemsEditor({ lineItems, setLineItems, serviceItems }: {
                 value={li.description}
                 onChange={(e) => updateItem(i, { description: e.target.value })}
                 placeholder="Description"
-                className="text-xs h-8"
+                className="text-xs"
                 data-testid={`input-line-desc-${i}`}
               />
             </div>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={() => removeItem(i)} data-testid={`button-remove-line-${i}`}>
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(i)} data-testid={`button-remove-line-${i}`}>
               <X className="w-3 h-3" />
             </Button>
           </div>
@@ -119,7 +113,7 @@ function LineItemsEditor({ lineItems, setLineItems, serviceItems }: {
                 min="1"
                 value={li.quantity}
                 onChange={(e) => updateItem(i, { quantity: parseInt(e.target.value) || 1 })}
-                className="text-xs h-8"
+                className="text-xs"
                 data-testid={`input-line-qty-${i}`}
               />
             </div>
@@ -130,13 +124,13 @@ function LineItemsEditor({ lineItems, setLineItems, serviceItems }: {
                 step="0.01"
                 value={li.unitPrice}
                 onChange={(e) => updateItem(i, { unitPrice: e.target.value })}
-                className="text-xs h-8"
+                className="text-xs"
                 data-testid={`input-line-price-${i}`}
               />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount</label>
-              <Input value={`$${li.amount}`} readOnly className="text-xs h-8 bg-muted" data-testid={`text-line-amount-${i}`} />
+              <Input value={`$${li.amount}`} readOnly className="text-xs bg-muted" data-testid={`text-line-amount-${i}`} />
             </div>
           </div>
         </div>
@@ -397,7 +391,7 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
         <div>
           <p className="text-muted-foreground">Status</p>
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={statusColor(invoice.status)}>{invoice.status}</Badge>
+            <StatusBadge status={invoice.status} />
             {(invoice as any).reminderCount > 0 && (
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300" data-testid={`badge-reminder-${invoice.id}`}>
                 {(invoice as any).reminderCount === 1 ? "1st Reminder" : (invoice as any).reminderCount === 2 ? "2nd Notice" : "Final Notice"}
@@ -482,7 +476,7 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
                         <td className="p-2 text-right">${parseFloat(li.unitPrice).toFixed(2)}</td>
                         <td className="p-2 text-right font-medium">${parseFloat(li.amount).toFixed(2)}</td>
                         <td className="p-2">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteLineItem.mutate(li.id)} data-testid={`button-delete-line-${li.id}`}>
+                          <Button variant="ghost" size="icon" onClick={() => deleteLineItem.mutate(li.id)} data-testid={`button-delete-line-${li.id}`}>
                             <X className="w-3 h-3" />
                           </Button>
                         </td>
@@ -502,7 +496,7 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
             {addingItem && (
               <div className="border rounded-lg p-3 mt-2 space-y-2">
                 <Select value={newItem.serviceItemId || "custom"} onValueChange={(v) => v === "custom" ? updateNewItem({ serviceItemId: null }) : selectService(v)}>
-                  <SelectTrigger className="text-xs h-8" data-testid="select-add-service-item">
+                  <SelectTrigger className="text-xs" data-testid="select-add-service-item">
                     <SelectValue placeholder="Select service..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -512,11 +506,11 @@ function InvoiceDetail({ invoice, clients }: { invoice: Invoice; clients: Client
                     ))}
                   </SelectContent>
                 </Select>
-                <Input value={newItem.description} onChange={(e) => updateNewItem({ description: e.target.value })} placeholder="Description" className="text-xs h-8" data-testid="input-add-line-desc" />
+                <Input value={newItem.description} onChange={(e) => updateNewItem({ description: e.target.value })} placeholder="Description" className="text-xs" data-testid="input-add-line-desc" />
                 <div className="grid grid-cols-3 gap-2">
-                  <Input type="number" min="1" value={newItem.quantity} onChange={(e) => updateNewItem({ quantity: parseInt(e.target.value) || 1 })} className="text-xs h-8" data-testid="input-add-line-qty" />
-                  <Input type="number" step="0.01" value={newItem.unitPrice} onChange={(e) => updateNewItem({ unitPrice: e.target.value })} className="text-xs h-8" data-testid="input-add-line-price" />
-                  <Input value={`$${newItem.amount}`} readOnly className="text-xs h-8 bg-muted" />
+                  <Input type="number" min="1" value={newItem.quantity} onChange={(e) => updateNewItem({ quantity: parseInt(e.target.value) || 1 })} className="text-xs" data-testid="input-add-line-qty" />
+                  <Input type="number" step="0.01" value={newItem.unitPrice} onChange={(e) => updateNewItem({ unitPrice: e.target.value })} className="text-xs" data-testid="input-add-line-price" />
+                  <Input value={`$${newItem.amount}`} readOnly className="text-xs bg-muted" />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" onClick={() => setAddingItem(false)} data-testid="button-cancel-add-line">Cancel</Button>
@@ -582,61 +576,52 @@ export default function Invoices() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto" data-testid="page-invoices">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
-          <p className="text-muted-foreground text-sm mt-1">Billing and payment tracking</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-invoice">
-              <Plus className="w-4 h-4 mr-2" />
-              New Invoice
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Invoice</DialogTitle>
-            </DialogHeader>
-            <InvoiceForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      <PageHeader
+        title="Invoices"
+        description="Billing and payment tracking"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-invoice">
+                <Plus className="w-4 h-4 mr-2" />
+                New Invoice
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Invoice</DialogTitle>
+              </DialogHeader>
+              <InvoiceForm onSuccess={() => setDialogOpen(false)} clients={clients ?? []} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Paid</p>
-                <p className="text-xl font-bold text-chart-2">${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <DollarSign className="w-5 h-5 text-chart-2" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Pending</p>
-                <p className="text-xl font-bold">${totalPending.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <Receipt className="w-5 h-5 text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Overdue</p>
-                <p className="text-xl font-bold text-destructive">${totalOverdue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <Calendar className="w-5 h-5 text-destructive" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          title="Total Paid"
+          value={`$${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={DollarSign}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-500/10"
+          subtitle={`${statusCounts.paid} invoices`}
+        />
+        <StatCard
+          title="Pending"
+          value={`$${totalPending.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={Receipt}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-500/10"
+          subtitle={`${statusCounts.draft + statusCounts.sent} invoices`}
+        />
+        <StatCard
+          title="Overdue"
+          value={`$${totalOverdue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={AlertTriangle}
+          iconColor="text-red-600 dark:text-red-400"
+          iconBg="bg-red-500/10"
+          subtitle={statusCounts.overdue > 0 ? `${statusCounts.overdue} overdue` : undefined}
+        />
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
@@ -668,12 +653,20 @@ export default function Invoices() {
             </div>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <Receipt className="w-12 h-12 text-muted-foreground/40 mb-4" />
-                <h3 className="text-lg font-semibold mb-1">No invoices found</h3>
-                <p className="text-sm text-muted-foreground">
-                  {search || tab !== "all" ? "Try adjusting your filters" : "Create your first invoice"}
-                </p>
+              <CardContent>
+                <EmptyState
+                  icon={Receipt}
+                  title="No invoices found"
+                  description={search || tab !== "all" ? "Try adjusting your filters" : "Create your first invoice"}
+                  action={
+                    !search && tab === "all" ? (
+                      <Button onClick={() => setDialogOpen(true)} data-testid="button-empty-add-invoice">
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Invoice
+                      </Button>
+                    ) : undefined
+                  }
+                />
               </CardContent>
             </Card>
           ) : (
@@ -689,9 +682,7 @@ export default function Invoices() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold">{invoice.invoiceNumber}</p>
-                            <Badge variant={statusColor(invoice.status)} className="text-xs">
-                              {invoice.status}
-                            </Badge>
+                            <StatusBadge status={invoice.status} />
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                             <span>{clientMap.get(invoice.clientId)?.companyName ?? "Unknown"}</span>
@@ -728,7 +719,7 @@ export default function Invoices() {
                             <SelectItem value="overdue">Overdue</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)} data-testid={`button-expand-invoice-${invoice.id}`}>
+                        <Button variant="ghost" size="icon" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)} data-testid={`button-expand-invoice-${invoice.id}`}>
                           {expandedId === invoice.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </Button>
                       </div>
