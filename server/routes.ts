@@ -2382,7 +2382,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     try {
       const { preparerId, clientId } = req.body;
       if (!preparerId || !clientId) return res.status(400).json({ message: "preparerId and clientId required" });
-      const prepUser = await storage.getUser(preparerId);
+      const [prepUser] = await db.select().from(users).where(eq(users.id, preparerId));
       if (!prepUser || prepUser.role !== "preparer") return res.status(400).json({ message: "Invalid preparer user" });
       const client = await storage.getClient(clientId);
       if (!client) return res.status(400).json({ message: "Client not found" });
@@ -2673,6 +2673,190 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         reviewed: req.body.reviewed,
       });
       res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== PREPARER: TAX DOCUMENTS =====
+  app.get("/api/preparer/clients/:id/tax-documents", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : undefined;
+      let docs = await storage.getTaxDocumentsByClient(clientId);
+      if (taxYear) docs = docs.filter(d => d.taxYear === taxYear);
+      res.json(docs);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/preparer/clients/:id/tax-documents/upload", isAuthenticated, isPreparer, (req, res, next) => {
+    taxDocUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ message: "File too large. Maximum size is 10 MB." });
+          }
+          return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        return res.status(400).json({ message: err.message || "Invalid file" });
+      }
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const { taxYear, documentType, payerName, notes } = req.body;
+      if (!documentType) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "documentType is required" });
+      }
+      const parsedYear = parseInt(taxYear);
+      if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "taxYear must be a valid year between 2000 and 2099" });
+      }
+
+      const doc = await storage.createTaxDocument({
+        clientId,
+        taxYear: parsedYear,
+        documentType,
+        payerName: payerName || null,
+        notes: notes || null,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
+        filePath: `uploads/tax-documents/${req.file.filename}`,
+        fileSize: req.file.size,
+        status: "pending",
+      });
+
+      await audit(req, "created", "tax_document", doc.id, `Preparer uploaded tax document — ${req.file.originalname} (${doc.documentType}) for tax year ${taxYear}`);
+      res.status(201).json(doc);
+    } catch (error: any) {
+      if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
+      res.status(500).json({ message: error.message || "Upload failed" });
+    }
+  });
+
+  // ===== PREPARER: CHAT WITH CLIENT =====
+  app.get("/api/preparer/clients/:id/chat", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const messages = await storage.getChatMessages(clientId);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/preparer/clients/:id/chat", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const { message } = req.body;
+      if (!message || !message.trim()) return res.status(400).json({ message: "Message is required" });
+      const preparerName = dbUser.firstName && dbUser.lastName
+        ? `${dbUser.firstName} ${dbUser.lastName}`
+        : dbUser.username;
+      const msg = await storage.createChatMessage({
+        clientId,
+        senderId: dbUser.id,
+        senderName: `${preparerName} (Preparer)`,
+        senderRole: "admin",
+        message: message.trim(),
+      });
+      await notifyClientUsers(clientId, "New Message", `New message from your tax preparer`, "message", `/portal/chat`);
+      res.status(201).json(msg);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== PREPARER: BOOKKEEPING SUMMARY =====
+  app.get("/api/preparer/clients/:id/bookkeeping-summary", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      if (!sub) return res.json({ hasBookkeeping: false });
+
+      const summaries = await storage.getMonthlySummaries(clientId);
+      const yearSummaries = summaries.filter(s => s.year === taxYear);
+
+      const transactions = await storage.getBankTransactions(clientId);
+      const yearTransactions = transactions.filter(tx => {
+        if (tx.statementYear === taxYear) return true;
+        if (tx.transactionDate) {
+          const d = new Date(tx.transactionDate);
+          return d.getFullYear() === taxYear;
+        }
+        return false;
+      });
+
+      const totalIncome = yearSummaries.reduce((s, m) => s + parseFloat(String(m.totalIncome || "0")), 0);
+      const totalExpenses = yearSummaries.reduce((s, m) => s + parseFloat(String(m.totalExpenses || "0")), 0);
+      const netIncome = yearSummaries.reduce((s, m) => s + parseFloat(String(m.netIncome || "0")), 0);
+
+      const categoryTotals: Record<string, number> = {};
+      for (const tx of yearTransactions) {
+        const cat = tx.manualCategory || tx.aiCategory || tx.originalCategory || "Uncategorized";
+        const amt = Math.abs(parseFloat(String(tx.amount || "0")));
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+      }
+
+      const topCategories = Object.entries(categoryTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([name, amount]) => ({ name, amount }));
+
+      const monthlyBreakdown = yearSummaries.map(s => ({
+        month: s.month,
+        year: s.year,
+        income: parseFloat(String(s.totalIncome || "0")),
+        expenses: parseFloat(String(s.totalExpenses || "0")),
+        net: parseFloat(String(s.netIncome || "0")),
+      })).sort((a, b) => a.month - b.month);
+
+      res.json({
+        hasBookkeeping: true,
+        subscriptionStatus: sub.status,
+        taxYear,
+        totalIncome,
+        totalExpenses,
+        netIncome,
+        transactionCount: yearTransactions.length,
+        monthsCovered: yearSummaries.length,
+        topCategories,
+        monthlyBreakdown,
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

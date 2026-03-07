@@ -62,7 +62,17 @@ I prefer iterative development, so please provide updates frequently. I value cl
 ### API Route Structure (Bookkeeping)
 - Admin: `/api/admin/bookkeeping/*` — full CRUD for subscriptions, transactions, categories, summaries, preparer assignments
 - Client Portal: `/api/portal/bookkeeping/*` — read own subscription/transactions/summaries, upload statements, upload receipt photos with AI analysis, self-activate subscription (`POST /api/portal/bookkeeping/subscribe`)
-- Preparer: `/api/preparer/*` — read assigned clients, transactions, summaries; edit transaction categories
+- Preparer: `/api/preparer/*` — read assigned clients, transactions, summaries; edit transaction categories; view/upload tax documents; chat with clients; view bookkeeping yearly summary
+
+### Preparer Portal Features
+- **Dashboard**: Shows assigned client cards with subscription status
+- **Client Detail Page** (tabbed interface):
+  - **Transactions Tab**: Monthly transaction review with category editing and reviewed checkbox
+  - **Tax Documents Tab**: View and upload tax documents (W-2, 1099s, IFTA returns, mileage logs, etc.) for assigned clients
+  - **Bookkeeping Summary Tab**: Yearly financial overview with income/expenses/net, monthly breakdown table, and top category bars
+  - **Messages Tab**: Direct messaging with clients (real-time polling every 5 seconds)
+- Preparer credentials: testpreparer1/prep123
+- All routes validate preparer-client assignment before returning data
 
 ## External Dependencies
 - **OpenAI**: Integrated via Replit AI Integrations for the AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization for bookkeeping (uses `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY`).
