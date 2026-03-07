@@ -343,7 +343,20 @@ export const clientNotes = pgTable("client_notes", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const knowledgeArticles = pgTable("knowledge_articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category").notNull(),
+  pinned: boolean("pinned").notNull().default(false),
+  createdBy: varchar("created_by"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertKnowledgeArticleSchema = createInsertSchema(knowledgeArticles).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
@@ -408,3 +421,5 @@ export type ClientRecurringSchedule = typeof clientRecurringSchedules.$inferSele
 export type InsertClientRecurringSchedule = z.infer<typeof insertClientRecurringScheduleSchema>;
 export type ClientNote = typeof clientNotes.$inferSelect;
 export type InsertClientNote = z.infer<typeof insertClientNoteSchema>;
+export type KnowledgeArticle = typeof knowledgeArticles.$inferSelect;
+export type InsertKnowledgeArticle = z.infer<typeof insertKnowledgeArticleSchema>;

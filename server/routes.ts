@@ -11,7 +11,7 @@ import {
   insertBookkeepingSubscriptionSchema, insertBankTransactionSchema,
   insertTransactionCategorySchema, insertPreparerAssignmentSchema,
   insertTicketRequiredDocumentSchema, insertRecurringTemplateSchema, insertClientRecurringScheduleSchema,
-  insertStaffMessageSchema,
+  insertStaffMessageSchema, insertKnowledgeArticleSchema,
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents
@@ -564,6 +564,91 @@ Contact name: ${client.contactName}`
     } catch (error: any) {
       console.error("[Dictate] Error:", error.message);
       res.status(500).json({ message: "Failed to process dictation. Please try again." });
+    }
+  });
+
+  // ===== KNOWLEDGE BASE ROUTES (admin) =====
+  app.get("/api/admin/knowledge-base", isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const articles = await storage.getKnowledgeArticles();
+      res.json(articles);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch knowledge articles" });
+    }
+  });
+
+  app.get("/api/admin/knowledge-base/search", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q || !q.trim()) return res.status(400).json({ message: "Search query is required" });
+      const articles = await storage.searchKnowledgeArticles(q.trim());
+      res.json(articles);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to search knowledge articles" });
+    }
+  });
+
+  app.get("/api/admin/knowledge-base/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const article = await storage.getKnowledgeArticle(param(req, "id"));
+      if (!article) return res.status(404).json({ message: "Article not found" });
+      res.json(article);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
+  app.post("/api/admin/knowledge-base", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      if (dbUser.role !== "admin" && dbUser.role !== "owner") {
+        return res.status(403).json({ message: "Only admins or owners can create articles" });
+      }
+      const parsed = insertKnowledgeArticleSchema.safeParse({
+        ...req.body,
+        createdBy: dbUser.id,
+        createdByName: dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username,
+      });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const article = await storage.createKnowledgeArticle(parsed.data);
+      await audit(req, "created", "knowledge_article", article.id, `Created knowledge article "${article.title}" [${article.category}]`);
+      res.status(201).json(article);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create article" });
+    }
+  });
+
+  app.patch("/api/admin/knowledge-base/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      if (dbUser.role !== "admin" && dbUser.role !== "owner") {
+        return res.status(403).json({ message: "Only admins or owners can update articles" });
+      }
+      const existing = await storage.getKnowledgeArticle(param(req, "id"));
+      if (!existing) return res.status(404).json({ message: "Article not found" });
+      const { title, content, category, pinned } = req.body;
+      const updateData: Record<string, any> = {};
+      if (title !== undefined) updateData.title = title;
+      if (content !== undefined) updateData.content = content;
+      if (category !== undefined) updateData.category = category;
+      if (pinned !== undefined) updateData.pinned = pinned;
+      const updated = await storage.updateKnowledgeArticle(param(req, "id"), updateData);
+      await audit(req, "updated", "knowledge_article", updated!.id, `Updated knowledge article "${updated!.title}"`);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update article" });
+    }
+  });
+
+  app.delete("/api/admin/knowledge-base/:id", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const existing = await storage.getKnowledgeArticle(param(req, "id"));
+      if (!existing) return res.status(404).json({ message: "Article not found" });
+      await storage.deleteKnowledgeArticle(param(req, "id"));
+      await audit(req, "deleted", "knowledge_article", param(req, "id"), `Deleted knowledge article "${existing.title}"`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete article" });
     }
   });
 
@@ -1590,12 +1675,13 @@ Contact name: ${client.contactName}`
       const { message, history = [] } = req.body;
       if (!message) return res.status(400).json({ message: "Message is required" });
 
-      const [allClients, allTickets, allInvoices, allDocs, allServiceItemsList] = await Promise.all([
+      const [allClients, allTickets, allInvoices, allDocs, allServiceItemsList, knowledgeArticlesList] = await Promise.all([
         storage.getClients(),
         storage.getTickets(),
         storage.getInvoices(),
         storage.getDocuments(),
         storage.getServiceItems(),
+        storage.getKnowledgeArticles(),
       ]);
 
       const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
@@ -1625,6 +1711,12 @@ ${allDocs.slice(0, 30).map(d => `- ${d.name} (${d.type}, ${d.status}) — Client
 
 SERVICE CATALOG (${allServiceItemsList.length} items):
 ${allServiceItemsList.map(s => `- ${s.name} — $${s.defaultPrice} (${s.category})`).join('\n')}
+
+=== INTERNAL KNOWLEDGE BASE ===
+Before general industry knowledge, check if we have internal articles that address the question.
+${knowledgeArticlesList.map(a => `### ${a.title} [Category: ${a.category}]\n${a.content}`).join('\n\n')}
+
+When answering questions about company processes, ALWAYS check the INTERNAL KNOWLEDGE BASE section first. If a relevant article exists, cite it by title and suggest the employee read it at the Knowledge Base page.
 
 === TRUCKING INDUSTRY KNOWLEDGE ===
 

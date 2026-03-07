@@ -43,6 +43,7 @@ import AdminTaxPrep from "@/pages/admin-tax-prep";
 import AdminEmployeePerformance from "@/pages/admin-employee-performance";
 import AdminBookkeeping from "@/pages/admin-bookkeeping";
 import AdminRecurring from "@/pages/admin-recurring";
+import AdminKnowledgeBase from "@/pages/admin-knowledge-base";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 import PortalTaxDocuments from "@/pages/portal/portal-tax-documents";
 import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
@@ -271,6 +272,9 @@ function App() {
           </Route>
           <Route path="/admin/recurring">
             <AdminLayout><AdminRecurring /></AdminLayout>
+          </Route>
+          <Route path="/admin/knowledge-base">
+            <AdminLayout><AdminKnowledgeBase /></AdminLayout>
           </Route>
 
           <Route path="/portal">

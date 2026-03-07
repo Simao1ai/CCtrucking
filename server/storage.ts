@@ -4,7 +4,7 @@ import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
-  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes,
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes, knowledgeArticles,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -30,6 +30,7 @@ import {
   type RecurringTemplate, type InsertRecurringTemplate,
   type ClientRecurringSchedule, type InsertClientRecurringSchedule,
   type ClientNote, type InsertClientNote,
+  type KnowledgeArticle, type InsertKnowledgeArticle,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -178,6 +179,13 @@ export interface IStorage {
   createClientNote(data: InsertClientNote): Promise<ClientNote>;
   updateClientNote(id: string, content: string): Promise<ClientNote | undefined>;
   deleteClientNote(id: string): Promise<void>;
+
+  getKnowledgeArticles(): Promise<KnowledgeArticle[]>;
+  getKnowledgeArticle(id: string): Promise<KnowledgeArticle | undefined>;
+  createKnowledgeArticle(data: InsertKnowledgeArticle): Promise<KnowledgeArticle>;
+  updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined>;
+  deleteKnowledgeArticle(id: string): Promise<void>;
+  searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -756,6 +764,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClientNote(id: string): Promise<void> {
     await db.delete(clientNotes).where(eq(clientNotes.id, id));
+  }
+
+  async getKnowledgeArticles(): Promise<KnowledgeArticle[]> {
+    return db.select().from(knowledgeArticles).orderBy(desc(knowledgeArticles.pinned), desc(knowledgeArticles.updatedAt));
+  }
+
+  async getKnowledgeArticle(id: string): Promise<KnowledgeArticle | undefined> {
+    const [article] = await db.select().from(knowledgeArticles).where(eq(knowledgeArticles.id, id));
+    return article;
+  }
+
+  async createKnowledgeArticle(data: InsertKnowledgeArticle): Promise<KnowledgeArticle> {
+    const [article] = await db.insert(knowledgeArticles).values(data).returning();
+    return article;
+  }
+
+  async updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined> {
+    const [article] = await db.update(knowledgeArticles).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeArticles.id, id)).returning();
+    return article;
+  }
+
+  async deleteKnowledgeArticle(id: string): Promise<void> {
+    await db.delete(knowledgeArticles).where(eq(knowledgeArticles.id, id));
+  }
+
+  async searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]> {
+    const lowerQuery = `%${query.toLowerCase()}%`;
+    return db.select().from(knowledgeArticles).where(
+      sql`LOWER(${knowledgeArticles.title}) LIKE ${lowerQuery} OR LOWER(${knowledgeArticles.content}) LIKE ${lowerQuery} OR LOWER(${knowledgeArticles.category}) LIKE ${lowerQuery}`
+    ).orderBy(desc(knowledgeArticles.pinned), desc(knowledgeArticles.updatedAt));
   }
 }
 

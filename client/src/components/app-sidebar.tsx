@@ -88,6 +88,12 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Resources",
+    items: [
+      { title: "Knowledge Base", url: "/admin/knowledge-base", icon: BookOpen },
+    ],
+  },
+  {
     label: "Admin",
     items: [
       { title: "Analytics", url: "/admin/analytics", icon: BarChart3, ownerOnly: true },
