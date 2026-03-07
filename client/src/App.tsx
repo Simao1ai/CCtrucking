@@ -39,6 +39,7 @@ import AdminServiceItems from "@/pages/admin-service-items";
 import AdminAnalytics from "@/pages/admin-analytics";
 import AdminAiChat from "@/pages/admin-ai-chat";
 import { AiChatWidget } from "@/components/ai-chat-widget";
+import { PortalAiChatWidget } from "@/components/portal-ai-chat-widget";
 import AdminTaxPrep from "@/pages/admin-tax-prep";
 import AdminEmployeePerformance from "@/pages/admin-employee-performance";
 import AdminBookkeeping from "@/pages/admin-bookkeeping";
@@ -122,6 +123,7 @@ function PortalLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <PortalAiChatWidget />
       </div>
     </SidebarProvider>
   );

@@ -1834,6 +1834,120 @@ When staff ask you to research regulations, find forms, or look up requirements:
     }
   });
 
+  // ===== CLIENT PORTAL AI CHAT =====
+  app.post("/api/portal/ai-chat", isAuthenticated, isClient, async (req: any, res) => {
+    try {
+      const { message, history = [] } = req.body;
+      if (!message) return res.status(400).json({ message: "Message is required" });
+
+      const clientId = req.clientId;
+      const [client, clientTickets, clientInvoices, clientDocs, knowledgeArticlesList, allServiceItemsList] = await Promise.all([
+        storage.getClient(clientId),
+        storage.getTicketsByClient(clientId),
+        storage.getInvoicesByClient(clientId),
+        storage.getDocumentsByClient(clientId),
+        storage.getKnowledgeArticles(),
+        storage.getServiceItems(),
+      ]);
+
+      const totalPaid = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
+      const totalDue = clientInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
+
+      const systemPrompt = `You are a helpful AI assistant for CC Trucking Services. You are speaking directly with a client — ${client?.companyName || 'a valued client'}.
+
+Your role is to help this client understand their services, compliance requirements, and how CC Trucking Services works. Be friendly, professional, and clear. Avoid technical jargon when possible.
+
+=== CLIENT INFORMATION ===
+Company: ${client?.companyName || 'N/A'}
+DOT Number: ${client?.dotNumber || 'Not on file'}
+MC Number: ${client?.mcNumber || 'Not on file'}
+EIN: ${client?.ein || 'Not on file'}
+
+=== YOUR ACTIVE SERVICES ===
+${clientTickets.length > 0 ? clientTickets.map(t => `- **${t.title}** (${t.serviceType}) — Status: ${t.status}${t.dueDate ? `, Due: ${new Date(t.dueDate).toLocaleDateString()}` : ''}`).join('\n') : 'No active services at this time.'}
+
+=== YOUR INVOICES ===
+- Total Paid: $${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Amount Due: $${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+${clientInvoices.slice(0, 10).map(i => `- Invoice ${i.invoiceNumber} — $${i.amount} (${i.status})`).join('\n')}
+
+=== YOUR DOCUMENTS ===
+${clientDocs.length > 0 ? clientDocs.slice(0, 15).map(d => `- ${d.name} (${d.type}) — ${d.status}`).join('\n') : 'No documents on file.'}
+
+=== AVAILABLE SERVICES ===
+CC Trucking Services offers the following:
+${allServiceItemsList.map(s => `- **${s.name}** — ${s.description || s.category} ($${s.defaultPrice})`).join('\n')}
+
+=== COMPANY KNOWLEDGE BASE ===
+Use these articles to explain our processes and procedures to the client:
+${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map(a => `### ${a.title} [Category: ${a.category}]\n${a.content}`).join('\n\n')}
+
+=== HOW TO HELP THE CLIENT ===
+1. **Service Questions**: Explain what each service type means, what's involved, and the typical timeline. Reference knowledge base articles when available.
+2. **Status Updates**: Help them understand what their ticket/invoice/document statuses mean:
+   - Tickets: open (just created), in_progress (being worked on), completed (done), blocked (waiting for documents from you)
+   - Invoices: draft (not yet sent), sent (payment due), paid (all set), overdue (past due — please pay)
+   - Documents: pending (waiting for upload), received (we have it), approved (verified)
+3. **Compliance Guidance**: Explain IFTA, DOT, UCR, MCS-150, and other compliance requirements in simple terms.
+4. **Portal Navigation**: Help them find things in their portal:
+   - [My Services](/portal/services) — view active services
+   - [My Invoices](/portal/invoices) — view and pay invoices
+   - [My Documents](/portal/documents) — upload and view documents
+   - [Messages](/portal/chat) — contact our team directly
+   - [Tax Documents](/portal/tax-documents) — upload tax docs and review returns
+   - [Bookkeeping](/portal/bookkeeping) — view financial summaries
+5. **Escalation**: If the client needs immediate help or has a complex issue, suggest they use the Messages page to contact the CC Trucking team directly.
+
+=== FORMATTING RULES ===
+- Use **bold** for important values
+- Format currency as **$X,XXX.XX**
+- Use bullet points for lists
+- Include portal links using markdown: [Link Text](/portal/path)
+- Keep responses friendly, concise, and easy to understand
+- Never share other clients' data or internal business metrics`;
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const messages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...history.map((h: any) => ({ role: h.role, content: h.content })),
+        { role: "user", content: message },
+      ];
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const stream = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages,
+        stream: true,
+        max_completion_tokens: 4096,
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (error) {
+      console.error("Portal AI chat error:", error);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: "Failed to process request" })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ message: "AI chat failed" });
+      }
+    }
+  });
+
   // ===== PORTAL LINE ITEMS ROUTES =====
   app.get("/api/portal/invoices/:id/line-items", isAuthenticated, isClient, async (req: any, res) => {
     const invoice = await storage.getInvoice(param(req, "id"));

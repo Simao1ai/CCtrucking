@@ -19,13 +19,13 @@ interface ChatMessage {
 }
 
 const SUGGESTED_QUESTIONS = [
+  "What's our onboarding process for new clients?",
+  "How do we file IFTA for a client?",
   "Show overdue invoices",
-  "List active clients",
-  "Open tickets summary",
-  "IFTA filing deadlines",
-  "MCS-150 update requirements",
-  "Form 2290 HVUT guide",
   "DOT compliance checklist",
+  "Open tickets summary",
+  "What are our bookkeeping procedures?",
+  "MCS-150 update requirements",
 ];
 
 let globalMessages: ChatMessage[] = [];
@@ -452,7 +452,7 @@ export function AiChatWidget() {
                 </div>
                 <div className="text-center">
                   <p className="font-medium text-sm" data-testid="text-ai-empty-state">How can I help you today?</p>
-                  <p className="text-xs text-muted-foreground mt-1">Ask about clients, invoices, or research trucking regulations</p>
+                  <p className="text-xs text-muted-foreground mt-1">Ask about company processes, client operations, or trucking regulations</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 justify-center max-w-[320px]">
                   {SUGGESTED_QUESTIONS.map((q) => (
