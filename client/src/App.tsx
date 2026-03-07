@@ -44,6 +44,7 @@ import AdminEmployeePerformance from "@/pages/admin-employee-performance";
 import AdminBookkeeping from "@/pages/admin-bookkeeping";
 import AdminRecurring from "@/pages/admin-recurring";
 import PortalSignatures from "@/pages/portal/portal-signatures";
+import PortalTaxDocuments from "@/pages/portal/portal-tax-documents";
 import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
 import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
 import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
@@ -291,6 +292,9 @@ function App() {
           </Route>
           <Route path="/portal/bookkeeping">
             <PortalLayout><PortalBookkeeping /></PortalLayout>
+          </Route>
+          <Route path="/portal/tax-documents">
+            <PortalLayout><PortalTaxDocuments /></PortalLayout>
           </Route>
 
           <Route path="/preparer">

@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   ArrowLeft, DollarSign, TrendingUp, TrendingDown, FileText,
   Upload, MessageCircle, Send, BarChart3, Receipt, Calendar,
-  Building2, User
+  Building2, User, CheckCircle2, XCircle, Clock, Eye, SendHorizonal
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -184,6 +184,29 @@ function TransactionsTab({ clientId }: { clientId: string }) {
   );
 }
 
+function taxDocStatusBadge(status: string) {
+  switch (status) {
+    case "ready_for_review":
+      return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-xs"><Eye className="w-3 h-3 mr-1" />Sent to Client</Badge>;
+    case "approved":
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800 text-xs"><CheckCircle2 className="w-3 h-3 mr-1" />Approved</Badge>;
+    case "rejected":
+      return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800 text-xs"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
+    case "analyzed":
+      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-xs"><CheckCircle2 className="w-3 h-3 mr-1" />Analyzed</Badge>;
+    case "pending":
+    default:
+      return <Badge variant="secondary" className="text-xs"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+  }
+}
+
+function uploaderBadge(role?: string | null) {
+  if (role === "client") return <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"><User className="w-3 h-3 mr-1" />Client</Badge>;
+  if (role === "preparer") return <Badge variant="outline" className="text-xs bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"><User className="w-3 h-3 mr-1" />Preparer</Badge>;
+  if (role === "admin" || role === "owner") return <Badge variant="outline" className="text-xs"><User className="w-3 h-3 mr-1" />Staff</Badge>;
+  return <Badge variant="outline" className="text-xs"><User className="w-3 h-3 mr-1" />—</Badge>;
+}
+
 function TaxDocumentsTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -227,6 +250,18 @@ function TaxDocumentsTab({ clientId }: { clientId: string }) {
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
     onError: (e: Error) => toast({ title: "Upload failed", description: e.message, variant: "destructive" }),
+  });
+
+  const sendForReviewMutation = useMutation({
+    mutationFn: async (docId: string) => {
+      const res = await apiRequest("PATCH", `/api/preparer/clients/${clientId}/tax-documents/${docId}/send-for-review`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preparer/clients", clientId, "tax-documents"] });
+      toast({ title: "Sent to client for review" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to send", description: e.message, variant: "destructive" }),
   });
 
   const handleUpload = () => {
@@ -305,9 +340,10 @@ function TaxDocumentsTab({ clientId }: { clientId: string }) {
                     <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Document</th>
                     <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Type</th>
                     <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Tax Year</th>
-                    <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Payer</th>
+                    <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Uploaded By</th>
                     <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Status</th>
-                    <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Uploaded</th>
+                    <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Date</th>
+                    <th className="py-2.5 px-3 font-medium text-muted-foreground text-xs">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,14 +359,32 @@ function TaxDocumentsTab({ clientId }: { clientId: string }) {
                         <Badge variant="outline" className="text-xs">{doc.documentType}</Badge>
                       </td>
                       <td className="py-2.5 px-3">{doc.taxYear}</td>
-                      <td className="py-2.5 px-3 text-muted-foreground">{doc.payerName || "—"}</td>
-                      <td className="py-2.5 px-3">
-                        <Badge variant={doc.status === "analyzed" ? "default" : "secondary"} className="text-xs">
-                          {doc.status}
-                        </Badge>
-                      </td>
+                      <td className="py-2.5 px-3">{uploaderBadge(doc.uploadedByRole)}</td>
+                      <td className="py-2.5 px-3">{taxDocStatusBadge(doc.status)}</td>
                       <td className="py-2.5 px-3 text-muted-foreground text-xs">
                         {doc.createdAt ? formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true }) : "—"}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
+                          {(doc.status === "pending" || doc.status === "analyzed" || doc.status === "rejected") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => sendForReviewMutation.mutate(doc.id)}
+                              disabled={sendForReviewMutation.isPending}
+                              data-testid={`button-send-review-${doc.id}`}
+                            >
+                              <SendHorizonal className="w-3 h-3 mr-1" />
+                              Send to Client
+                            </Button>
+                          )}
+                          {doc.status === "rejected" && doc.rejectionFeedback && (
+                            <span className="text-xs text-red-600 dark:text-red-400 ml-1 max-w-[150px] truncate" title={doc.rejectionFeedback} data-testid={`text-feedback-${doc.id}`}>
+                              {doc.rejectionFeedback}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

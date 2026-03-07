@@ -78,3 +78,10 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **OpenAI**: Integrated via Replit AI Integrations for the AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization for bookkeeping (uses `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY`).
 - **Google Cloud (googleapis)**: For Google Sheets integration, requiring a Google Service Account and `GOOGLE_SERVICE_ACCOUNT_KEY` secret for accessing and pulling data from spreadsheets.
 - **Stripe**: Scaffolded for subscription billing ($50/month bookkeeping). Not yet connected — will use Replit Stripe integration when ready.
+
+### Tax Document Approval Workflow
+- **Statuses**: `pending`, `analyzed`, `review`, `exported`, `ready_for_review`, `approved`, `rejected`
+- **Flow**: Preparer uploads finished tax return → marks as `ready_for_review` (sends notification to client) → client reviews and approves or rejects with feedback → preparer sees status update and can re-send after corrections
+- **Client Portal**: `portal-tax-documents.tsx` — clients can upload their own tax docs (W-2s, 1099s, etc.) and review/approve/reject prepared tax returns
+- **Tracking fields**: `uploadedBy`, `uploadedByRole` (client/preparer/admin/owner), `rejectionFeedback`, `approvedAt`
+- **Download routes**: Admin uses `/api/admin/tax-documents/:id/download`, clients use `/api/portal/tax-documents/:id/download`

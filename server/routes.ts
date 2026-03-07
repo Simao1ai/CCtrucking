@@ -1791,6 +1791,7 @@ FORMATTING RULES:
         return res.status(400).json({ message: `File extension ${ext} is not allowed` });
       }
 
+      const dbUser = (req as any).dbUser;
       const doc = await storage.createTaxDocument({
         clientId,
         taxYear: parsedYear,
@@ -1802,6 +1803,8 @@ FORMATTING RULES:
         filePath: `uploads/tax-documents/${req.file.filename}`,
         fileSize: req.file.size,
         status: "pending",
+        uploadedBy: dbUser.id,
+        uploadedByRole: dbUser.role,
       });
 
       await audit(req, "created", "tax_document", doc.id, `Uploaded tax document — ${req.file.originalname} (${doc.documentType}) for tax year ${taxYear}`);
@@ -1840,7 +1843,7 @@ FORMATTING RULES:
     if (updateData.ssnLastFour && updateData.ssnLastFour.length > 4) {
       updateData.ssnLastFour = updateData.ssnLastFour.replace(/\D/g, "").slice(-4);
     }
-    if (updateData.status && !["pending", "analyzed", "review", "exported"].includes(updateData.status)) {
+    if (updateData.status && !["pending", "analyzed", "review", "exported", "ready_for_review", "approved", "rejected"].includes(updateData.status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
     const doc = await storage.updateTaxDocument(param(req, "id"), updateData);
@@ -2616,6 +2619,135 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     res.json(summaries);
   });
 
+  // ===== CLIENT PORTAL: TAX DOCUMENTS =====
+  app.get("/api/portal/tax-documents", isAuthenticated, isClient, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const docs = await storage.getTaxDocumentsByClient(clientId);
+      res.json(docs);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/portal/tax-documents/upload", isAuthenticated, isClient, (req, res, next) => {
+    taxDocUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ message: "File too large. Maximum size is 10 MB." });
+          }
+          return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        return res.status(400).json({ message: err.message || "Invalid file" });
+      }
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const dbUser = (req as any).dbUser;
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const { taxYear, documentType, payerName } = req.body;
+      if (!documentType) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "documentType is required" });
+      }
+      const parsedYear = parseInt(taxYear);
+      if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "taxYear must be a valid year between 2000 and 2099" });
+      }
+
+      const doc = await storage.createTaxDocument({
+        clientId,
+        taxYear: parsedYear,
+        documentType,
+        payerName: payerName || null,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
+        filePath: `uploads/tax-documents/${req.file.filename}`,
+        fileSize: req.file.size,
+        status: "pending",
+        uploadedBy: dbUser.id,
+        uploadedByRole: "client",
+      });
+
+      await audit(req, "created", "tax_document", doc.id, `Client uploaded tax document — ${req.file.originalname}`);
+      res.status(201).json(doc);
+    } catch (error: any) {
+      if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
+      res.status(500).json({ message: error.message || "Upload failed" });
+    }
+  });
+
+  app.get("/api/portal/tax-documents/:id/download", isAuthenticated, isClient, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const doc = await storage.getTaxDocument(param(req, "id"));
+      if (!doc || doc.clientId !== clientId || !doc.filePath) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      const sanitizedPath = doc.filePath.replace(/^\/+/, "");
+      const fullPath = path.resolve(process.cwd(), sanitizedPath);
+      if (!fullPath.startsWith(uploadDir) || !fs.existsSync(fullPath)) {
+        return res.status(404).json({ message: "File not found on disk" });
+      }
+      res.download(fullPath, doc.fileName || "document");
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/portal/tax-documents/:id/approve", isAuthenticated, isClient, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const doc = await storage.getTaxDocument(param(req, "id"));
+      if (!doc || doc.clientId !== clientId) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      if (doc.status !== "ready_for_review") {
+        return res.status(400).json({ message: "Document is not pending review" });
+      }
+      const updated = await storage.updateTaxDocument(doc.id, {
+        status: "approved",
+        approvedAt: new Date(),
+      });
+      await notifyAllAdmins("Tax Return Approved", `Client approved tax document: ${doc.fileName || doc.documentType}`, "document");
+      await audit(req, "approved", "tax_document", doc.id, `Client approved tax return: ${doc.fileName}`);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/portal/tax-documents/:id/reject", isAuthenticated, isClient, async (req, res) => {
+    try {
+      const clientId = (req as any).clientId;
+      const doc = await storage.getTaxDocument(param(req, "id"));
+      if (!doc || doc.clientId !== clientId) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      if (doc.status !== "ready_for_review") {
+        return res.status(400).json({ message: "Document is not pending review" });
+      }
+      const { feedback } = req.body;
+      if (!feedback || !feedback.trim()) {
+        return res.status(400).json({ message: "Feedback is required when rejecting a document" });
+      }
+      const updated = await storage.updateTaxDocument(doc.id, {
+        status: "rejected",
+        rejectionFeedback: feedback.trim(),
+      });
+      await notifyAllAdmins("Tax Return Rejected", `Client rejected tax document: ${doc.fileName || doc.documentType}. Feedback: ${feedback || "No feedback provided"}`, "document");
+      await audit(req, "rejected", "tax_document", doc.id, `Client rejected tax return: ${doc.fileName}`);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ===== PREPARER PORTAL ROUTES =====
   app.get("/api/preparer/clients", isAuthenticated, isPreparer, async (req, res) => {
     const dbUser = (req as any).dbUser;
@@ -2742,6 +2874,8 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         filePath: `uploads/tax-documents/${req.file.filename}`,
         fileSize: req.file.size,
         status: "pending",
+        uploadedBy: dbUser.id,
+        uploadedByRole: "preparer",
       });
 
       await audit(req, "created", "tax_document", doc.id, `Preparer uploaded tax document — ${req.file.originalname} (${doc.documentType}) for tax year ${taxYear}`);
@@ -2749,6 +2883,31 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     } catch (error: any) {
       if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
       res.status(500).json({ message: error.message || "Upload failed" });
+    }
+  });
+
+  app.patch("/api/preparer/clients/:id/tax-documents/:docId/send-for-review", isAuthenticated, isPreparer, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      const clientId = param(req, "id");
+      const docId = req.params.docId;
+      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      if (!assignments.some(a => a.clientId === clientId)) {
+        return res.status(403).json({ message: "Not assigned to this client" });
+      }
+      const doc = await storage.getTaxDocument(docId);
+      if (!doc || doc.clientId !== clientId) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      if (!["pending", "analyzed", "rejected"].includes(doc.status)) {
+        return res.status(400).json({ message: `Cannot send for review — document is currently "${doc.status}"` });
+      }
+      const updated = await storage.updateTaxDocument(docId, { status: "ready_for_review" });
+      await notifyClientUsers(clientId, "Tax Return Ready", "Your tax return is ready for review", "document", "/portal/tax-documents");
+      await audit(req, "updated", "tax_document", docId, `Sent tax document for client review`);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
