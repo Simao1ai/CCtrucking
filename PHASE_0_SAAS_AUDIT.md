@@ -91,6 +91,7 @@ Each external integration must be explicitly defined in terms of credential owne
 | **Google Sheets** | **Per-tenant.** Each tenant provides their own Google service account credentials or connects via OAuth. | Pro+ only. | If credentials missing or invalid: Google Sheets integration page shows "Not connected" with setup instructions. No other features affected. | Tenant's Google credentials deleted. No platform-side access to tenant sheets after disconnection. |
 | **Web Push (VAPID)** | **Platform-level.** Single VAPID key pair for the platform. Push notification content is tenant-branded. | All plans. | If push delivery fails: in-app notifications are the fallback. Push failures logged but do not block operations. | Push subscriptions for tenant's users deleted. |
 | **File Storage (Uploads)** | **Platform-level infrastructure.** Files partitioned by tenant directory (`uploads/{tenantId}/...`). | All plans. Storage quotas may vary by plan. | If storage quota exceeded: upload fails with clear message. Existing files remain accessible. | All files in `uploads/{tenantId}/` deleted after retention period. Tenant notified before deletion with export window. |
+| **Programmatic API (API Keys)** | **Per-tenant.** Each tenant generates their own API keys. Platform owner has platform-level keys. | Basic: No access. Pro: 3 keys, 100 req/min. Enterprise: Unlimited keys, 500 req/min. | If key is disabled/expired: `401 Unauthorized`. If rate limit exceeded: `429 Too Many Requests` with retry-after header. | All tenant API keys deleted. Active webhook subscriptions removed. External systems receive no further events. |
 
 ---
 
@@ -1136,15 +1137,121 @@ These two phases are combined because tenant structure and access control are ti
 - **Effort: 3-4 weeks**
 - **Risk: Medium** — launch readiness is critical
 
-### Total Estimated Timeline: 22-32 weeks (5-8 months)
+### Phase 7: Programmatic API & AI Agent Access
+- Build API key management system (`api_keys` table, generation UI, key hashing)
+- Implement API key authentication middleware (`Authorization: Bearer <key>`)
+- Create versioned external API (`/api/v1/...`) with stable, documented endpoints
+- Scoped permissions per key (read-only, full access, or per-module)
+- Per-key rate limiting and usage tracking
+- Per-key audit logging (distinguishes API/agent actions from human actions)
+- Tenant-scoped keys (each tenant generates keys for their own account)
+- Platform-level keys for platform owner automation
+- Webhook support (notify external systems of events: new ticket, invoice paid, document uploaded)
+- API documentation (OpenAPI/Swagger spec) for AI agent and third-party integration
+- **Effort: 3-4 weeks**
+- **Risk: Low-Medium** — additive feature, does not modify existing functionality
+
+### Total Estimated Timeline: 25-36 weeks (6-9 months)
 
 This estimate assumes the architecture is as clean in practice as it appears in this audit. The scope of this conversion — 30 tables, 90+ routes, 6 AI integrations, 3 portals, 2 schedulers, email/PDF/push systems — means that hidden dependencies, migration edge cases, and testing depth will add time that is difficult to predict upfront. Plan for the upper range and be pleasantly surprised if it comes in lower.
 
 ---
 
-## 22. Ownership, Data Rights & Commercial Rules
+## 22. Programmatic API & AI Agent Access Architecture
+
+This section defines the architecture for allowing external AI agents, automation tools, and third-party integrations to connect to the platform programmatically.
+
+### Overview
+
+Rather than giving an AI agent a human login (which works but is fragile and not scalable), the platform will provide a proper API key system that enables secure, scoped, auditable programmatic access. This becomes a feature that can also be offered to tenants — allowing them to connect their own tools and automations.
+
+### `api_keys` Table
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | varchar (UUID) | Primary key |
+| `tenantId` | varchar, FK | Which tenant this key belongs to (NULL for platform-level keys) |
+| `name` | text, NOT NULL | Human-readable label (e.g., "AI Employee Agent", "Zapier Integration") |
+| `keyHash` | text, NOT NULL | SHA-256 hash of the API key. The raw key is shown once at creation and never stored. |
+| `keyPrefix` | varchar(8) | First 8 characters of the key, for identification in logs/UI (e.g., `sk_live_Ab`) |
+| `permissions` | jsonb, NOT NULL | Scoped permissions: `{"read": ["clients", "tickets", "invoices"], "write": ["tickets", "notes"], "modules": ["bookkeeping"]}` |
+| `rateLimit` | integer, default 100 | Max requests per minute |
+| `createdBy` | varchar, FK | User who created this key |
+| `lastUsedAt` | timestamp | Last time this key was used (updated on each request) |
+| `expiresAt` | timestamp | Optional expiration date. NULL = never expires. |
+| `isActive` | boolean, default true | Can be disabled without deleting |
+| `createdAt` | timestamp | |
+
+### Authentication Flow
+
+1. External client sends request with `Authorization: Bearer sk_live_...` header
+2. Platform hashes the key, looks up in `api_keys` table
+3. Validates: key exists, `isActive` is true, not expired, tenant is active
+4. Sets `req.tenantId` from the key's tenant, `req.apiKeyId` for audit logging
+5. Checks requested route against key's `permissions`
+6. Rate limit checked against key's `rateLimit`
+7. Request processed, action logged with `source: "api_key"` in audit trail
+
+### Versioned API Endpoints
+
+External API uses a versioned path prefix to ensure stability:
+
+| Path Pattern | Purpose |
+|-------------|---------|
+| `/api/v1/clients` | CRUD operations on clients |
+| `/api/v1/tickets` | CRUD operations on service tickets |
+| `/api/v1/invoices` | CRUD operations on invoices |
+| `/api/v1/documents` | Document metadata and upload |
+| `/api/v1/bookkeeping/transactions` | Transaction CRUD (if module enabled) |
+| `/api/v1/notes/:clientId` | Client notes CRUD |
+| `/api/v1/ai/chat` | Send a message to the AI assistant |
+| `/api/v1/ai/categorize` | Trigger AI transaction categorization |
+| `/api/v1/webhooks` | Manage webhook subscriptions |
+
+These endpoints mirror the internal API but are versioned, rate-limited, and have stable request/response contracts that won't change without a version bump.
+
+### Webhook System
+
+Tenants can register webhook URLs to receive real-time notifications of platform events:
+
+| Event | Payload |
+|-------|---------|
+| `ticket.created` | Ticket ID, client ID, title, service type |
+| `ticket.updated` | Ticket ID, changed fields, new status |
+| `invoice.paid` | Invoice ID, client ID, amount, paid date |
+| `invoice.overdue` | Invoice ID, client ID, amount, days overdue |
+| `document.uploaded` | Document ID, client ID, document type |
+| `client.created` | Client ID, company name |
+| `signature.completed` | Signature request ID, client ID, signed date |
+| `bookkeeping.statement_uploaded` | Client ID, month, year, transaction count |
+
+Webhooks are signed with a per-key secret (HMAC-SHA256) so recipients can verify authenticity.
+
+### AI Agent Use Cases
+
+With this system, an AI agent could:
+- **Automated intake:** Receive new client inquiries via webhook, create client records, assign to pipeline
+- **Ticket triage:** Monitor new tickets, auto-assign based on service type, set priority
+- **Compliance monitoring:** Check upcoming deadlines, create reminder tickets, send notifications
+- **Data entry:** Bulk-create transactions from external data sources
+- **Reporting:** Pull analytics data for external dashboards or reports
+- **Client communication:** Send messages to clients on behalf of staff, post notes after automated analysis
+
+### Plan Tier Access
+
+| Plan | API Access |
+|------|-----------|
+| Basic | No API access |
+| Pro | Up to 3 API keys, 100 req/min per key, read + write on core entities |
+| Enterprise | Unlimited keys, 500 req/min per key, full access including AI endpoints, webhooks |
+
+---
+
+## 23. Ownership, Data Rights & Commercial Rules
 
 These decisions must be made before launch. This is not legal drafting, but identifies the major questions that need answers from a business and legal perspective.
+
+> Note: API keys created by tenants are tenant data and are deleted on offboarding. Platform-level API keys are platform IP.
 
 ### Code & IP Ownership
 
@@ -1276,6 +1383,8 @@ This approach lets you sell immediately while building the foundation for expans
 | **Notarizations** | Notarization tracking and records | Optional |
 | **Employee Performance** | Staff grading, activity tracking, trend charts | Optional |
 | **Advanced Analytics** | SLA tracking, AR aging, revenue breakdown | Included in Pro+ |
+| **Programmatic API** | API key management, versioned REST endpoints, scoped permissions, rate limiting, audit logging | Pro+ (see Section 22) |
+| **Webhooks** | Event notifications to external URLs, HMAC-signed payloads, retry logic | Enterprise |
 
 ## Appendix B: Industry Pack Contents
 
