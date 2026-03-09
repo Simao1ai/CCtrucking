@@ -215,6 +215,12 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  app.get("/api/download/saas-audit", isAuthenticated, isAdmin, async (req: any, res) => {
+    const path = require("path");
+    const filePath = path.resolve("PHASE_0_SAAS_AUDIT.md");
+    res.download(filePath, "PHASE_0_SAAS_AUDIT.md");
+  });
+
   app.get("/api/auth/me", isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
