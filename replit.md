@@ -10,7 +10,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Phase 0 COMPLETE**: Full SaaS audit (PHASE_0_SAAS_AUDIT.md)
 - **Phase 1 COMPLETE**: Centralized branding, tenant context, industry packs, custom fields
 - **Phase 2 COMPLETE**: Multi-tenant architecture (see details below)
-- **Phase 3-7**: Pending (data partitioning, commercial layer, onboarding, launch prep)
+- **Phase 3 COMPLETE**: Platform Operations Layer (see details below)
+- **Phase 4-7**: Pending (data partitioning, commercial layer, onboarding, launch prep)
 
 ## System Architecture
 
@@ -25,6 +26,15 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Tenant Settings UI**: `/admin/tenant-settings` with General, Branding, Modules, Users tabs (owner-only)
 - **Scheduler Isolation**: Invoice reminders and recurring compliance skip suspended/inactive tenants
 - **AI Tenant Scoping**: All AI prompts load company name, industry knowledge, and data scoped to tenant
+
+### Platform Operations Layer (Phase 3)
+- **Super Admin Dashboard**: `/platform` route with PlatformLayout, PlatformSidebar — shows tenant overview, revenue chart, AI usage, health stats
+- **Platform API Routes**: `GET/POST/PATCH /api/platform/tenants`, `GET /api/platform/analytics`, `GET /api/platform/health`, `GET /api/platform/ai-usage`
+- **AI Usage Tracking**: `ai_usage_logs` table tracks all OpenAI calls with tenantId, model, tokens, feature name; logged automatically in all AI routes
+- **AI Quota Enforcement**: `server/middleware/ai-quota.ts` — `checkAiQuota` middleware on all AI routes; plan-based defaults (basic=100k, pro=500k, enterprise=unlimited); `GET /api/tenant/ai-quota-status` endpoint
+- **Support Impersonation**: Platform admins can impersonate any tenant via `POST /api/platform/impersonate/:tenantId`; session preserves original user; impersonation banner shows in admin UI; all actions audit-logged
+- **Platform Navigation**: Platform roles see "Platform Admin" link in admin sidebar; `/platform/*` routes only accessible to `platform_owner`/`platform_admin`
+- **Admin User**: admin/admin123 upgraded to `platform_owner` role (was `owner`)
 
 ### UI/UX Decisions
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter for routing.

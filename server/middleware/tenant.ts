@@ -40,19 +40,43 @@ export function requireTenant(req: Request, _res: Response, next: NextFunction) 
 }
 
 export function isPlatformOwner(req: Request, res: Response, next: NextFunction) {
-  const dbUser = (req as any).dbUser;
-  if (!dbUser || dbUser.role !== "platform_owner") {
-    return res.status(403).json({ message: "Platform owner access required" });
+  const existing = (req as any).dbUser;
+  if (existing) {
+    if (existing.role !== "platform_owner") {
+      return res.status(403).json({ message: "Platform owner access required" });
+    }
+    return next();
   }
-  next();
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
+    if (!dbUser || dbUser.role !== "platform_owner") {
+      return res.status(403).json({ message: "Platform owner access required" });
+    }
+    (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
+    next();
+  }).catch(() => res.status(500).json({ message: "Server error" }));
 }
 
 export function isPlatformAdmin(req: Request, res: Response, next: NextFunction) {
-  const dbUser = (req as any).dbUser;
-  if (!dbUser || !PLATFORM_ROLES.includes(dbUser.role)) {
-    return res.status(403).json({ message: "Platform admin access required" });
+  const existing = (req as any).dbUser;
+  if (existing) {
+    if (!PLATFORM_ROLES.includes(existing.role)) {
+      return res.status(403).json({ message: "Platform admin access required" });
+    }
+    return next();
   }
-  next();
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+  db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
+    if (!dbUser || !PLATFORM_ROLES.includes(dbUser.role)) {
+      return res.status(403).json({ message: "Platform admin access required" });
+    }
+    (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
+    next();
+  }).catch(() => res.status(500).json({ message: "Server error" }));
 }
 
 export function isTenantOwner(req: Request, res: Response, next: NextFunction) {

@@ -1,5 +1,6 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, count } from "drizzle-orm";
 import { db } from "./db";
+import { users } from "@shared/models/auth";
 import {
   clients, serviceTickets, documents, invoices, chatMessages, signatureRequests, notifications,
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
@@ -202,6 +203,9 @@ export interface IStorage {
   setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue>;
   deleteCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<void>;
 
+  getAllTenants(): Promise<Tenant[]>;
+  getTenantWithStats(id: string): Promise<{ tenant: Tenant; branding: TenantBranding | undefined; userCount: number; clientCount: number } | undefined>;
+  createTenant(data: InsertTenant): Promise<Tenant>;
   getTenant(id: string): Promise<Tenant | undefined>;
   updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined>;
   getTenantBrandingByTenantId(tenantId: string): Promise<TenantBranding | undefined>;
@@ -1110,6 +1114,29 @@ export class DatabaseStorage implements IStorage {
     const conditions = [eq(customFieldValues.entityType, entityType), eq(customFieldValues.entityId, entityId)];
     if (tenantId) conditions.push(eq(customFieldValues.tenantId, tenantId));
     await db.delete(customFieldValues).where(and(...conditions));
+  }
+
+  async getAllTenants(): Promise<Tenant[]> {
+    return db.select().from(tenants).orderBy(desc(tenants.createdAt));
+  }
+
+  async getTenantWithStats(id: string): Promise<{ tenant: Tenant; branding: TenantBranding | undefined; userCount: number; clientCount: number } | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    if (!tenant) return undefined;
+    const [branding] = await db.select().from(tenantBranding).where(eq(tenantBranding.tenantId, id));
+    const [userResult] = await db.select({ count: count() }).from(users).where(eq(users.tenantId, id));
+    const [clientResult] = await db.select({ count: count() }).from(clients).where(eq(clients.tenantId, id));
+    return {
+      tenant,
+      branding,
+      userCount: Number(userResult?.count || 0),
+      clientCount: Number(clientResult?.count || 0),
+    };
+  }
+
+  async createTenant(data: InsertTenant): Promise<Tenant> {
+    const [tenant] = await db.insert(tenants).values(data).returning();
+    return tenant;
   }
 
   async getTenant(id: string): Promise<Tenant | undefined> {

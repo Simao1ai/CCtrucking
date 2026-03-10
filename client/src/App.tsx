@@ -8,11 +8,14 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PreparerSidebar } from "@/components/preparer-sidebar";
+import { PlatformSidebar } from "@/components/platform-sidebar";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import PlatformDashboard from "@/pages/platform-dashboard";
 import Home from "@/pages/home";
 import Faqs from "@/pages/faqs";
 import Contact from "@/pages/contact";
@@ -78,6 +81,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={sidebarStyle}>
+      <ImpersonationBanner />
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
@@ -158,6 +162,44 @@ function PreparerLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger data-testid="button-preparer-sidebar-toggle" />
             <div className="flex items-center gap-1">
               <NotificationBell basePath="/preparer" />
+              <ThemeToggle />
+            </div>
+          </header>
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function PlatformLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!user) {
+    window.location.href = "/login";
+    return null;
+  }
+
+  const platformRoles = ["platform_owner", "platform_admin"];
+  if (!platformRoles.includes(user.role)) {
+    window.location.href = "/admin";
+    return null;
+  }
+
+  return (
+    <SidebarProvider style={sidebarStyle}>
+      <div className="flex h-screen w-full">
+        <PlatformSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between gap-2 p-2 border-b">
+            <SidebarTrigger data-testid="button-platform-sidebar-toggle" />
+            <div className="flex items-center gap-1">
               <ThemeToggle />
             </div>
           </header>
@@ -312,6 +354,22 @@ function App() {
           </Route>
           <Route path="/portal/tax-documents">
             <PortalLayout><PortalTaxDocuments /></PortalLayout>
+          </Route>
+
+          <Route path="/platform/tenants">
+            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+          </Route>
+          <Route path="/platform/analytics">
+            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+          </Route>
+          <Route path="/platform/ai-usage">
+            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+          </Route>
+          <Route path="/platform/health">
+            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+          </Route>
+          <Route path="/platform">
+            <PlatformLayout><PlatformDashboard /></PlatformLayout>
           </Route>
 
           <Route path="/preparer">

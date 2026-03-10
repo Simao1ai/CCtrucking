@@ -240,6 +240,19 @@ export const staffMessages = pgTable("staff_messages", {
   tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
+export const aiUsageLogs = pgTable("ai_usage_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  userId: varchar("user_id"),
+  model: text("model").notNull(),
+  promptTokens: integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  totalTokens: integer("total_tokens").notNull().default(0),
+  feature: text("feature").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTenantBrandingSchema = createInsertSchema(tenantBranding).omit({ id: true });
 export const insertTenantSettingsSchema = createInsertSchema(tenantSettings).omit({ id: true, updatedAt: true });
@@ -470,6 +483,7 @@ export const insertPreparerAssignmentSchema = createInsertSchema(preparerAssignm
 export const insertTicketRequiredDocumentSchema = createInsertSchema(ticketRequiredDocuments).omit({ id: true, createdAt: true });
 export const insertRecurringTemplateSchema = createInsertSchema(recurringTemplates).omit({ id: true, createdAt: true });
 export const insertClientRecurringScheduleSchema = createInsertSchema(clientRecurringSchedules).omit({ id: true, createdAt: true });
+export const insertAiUsageLogSchema = createInsertSchema(aiUsageLogs).omit({ id: true, createdAt: true });
 
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
@@ -533,3 +547,5 @@ export type CustomFieldDefinition = typeof customFieldDefinitions.$inferSelect;
 export type InsertCustomFieldDefinition = z.infer<typeof insertCustomFieldDefinitionSchema>;
 export type CustomFieldValue = typeof customFieldValues.$inferSelect;
 export type InsertCustomFieldValue = z.infer<typeof insertCustomFieldValueSchema>;
+export type AiUsageLog = typeof aiUsageLogs.$inferSelect;
+export type InsertAiUsageLog = z.infer<typeof insertAiUsageLogSchema>;

@@ -25,6 +25,7 @@ import {
   Building2,
   Briefcase,
   Settings2,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant } from "@/context/tenant-context";
@@ -176,6 +177,16 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              {user?.role && ["platform_owner", "platform_admin"].includes(user.role) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link href="/platform" data-testid="nav-platform-admin">
+                      <Shield className="w-4 h-4" />
+                      <span>Platform Admin</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <a href="/" data-testid="nav-website">

@@ -16,7 +16,7 @@ import {
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents,
-  tenantSettings
+  tenantSettings, aiUsageLogs, tenants, tenantBranding, auditLogs, insertTenantSchema
 } from "@shared/schema";
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
@@ -24,7 +24,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, desc, gte, and, like } from "drizzle-orm";
+import { eq, sql, desc, gte, and, like, count, sum, lte } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import OpenAI from "openai";
 import multer from "multer";
@@ -37,6 +37,8 @@ import { sendInvoiceEmail } from "./invoice-email";
 import { brandingConfig } from "./branding-config";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule } from "./middleware/module-gates";
+import { isPlatformAdmin } from "./middleware/tenant";
+import { checkAiQuota, getAiQuotaStatus } from "./middleware/ai-quota";
 async function getTenantCompanyName(tenantId?: string): Promise<string> {
   if (tenantId) {
     const branding = await storage.getTenantBrandingByTenantId(tenantId);
@@ -236,6 +238,23 @@ async function notifyClientUsers(clientId: string, title: string, message: strin
     }
   } catch (e) {
     console.error("Failed to notify client users:", e);
+  }
+}
+
+async function logAiUsage(tenantId: string | undefined, userId: string | undefined, model: string, usage: { prompt_tokens?: number, completion_tokens?: number, total_tokens?: number } | undefined, feature: string) {
+  try {
+    if (!usage) return;
+    await db.insert(aiUsageLogs).values({
+      tenantId: tenantId || null,
+      userId: userId || null,
+      model,
+      promptTokens: usage.prompt_tokens || 0,
+      completionTokens: usage.completion_tokens || 0,
+      totalTokens: usage.total_tokens || 0,
+      feature,
+    });
+  } catch (err) {
+    console.error("[AI Usage] Failed to log usage:", err);
   }
 }
 
@@ -643,7 +662,7 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  app.post("/api/clients/:id/notes/dictate", express.json({ limit: "25mb" }), isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/clients/:id/notes/dictate", express.json({ limit: "25mb" }), isAuthenticated, isAdmin, checkAiQuota("note_dictation"), async (req, res) => {
     try {
       const tenantId = (req as any).tenantId;
       const dbUser = (req as any).dbUser;
@@ -700,6 +719,8 @@ Contact name: ${client.contactName}`
         ],
         temperature: 0.3,
       });
+
+      await logAiUsage(tenantId, dbUser?.id, "gpt-4o-mini", completion.usage, "note_dictation");
 
       const summary = completion.choices[0]?.message?.content || transcript;
       const authorName = dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username;
@@ -1965,7 +1986,7 @@ Contact name: ${client.contactName}`
   });
 
   // ===== AI CHAT ROUTES (admin) =====
-  app.post("/api/admin/ai-chat", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/ai-chat", isAuthenticated, isAdmin, checkAiQuota("admin_chat"), async (req, res) => {
     try {
       const tenantId = (req as any).tenantId;
       const { message, history = [] } = req.body;
@@ -2067,17 +2088,25 @@ When staff ask you to research regulations, find forms, or look up requirements:
         model: "gpt-5.2",
         messages,
         stream: true,
+        stream_options: { include_usage: true },
         max_completion_tokens: 8192,
       });
 
       let fullResponse = "";
+      let streamUsage: any = undefined;
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || "";
         if (content) {
           fullResponse += content;
           res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+        if ((chunk as any).usage) {
+          streamUsage = (chunk as any).usage;
+        }
       }
+
+      const dbUser = (req as any).dbUser;
+      await logAiUsage(tenantId, dbUser?.id, "gpt-5.2", streamUsage, "admin_chat");
 
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
@@ -2093,7 +2122,7 @@ When staff ask you to research regulations, find forms, or look up requirements:
   });
 
   // ===== CLIENT PORTAL AI CHAT =====
-  app.post("/api/portal/ai-chat", isAuthenticated, isClient, async (req: any, res) => {
+  app.post("/api/portal/ai-chat", isAuthenticated, isClient, checkAiQuota("portal_chat"), async (req: any, res) => {
     try {
       const { message, history = [] } = req.body;
       if (!message) return res.status(400).json({ message: "Message is required" });
@@ -2190,15 +2219,23 @@ ${complianceSection}
         model: "gpt-5.2",
         messages,
         stream: true,
+        stream_options: { include_usage: true },
         max_completion_tokens: 4096,
       });
 
+      let portalStreamUsage: any = undefined;
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || "";
         if (content) {
           res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+        if ((chunk as any).usage) {
+          portalStreamUsage = (chunk as any).usage;
+        }
       }
+
+      const dbUser = (req as any).dbUser;
+      await logAiUsage(tenantId, dbUser?.id, "gpt-5.2", portalStreamUsage, "portal_chat");
 
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
@@ -2418,7 +2455,7 @@ ${complianceSection}
     res.status(204).send();
   });
 
-  app.post("/api/admin/tax-documents/:id/analyze", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+  app.post("/api/admin/tax-documents/:id/analyze", isAuthenticated, isAdmin, requireModule('tax_preparation'), checkAiQuota("tax_analysis"), async (req, res) => {
     try {
       const tenantId = (req as any).tenantId;
       const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
@@ -2485,6 +2522,9 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
         ],
         max_completion_tokens: 2048,
       });
+
+      const dbUser = (req as any).dbUser;
+      await logAiUsage(tenantId, dbUser?.id, "gpt-5.2", completion.usage, "tax_analysis");
 
       const responseText = completion.choices[0]?.message?.content || "";
       let parsed2: any = {};
@@ -2779,7 +2819,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     res.json({ success: true });
   });
 
-  app.post("/api/admin/bookkeeping/ai-categorize/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+  app.post("/api/admin/bookkeeping/ai-categorize/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), checkAiQuota("categorization"), async (req, res) => {
     try {
       const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
@@ -2815,6 +2855,9 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
           ],
           temperature: 0.1,
         });
+
+        const dbUser = (req as any).dbUser;
+        await logAiUsage(tenantId, dbUser?.id, "gpt-4o-mini", completion.usage, "categorization");
 
         const responseText = completion.choices[0]?.message?.content || "[]";
         try {
@@ -3108,6 +3151,8 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       max_tokens: 500,
     });
 
+    await logAiUsage(tenantId, undefined, "gpt-4o-mini", response.usage, "receipt_analysis");
+
     const text = response.choices[0]?.message?.content || "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("Failed to parse AI response");
@@ -3133,6 +3178,12 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       if (!file) return res.status(400).json({ message: "Receipt image required" });
 
       const imageBase64 = file.buffer.toString("base64");
+
+      const quotaStatus = tenantId ? await getAiQuotaStatus(tenantId) : null;
+      if (quotaStatus && quotaStatus.quota > 0 && quotaStatus.remaining <= 0) {
+        return res.status(429).json({ message: "AI usage limit reached for this billing period" });
+      }
+
       const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype, tenantId);
 
       const txDate = new Date(extracted.date);
@@ -3167,6 +3218,12 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       if (!file) return res.status(400).json({ message: "Receipt image required" });
 
       const imageBase64 = file.buffer.toString("base64");
+
+      const quotaStatus2 = tenantId ? await getAiQuotaStatus(tenantId) : null;
+      if (quotaStatus2 && quotaStatus2.quota > 0 && quotaStatus2.remaining <= 0) {
+        return res.status(429).json({ message: "AI usage limit reached for this billing period" });
+      }
+
       const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype, tenantId);
 
       const txDate = new Date(extracted.date);
@@ -3958,6 +4015,344 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         results.push(saved);
       }
       res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===================== PLATFORM ADMIN ROUTES =====================
+
+  app.get("/api/platform/tenants", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const allTenants = await storage.getAllTenants();
+      const results = await Promise.all(allTenants.map(async (tenant) => {
+        const [userResult] = await db.select({ count: count() }).from(users).where(eq(users.tenantId, tenant.id));
+        const [clientResult] = await db.select({ count: count() }).from(clients).where(eq(clients.tenantId, tenant.id));
+        const [brandingResult] = await db.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenant.id));
+        return {
+          ...tenant,
+          userCount: Number(userResult?.count || 0),
+          clientCount: Number(clientResult?.count || 0),
+          branding: brandingResult || null,
+        };
+      }));
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/platform/tenants/:id", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const id = param(req, "id");
+      const tenant = await storage.getTenant(id);
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+      const branding = await storage.getTenantBrandingByTenantId(id);
+      const settings = await storage.getTenantSettings(id);
+      const tenantUsers = await db.select().from(users).where(eq(users.tenantId, id));
+      const safeUsers = tenantUsers.map(({ password: _, ...u }) => u);
+      const [clientResult] = await db.select({ count: count() }).from(clients).where(eq(clients.tenantId, id));
+      res.json({
+        tenant,
+        branding: branding || null,
+        settings,
+        users: safeUsers,
+        clientCount: Number(clientResult?.count || 0),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/platform/tenants/:id", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const id = param(req, "id");
+      const { name, status, plan, contactEmail, contactPhone, industry } = req.body;
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (status !== undefined) updateData.status = status;
+      if (plan !== undefined) updateData.plan = plan;
+      if (contactEmail !== undefined) updateData.contactEmail = contactEmail;
+      if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
+      if (industry !== undefined) updateData.industry = industry;
+      const updated = await storage.updateTenant(id, updateData);
+      if (!updated) return res.status(404).json({ message: "Tenant not found" });
+      await audit(req, "updated", "tenant", id, `Updated tenant "${updated.name}"`);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/tenants", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const parsed = insertTenantSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const tenant = await storage.createTenant(parsed.data);
+      await db.insert(tenantBranding).values({ tenantId: tenant.id });
+      const defaultModules = [
+        "tickets", "invoices", "documents", "chat", "signatures",
+        "forms", "notarizations", "tax_prep", "bookkeeping", "knowledge_base",
+        "staff_chat", "recurring", "analytics", "ai_chat",
+      ];
+      for (const mod of defaultModules) {
+        await storage.upsertTenantSetting(tenant.id, `modules.${mod}`, "true", "boolean");
+      }
+      await audit(req, "created", "tenant", tenant.id, `Created tenant "${tenant.name}"`);
+      res.status(201).json(tenant);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/platform/analytics", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const tenantStatusBreakdown = await db.select({
+        status: tenants.status,
+        count: count(),
+      }).from(tenants).groupBy(tenants.status);
+
+      const [totalUsersResult] = await db.select({ count: count() }).from(users);
+      const [totalClientsResult] = await db.select({ count: count() }).from(clients);
+      const [totalRevenueResult] = await db.select({
+        total: sum(invoices.amount),
+      }).from(invoices).where(eq(invoices.status, "paid"));
+
+      const now = new Date();
+      const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      const monthlyRevenue = await db.select({
+        month: sql<string>`to_char(${invoices.paidDate}, 'YYYY-MM')`,
+        total: sum(invoices.amount),
+      }).from(invoices).where(
+        and(
+          eq(invoices.status, "paid"),
+          gte(invoices.paidDate, twelveMonthsAgo)
+        )
+      ).groupBy(sql`to_char(${invoices.paidDate}, 'YYYY-MM')`).orderBy(sql`to_char(${invoices.paidDate}, 'YYYY-MM')`);
+
+      const perTenantRevenue = await db.select({
+        tenantId: invoices.tenantId,
+        total: sum(invoices.amount),
+      }).from(invoices).where(eq(invoices.status, "paid")).groupBy(invoices.tenantId).orderBy(desc(sum(invoices.amount))).limit(10);
+
+      const perTenantRevenueWithNames = await Promise.all(
+        perTenantRevenue.map(async (r) => {
+          if (!r.tenantId) return { ...r, tenantName: "Unknown" };
+          const t = await storage.getTenant(r.tenantId);
+          return { ...r, tenantName: t?.name || "Unknown" };
+        })
+      );
+
+      res.json({
+        tenantStatusBreakdown,
+        totalUsers: Number(totalUsersResult?.count || 0),
+        totalClients: Number(totalClientsResult?.count || 0),
+        totalRevenue: totalRevenueResult?.total || "0",
+        monthlyRevenue,
+        perTenantRevenue: perTenantRevenueWithNames,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/platform/health", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const tenantsByStatus = await db.select({
+        status: tenants.status,
+        count: count(),
+      }).from(tenants).groupBy(tenants.status);
+
+      const [clientCount] = await db.select({ count: count() }).from(clients);
+      const [ticketCount] = await db.select({ count: count() }).from(serviceTickets);
+      const [invoiceCount] = await db.select({ count: count() }).from(invoices);
+      const [documentCount] = await db.select({ count: count() }).from(documents);
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const [recentAuditCount] = await db.select({ count: count() }).from(auditLogs).where(gte(auditLogs.createdAt, twentyFourHoursAgo));
+
+      res.json({
+        tenantsByStatus,
+        tableCounts: {
+          clients: Number(clientCount?.count || 0),
+          tickets: Number(ticketCount?.count || 0),
+          invoices: Number(invoiceCount?.count || 0),
+          documents: Number(documentCount?.count || 0),
+        },
+        recentAuditLogCount: Number(recentAuditCount?.count || 0),
+        systemUptime: process.uptime(),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/platform/ai-usage", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const filterTenantId = req.query.tenantId as string | undefined;
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+
+      const conditions: any[] = [];
+      if (filterTenantId) conditions.push(eq(aiUsageLogs.tenantId, filterTenantId));
+      if (startDate) conditions.push(gte(aiUsageLogs.createdAt, startDate));
+      if (endDate) conditions.push(lte(aiUsageLogs.createdAt, endDate));
+
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [totalResult] = await db.select({
+        totalTokens: sum(aiUsageLogs.totalTokens),
+        promptTokens: sum(aiUsageLogs.promptTokens),
+        completionTokens: sum(aiUsageLogs.completionTokens),
+        count: count(),
+      }).from(aiUsageLogs).where(whereClause);
+
+      const perFeature = await db.select({
+        feature: aiUsageLogs.feature,
+        totalTokens: sum(aiUsageLogs.totalTokens),
+        count: count(),
+      }).from(aiUsageLogs).where(whereClause).groupBy(aiUsageLogs.feature);
+
+      const perTenant = await db.select({
+        tenantId: aiUsageLogs.tenantId,
+        totalTokens: sum(aiUsageLogs.totalTokens),
+        count: count(),
+      }).from(aiUsageLogs).where(whereClause).groupBy(aiUsageLogs.tenantId);
+
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const dailyConditions: any[] = [gte(aiUsageLogs.createdAt, thirtyDaysAgo)];
+      if (filterTenantId) dailyConditions.push(eq(aiUsageLogs.tenantId, filterTenantId));
+
+      const dailyTrend = await db.select({
+        date: sql<string>`to_char(${aiUsageLogs.createdAt}, 'YYYY-MM-DD')`,
+        totalTokens: sum(aiUsageLogs.totalTokens),
+        count: count(),
+      }).from(aiUsageLogs).where(and(...dailyConditions))
+        .groupBy(sql`to_char(${aiUsageLogs.createdAt}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${aiUsageLogs.createdAt}, 'YYYY-MM-DD')`);
+
+      res.json({
+        totals: {
+          totalTokens: totalResult?.totalTokens || "0",
+          promptTokens: totalResult?.promptTokens || "0",
+          completionTokens: totalResult?.completionTokens || "0",
+          requestCount: Number(totalResult?.count || 0),
+        },
+        perFeature,
+        perTenant,
+        dailyTrend,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/tenant/ai-quota-status", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      let tenantId = (req as any).tenantId;
+      if (!tenantId && userId) {
+        const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+        tenantId = dbUser?.tenantId;
+      }
+      if (!tenantId) {
+        return res.json({ usage: 0, quota: 0, remaining: 0, percentUsed: 0 });
+      }
+      const status = await getAiQuotaStatus(tenantId);
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch AI quota status" });
+    }
+  });
+
+  app.post("/api/platform/impersonate/:tenantId", isAuthenticated, async (req, res) => {
+    try {
+      const currentUserId = (req.session as any).userId;
+      const [dbUser] = await db.select().from(users).where(eq(users.id, currentUserId));
+      if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+      const PLATFORM_ROLES = ["platform_owner", "platform_admin"];
+      if (!PLATFORM_ROLES.includes(dbUser.role)) {
+        return res.status(403).json({ message: "Platform admin access required" });
+      }
+
+      const targetTenantId = param(req, "tenantId");
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, targetTenantId));
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+
+      let targetUser = null;
+
+      if (tenant.ownerUserId) {
+        const [ownerUser] = await db.select().from(users).where(eq(users.id, tenant.ownerUserId));
+        if (ownerUser) targetUser = ownerUser;
+      }
+
+      if (!targetUser) {
+        const tenantUsers = await db.select().from(users).where(eq(users.tenantId, targetTenantId));
+        targetUser = tenantUsers.find(u => u.role === "owner") ||
+                     tenantUsers.find(u => u.role === "tenant_owner") ||
+                     tenantUsers.find(u => u.role === "admin") ||
+                     tenantUsers.find(u => u.role === "tenant_admin") ||
+                     null;
+      }
+
+      if (!targetUser) {
+        return res.status(404).json({ message: "No owner or admin user found in target tenant" });
+      }
+
+      (req.session as any).impersonation = {
+        originalUserId: currentUserId,
+        originalRole: dbUser.role,
+        targetTenantId,
+        startedAt: new Date(),
+      };
+      (req.session as any).userId = targetUser.id;
+
+      (req as any).dbUser = dbUser;
+      (req as any).tenantId = dbUser.tenantId;
+      await audit(req, "impersonate", "tenant", targetTenantId, `Platform admin started impersonation of tenant "${tenant.name}" via impersonation`);
+
+      res.json({ success: true, tenantId: targetTenantId, userId: targetUser.id });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/stop-impersonation", isAuthenticated, async (req, res) => {
+    try {
+      const impersonation = (req.session as any).impersonation;
+      if (!impersonation) {
+        return res.status(400).json({ message: "Not currently impersonating" });
+      }
+
+      const originalUserId = impersonation.originalUserId;
+      (req.session as any).userId = originalUserId;
+      delete (req.session as any).impersonation;
+
+      const [dbUser] = await db.select().from(users).where(eq(users.id, originalUserId));
+      (req as any).dbUser = dbUser;
+      (req as any).tenantId = dbUser?.tenantId;
+      await audit(req, "stop_impersonate", "tenant", impersonation.targetTenantId, "Platform admin stopped impersonation via impersonation");
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/platform/impersonation-status", isAuthenticated, async (req, res) => {
+    try {
+      const impersonation = (req.session as any).impersonation;
+      if (!impersonation) {
+        return res.json({ impersonating: false });
+      }
+
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, impersonation.targetTenantId));
+      res.json({
+        impersonating: true,
+        tenantId: impersonation.targetTenantId,
+        tenantName: tenant?.name || "Unknown",
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
