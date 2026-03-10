@@ -46,6 +46,7 @@ import AdminEmployeePerformance from "@/pages/admin-employee-performance";
 import AdminBookkeeping from "@/pages/admin-bookkeeping";
 import AdminRecurring from "@/pages/admin-recurring";
 import AdminKnowledgeBase from "@/pages/admin-knowledge-base";
+import AdminTenantSettings from "@/pages/admin-tenant-settings";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 import PortalTaxDocuments from "@/pages/portal/portal-tax-documents";
 import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
@@ -69,7 +70,8 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  if (user.role !== "admin" && user.role !== "owner") {
+  const adminRoles = ["admin", "owner", "tenant_admin", "tenant_owner", "platform_owner", "platform_admin"];
+  if (!adminRoles.includes(user.role)) {
     window.location.href = "/portal";
     return null;
   }
@@ -282,6 +284,9 @@ function App() {
           </Route>
           <Route path="/admin/knowledge-base">
             <AdminLayout><AdminKnowledgeBase /></AdminLayout>
+          </Route>
+          <Route path="/admin/tenant-settings">
+            <AdminLayout><AdminTenantSettings /></AdminLayout>
           </Route>
 
           <Route path="/portal">

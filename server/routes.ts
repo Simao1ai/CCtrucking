@@ -15,7 +15,8 @@ import {
   insertCustomFieldDefinitionSchema, insertCustomFieldValueSchema,
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
-  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents
+  ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents,
+  tenantSettings
 } from "@shared/schema";
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
@@ -23,7 +24,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, desc, gte, and } from "drizzle-orm";
+import { eq, sql, desc, gte, and, like } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import OpenAI from "openai";
 import multer from "multer";
@@ -35,6 +36,25 @@ import { generateInvoicePDF } from "./invoice-pdf";
 import { sendInvoiceEmail } from "./invoice-email";
 import { brandingConfig } from "./branding-config";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
+import { requireModule } from "./middleware/module-gates";
+async function getTenantCompanyName(tenantId?: string): Promise<string> {
+  if (tenantId) {
+    const branding = await storage.getTenantBrandingByTenantId(tenantId);
+    if (branding?.companyName) return branding.companyName;
+  }
+  return brandingConfig.companyName;
+}
+
+function getIndustryKnowledge(industry?: string | null): { knowledge: string; guidance: string; portalTopics: string } {
+  if (industry === "trucking" || !industry) {
+    return {
+      knowledge: truckingIndustryKnowledge,
+      guidance: truckingIndustryGuidance,
+      portalTopics: truckingPortalComplianceTopics,
+    };
+  }
+  return { knowledge: "", guidance: "", portalTopics: "" };
+}
 
 const uploadDir = path.join(process.cwd(), "uploads", "tax-documents");
 if (!fs.existsSync(uploadDir)) {
@@ -73,15 +93,19 @@ function param(req: Request, name: string): string {
   return req.params[name] as string;
 }
 
+const ADMIN_ROLES = ["admin", "owner", "tenant_admin", "tenant_owner", "platform_owner", "platform_admin"];
+const OWNER_ROLES = ["owner", "tenant_owner", "platform_owner"];
+
 function isAdmin(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any).userId;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
-    if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "owner")) {
+    if (!dbUser || !ADMIN_ROLES.includes(dbUser.role)) {
       return res.status(403).json({ message: "Admin access required" });
     }
     (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
 }
@@ -91,10 +115,11 @@ function isOwner(req: Request, res: Response, next: NextFunction) {
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   db.select().from(users).where(eq(users.id, userId)).then(([dbUser]) => {
-    if (!dbUser || dbUser.role !== "owner") {
+    if (!dbUser || !OWNER_ROLES.includes(dbUser.role)) {
       return res.status(403).json({ message: "Owner access required" });
     }
     (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
 }
@@ -109,6 +134,7 @@ function isClient(req: Request, res: Response, next: NextFunction) {
     }
     (req as any).clientId = dbUser.clientId;
     (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
 }
@@ -122,6 +148,7 @@ function isPreparer(req: Request, res: Response, next: NextFunction) {
       return res.status(403).json({ message: "Preparer access required" });
     }
     (req as any).dbUser = dbUser;
+    (req as any).tenantId = dbUser.tenantId;
     next();
   }).catch(() => res.status(500).json({ message: "Server error" }));
 }
@@ -129,6 +156,7 @@ function isPreparer(req: Request, res: Response, next: NextFunction) {
 async function audit(req: Request, action: string, entityType: string, entityId?: string, details?: string) {
   try {
     const dbUser = (req as any).dbUser;
+    const tenantId = (req as any).tenantId;
     await storage.createAuditLog({
       userId: dbUser?.id || (req.session as any).userId || null,
       userName: dbUser ? (dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username) : null,
@@ -136,6 +164,7 @@ async function audit(req: Request, action: string, entityType: string, entityId?
       entityType,
       entityId: entityId || null,
       details: details || null,
+      tenantId,
     });
   } catch (e) {
     console.error("Failed to create audit log:", e);
@@ -177,33 +206,33 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
   }
 }
 
-async function notifyUser(userId: string, title: string, message: string, type: string, link?: string) {
+async function notifyUser(userId: string, title: string, message: string, type: string, link?: string, tenantId?: string) {
   try {
-    await storage.createNotification({ userId, title, message, type, link: link || null, read: "false" });
+    await storage.createNotification({ userId, title, message, type, link: link || null, read: "false", tenantId });
     sendPushToUser(userId, { title, body: message, url: link || "/", tag: type });
   } catch (e) {
     console.error("Failed to create notification:", e);
   }
 }
 
-async function notifyAllAdmins(title: string, message: string, type: string, link?: string) {
+async function notifyAllAdmins(title: string, message: string, type: string, link?: string, tenantId?: string) {
   try {
     const allUsers = await db.select().from(users);
-    const admins = allUsers.filter(u => u.role === "admin" || u.role === "owner");
+    const admins = allUsers.filter(u => (u.role === "admin" || u.role === "owner") && (!tenantId || u.tenantId === tenantId));
     for (const admin of admins) {
-      await notifyUser(admin.id, title, message, type, link);
+      await notifyUser(admin.id, title, message, type, link, tenantId);
     }
   } catch (e) {
     console.error("Failed to notify admins:", e);
   }
 }
 
-async function notifyClientUsers(clientId: string, title: string, message: string, type: string, link?: string) {
+async function notifyClientUsers(clientId: string, title: string, message: string, type: string, link?: string, tenantId?: string) {
   try {
     const allUsers = await db.select().from(users);
-    const clientUsers = allUsers.filter(u => u.clientId === clientId);
+    const clientUsers = allUsers.filter(u => u.clientId === clientId && (!tenantId || u.tenantId === tenantId));
     for (const user of clientUsers) {
-      await notifyUser(user.id, title, message, type, link);
+      await notifyUser(user.id, title, message, type, link, tenantId);
     }
   } catch (e) {
     console.error("Failed to notify client users:", e);
@@ -218,8 +247,81 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  app.get("/api/branding", (_req, res) => {
-    res.json(brandingConfig);
+  app.get("/api/branding", async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      if (userId) {
+        const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+        if (dbUser?.tenantId) {
+          const branding = await storage.getTenantBrandingByTenantId(dbUser.tenantId);
+          if (branding) {
+            return res.json({
+              companyName: branding.companyName || brandingConfig.companyName,
+              shortName: branding.companyName || brandingConfig.shortName,
+              tagline: branding.tagline || brandingConfig.tagline,
+              primaryColor: branding.primaryColor || brandingConfig.primaryColor,
+              contactEmail: branding.supportEmail || brandingConfig.contactEmail,
+              supportPhone: branding.supportPhone || brandingConfig.supportPhone,
+              website: branding.websiteUrl || brandingConfig.website,
+              address: branding.address || brandingConfig.address,
+              sidebarIconName: branding.sidebarIcon || brandingConfig.sidebarIconName,
+            });
+          }
+        }
+      }
+
+      const slug = req.query.slug as string | undefined;
+      if (slug) {
+        const tenant = await storage.getTenantBySlug(slug);
+        if (tenant) {
+          const branding = await storage.getTenantBrandingByTenantId(tenant.id);
+          if (branding) {
+            return res.json({
+              companyName: branding.companyName || brandingConfig.companyName,
+              shortName: branding.companyName || brandingConfig.shortName,
+              tagline: branding.tagline || brandingConfig.tagline,
+              primaryColor: branding.primaryColor || brandingConfig.primaryColor,
+              contactEmail: branding.supportEmail || brandingConfig.contactEmail,
+              supportPhone: branding.supportPhone || brandingConfig.supportPhone,
+              website: branding.websiteUrl || brandingConfig.website,
+              address: branding.address || brandingConfig.address,
+              sidebarIconName: branding.sidebarIcon || brandingConfig.sidebarIconName,
+            });
+          }
+        }
+      }
+
+      res.json(brandingConfig);
+    } catch (error) {
+      console.error("Failed to load branding:", error);
+      res.json(brandingConfig);
+    }
+  });
+
+  app.get("/api/tenant/modules", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      let tenantId = (req as any).tenantId;
+      if (!tenantId && userId) {
+        const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+        tenantId = dbUser?.tenantId;
+      }
+      if (!tenantId) {
+        return res.json({});
+      }
+      const settings = await db
+        .select()
+        .from(tenantSettings)
+        .where(and(eq(tenantSettings.tenantId, tenantId), like(tenantSettings.key, 'modules.%')));
+      const modules: Record<string, boolean> = {};
+      for (const s of settings) {
+        const moduleName = s.key.replace('modules.', '');
+        modules[moduleName] = s.value === 'true';
+      }
+      res.json(modules);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch module settings" });
+    }
   });
 
   app.get("/api/download/saas-audit", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -302,41 +404,47 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  app.get("/api/admin/users", isAuthenticated, isAdmin, async (_req, res) => {
+  app.get("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const allUsers = await db.select().from(users);
-    const safeUsers = allUsers.map(({ password: _, ...u }) => u);
+    const filtered = tenantId ? allUsers.filter(u => u.tenantId === tenantId) : allUsers;
+    const safeUsers = filtered.map(({ password: _, ...u }) => u);
     res.json(safeUsers);
   });
 
-  app.get("/api/clients", isAuthenticated, isAdmin, async (_req, res) => {
-    const clientList = await storage.getClients();
+  app.get("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const clientList = await storage.getClients(tenantId);
     res.json(clientList);
   });
 
   app.get("/api/clients/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const client = await storage.getClient(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const client = await storage.getClient(param(req, "id"), tenantId);
     if (!client) return res.status(404).json({ message: "Client not found" });
     res.json(client);
   });
 
   app.get("/api/clients/:id/summary", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const clientId = param(req, "id");
-    const client = await storage.getClient(clientId);
+    const client = await storage.getClient(clientId, tenantId);
     if (!client) return res.status(404).json({ message: "Client not found" });
     const [tickets, documents, invoices, messages, signatures, forms, notarizationRecords] = await Promise.all([
-      storage.getTicketsByClient(clientId),
-      storage.getDocumentsByClient(clientId),
-      storage.getInvoicesByClient(clientId),
-      storage.getChatMessages(clientId),
-      storage.getSignatureRequestsByClient(clientId),
-      storage.getFilledFormsByClient(clientId),
-      storage.getNotarizationsByClient(clientId),
+      storage.getTicketsByClient(clientId, tenantId),
+      storage.getDocumentsByClient(clientId, tenantId),
+      storage.getInvoicesByClient(clientId, tenantId),
+      storage.getChatMessages(clientId, tenantId),
+      storage.getSignatureRequestsByClient(clientId, tenantId),
+      storage.getFilledFormsByClient(clientId, tenantId),
+      storage.getNotarizationsByClient(clientId, tenantId),
     ]);
     res.json({ client, tickets, documents, invoices, messages, signatures, forms, notarizations: notarizationRecords });
   });
 
   app.post("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertClientSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertClientSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const client = await storage.createClient(parsed.data);
     await audit(req, "created", "client", client.id, `Created client "${client.companyName}"`);
@@ -356,19 +464,22 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  app.get("/api/tickets", isAuthenticated, isAdmin, async (_req, res) => {
-    const tickets = await storage.getTickets();
+  app.get("/api/tickets", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const tickets = await storage.getTickets(tenantId);
     res.json(tickets);
   });
 
   app.get("/api/tickets/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const ticket = await storage.getTicket(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const ticket = await storage.getTicket(param(req, "id"), tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
     res.json(ticket);
   });
 
   app.post("/api/tickets", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertServiceTicketSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertServiceTicketSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
     await audit(req, "created", "ticket", ticket.id, `Created ticket "${ticket.title}" (${ticket.serviceType})`);
@@ -383,7 +494,8 @@ export async function registerRoutes(
   }
 
   app.get("/api/tickets/:id/lock", isAuthenticated, isAdmin, async (req, res) => {
-    const ticket = await storage.getTicket(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const ticket = await storage.getTicket(param(req, "id"), tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
     const locked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
     res.json({
@@ -395,9 +507,10 @@ export async function registerRoutes(
   });
 
   app.post("/api/tickets/:id/claim", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const ticketId = param(req, "id");
     const dbUser = (req as any).dbUser;
-    const ticket = await storage.getTicket(ticketId);
+    const ticket = await storage.getTicket(ticketId, tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     const currentlyLocked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
@@ -417,9 +530,10 @@ export async function registerRoutes(
   });
 
   app.post("/api/tickets/:id/release", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const ticketId = param(req, "id");
     const dbUser = (req as any).dbUser;
-    const ticket = await storage.getTicket(ticketId);
+    const ticket = await storage.getTicket(ticketId, tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     const isOwnerOrAdmin = dbUser.role === "owner" || dbUser.role === "admin";
@@ -434,9 +548,10 @@ export async function registerRoutes(
   });
 
   app.patch("/api/tickets/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const ticketId = param(req, "id");
     const dbUser = (req as any).dbUser;
-    const ticket = await storage.getTicket(ticketId);
+    const ticket = await storage.getTicket(ticketId, tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     const currentlyLocked = ticket.lockedBy && !isLockExpired(ticket.lockedAt);
@@ -453,11 +568,13 @@ export async function registerRoutes(
   });
 
   app.get("/api/clients/:id/notes", isAuthenticated, isAdmin, async (req, res) => {
-    const notes = await storage.getClientNotes(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const notes = await storage.getClientNotes(param(req, "id"), tenantId);
     res.json(notes);
   });
 
   app.post("/api/clients/:id/notes", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const dbUser = (req as any).dbUser;
     const { content } = req.body;
     if (!content || typeof content !== "string" || !content.trim()) {
@@ -469,6 +586,7 @@ export async function registerRoutes(
       authorId: dbUser.id,
       authorName,
       content: content.trim(),
+      tenantId,
     });
     await audit(req, "created", "client_note", note.id, `Added note to client ${param(req, "id")}`);
     res.status(201).json(note);
@@ -508,9 +626,10 @@ export async function registerRoutes(
 
   app.post("/api/clients/:id/notes/dictate", express.json({ limit: "25mb" }), isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = (req as any).dbUser;
       const clientId = param(req, "id");
-      const client = await storage.getClient(clientId);
+      const client = await storage.getClient(clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
 
       const { audio } = req.body;
@@ -542,7 +661,7 @@ export async function registerRoutes(
         messages: [
           {
             role: "system",
-            content: `You are a note-taking assistant for ${brandingConfig.companyName}. An employee just dictated a verbal summary after a phone call or meeting with a client. Your job is to structure their dictation into a clean, professional internal note.
+            content: `You are a note-taking assistant for ${await getTenantCompanyName(tenantId)}. An employee just dictated a verbal summary after a phone call or meeting with a client. Your job is to structure their dictation into a clean, professional internal note.
 
 Format the note as:
 **Call Summary** — [today's date in Month Day, Year format]
@@ -570,6 +689,7 @@ Contact name: ${client.contactName}`
         authorId: dbUser.id,
         authorName,
         content: summary,
+        tenantId,
       });
 
       await audit(req, "created", "client_note", note.id, `Dictated note for client ${clientId} (voice-to-text)`);
@@ -581,9 +701,10 @@ Contact name: ${client.contactName}`
   });
 
   // ===== KNOWLEDGE BASE ROUTES (admin) =====
-  app.get("/api/admin/knowledge-base", isAuthenticated, isAdmin, async (_req, res) => {
+  app.get("/api/admin/knowledge-base", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const articles = await storage.getKnowledgeArticles();
+      const tenantId = (req as any).tenantId;
+      const articles = await storage.getKnowledgeArticles(tenantId);
       res.json(articles);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch knowledge articles" });
@@ -592,9 +713,10 @@ Contact name: ${client.contactName}`
 
   app.get("/api/admin/knowledge-base/search", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const q = req.query.q as string;
       if (!q || !q.trim()) return res.status(400).json({ message: "Search query is required" });
-      const articles = await storage.searchKnowledgeArticles(q.trim());
+      const articles = await storage.searchKnowledgeArticles(q.trim(), tenantId);
       res.json(articles);
     } catch (error) {
       res.status(500).json({ message: "Failed to search knowledge articles" });
@@ -603,7 +725,8 @@ Contact name: ${client.contactName}`
 
   app.get("/api/admin/knowledge-base/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const article = await storage.getKnowledgeArticle(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const article = await storage.getKnowledgeArticle(param(req, "id"), tenantId);
       if (!article) return res.status(404).json({ message: "Article not found" });
       res.json(article);
     } catch (error) {
@@ -613,6 +736,7 @@ Contact name: ${client.contactName}`
 
   app.post("/api/admin/knowledge-base", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = (req as any).dbUser;
       if (dbUser.role !== "admin" && dbUser.role !== "owner") {
         return res.status(403).json({ message: "Only admins or owners can create articles" });
@@ -621,6 +745,7 @@ Contact name: ${client.contactName}`
         ...req.body,
         createdBy: dbUser.id,
         createdByName: dbUser.firstName && dbUser.lastName ? `${dbUser.firstName} ${dbUser.lastName}` : dbUser.username,
+        tenantId,
       });
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const article = await storage.createKnowledgeArticle(parsed.data);
@@ -633,11 +758,12 @@ Contact name: ${client.contactName}`
 
   app.patch("/api/admin/knowledge-base/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = (req as any).dbUser;
       if (dbUser.role !== "admin" && dbUser.role !== "owner") {
         return res.status(403).json({ message: "Only admins or owners can update articles" });
       }
-      const existing = await storage.getKnowledgeArticle(param(req, "id"));
+      const existing = await storage.getKnowledgeArticle(param(req, "id"), tenantId);
       if (!existing) return res.status(404).json({ message: "Article not found" });
       const { title, content, category, pinned } = req.body;
       const updateData: Record<string, any> = {};
@@ -655,7 +781,8 @@ Contact name: ${client.contactName}`
 
   app.delete("/api/admin/knowledge-base/:id", isAuthenticated, isOwner, async (req, res) => {
     try {
-      const existing = await storage.getKnowledgeArticle(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const existing = await storage.getKnowledgeArticle(param(req, "id"), tenantId);
       if (!existing) return res.status(404).json({ message: "Article not found" });
       await storage.deleteKnowledgeArticle(param(req, "id"));
       await audit(req, "deleted", "knowledge_article", param(req, "id"), `Deleted knowledge article "${existing.title}"`);
@@ -665,19 +792,99 @@ Contact name: ${client.contactName}`
     }
   });
 
-  app.get("/api/documents", isAuthenticated, isAdmin, async (_req, res) => {
-    const docs = await storage.getDocuments();
+  app.get("/api/admin/tenant", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+      res.json(tenant);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch tenant" });
+    }
+  });
+
+  app.patch("/api/admin/tenant", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const { name, contactEmail, contactPhone, industry, plan } = req.body;
+      const updated = await storage.updateTenant(tenantId, { name, contactEmail, contactPhone, industry, plan });
+      if (!updated) return res.status(404).json({ message: "Tenant not found" });
+      await audit(req, "updated", "tenant", tenantId, `Updated tenant settings`);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update tenant" });
+    }
+  });
+
+  app.get("/api/admin/tenant/branding", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const branding = await storage.getTenantBrandingByTenantId(tenantId);
+      if (!branding) return res.status(404).json({ message: "Branding not found" });
+      res.json(branding);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch branding" });
+    }
+  });
+
+  app.patch("/api/admin/tenant/branding", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const updated = await storage.updateTenantBranding(tenantId, req.body);
+      if (!updated) return res.status(404).json({ message: "Branding not found" });
+      await audit(req, "updated", "tenant_branding", tenantId, `Updated tenant branding`);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update branding" });
+    }
+  });
+
+  app.get("/api/admin/tenant/settings", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const settings = await storage.getTenantSettings(tenantId);
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  app.patch("/api/admin/tenant/settings", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+      const dbUser = (req as any).dbUser;
+      const { key, value, type } = req.body;
+      if (!key || value === undefined) return res.status(400).json({ message: "key and value required" });
+      const setting = await storage.upsertTenantSetting(tenantId, key, value, type, dbUser?.id);
+      await audit(req, "updated", "tenant_setting", tenantId, `Updated setting "${key}"`);
+      res.json(setting);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update setting" });
+    }
+  });
+
+  app.get("/api/documents", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const docs = await storage.getDocuments(tenantId);
     res.json(docs);
   });
 
   app.get("/api/documents/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const doc = await storage.getDocument(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const doc = await storage.getDocument(param(req, "id"), tenantId);
     if (!doc) return res.status(404).json({ message: "Document not found" });
     res.json(doc);
   });
 
   app.post("/api/documents", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertDocumentSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertDocumentSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const doc = await storage.createDocument(parsed.data);
     await audit(req, "created", "document", doc.id, `Created document "${doc.name}" (${doc.type})`);
@@ -691,8 +898,9 @@ Contact name: ${client.contactName}`
     res.json(doc);
   });
 
-  app.get("/api/invoices/next-number", isAuthenticated, isAdmin, async (_req, res) => {
-    const allInvoices = await storage.getInvoices();
+  app.get("/api/invoices/next-number", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const allInvoices = await storage.getInvoices(tenantId);
     let maxNum = 0;
     for (const inv of allInvoices) {
       const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
@@ -705,21 +913,24 @@ Contact name: ${client.contactName}`
     res.json({ nextNumber, currentCount: allInvoices.length });
   });
 
-  app.get("/api/invoices", isAuthenticated, isAdmin, async (_req, res) => {
-    const invoiceList = await storage.getInvoices();
+  app.get("/api/invoices", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const invoiceList = await storage.getInvoices(tenantId);
     res.json(invoiceList);
   });
 
   app.get("/api/invoices/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const invoice = await storage.getInvoice(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const invoice = await storage.getInvoice(param(req, "id"), tenantId);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     res.json(invoice);
   });
 
   app.post("/api/invoices", isAuthenticated, isAdmin, async (req, res) => {
-    let body = { ...req.body };
+    const tenantId = (req as any).tenantId;
+    let body = { ...req.body, tenantId };
     if (!body.invoiceNumber || body.invoiceNumber.trim() === "") {
-      const allInvoices = await storage.getInvoices();
+      const allInvoices = await storage.getInvoices(tenantId);
       let maxNum = 0;
       for (const inv of allInvoices) {
         const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
@@ -738,7 +949,7 @@ Contact name: ${client.contactName}`
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
     await audit(req, "created", "invoice", invoice.id, `Created invoice #${invoice.invoiceNumber} — $${invoice.amount}`);
-    notifyClientUsers(invoice.clientId, "New Invoice", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been created.`, "invoice", "/portal/invoices");
+    notifyClientUsers(invoice.clientId, "New Invoice", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been created.`, "invoice", "/portal/invoices", tenantId);
     res.status(201).json(invoice);
   });
 
@@ -751,11 +962,12 @@ Contact name: ${client.contactName}`
 
   app.get("/api/invoices/:id/pdf", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const invoice = await storage.getInvoice(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const invoice = await storage.getInvoice(param(req, "id"), tenantId);
       if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-      const client = await storage.getClient(invoice.clientId);
+      const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
-      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+      const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -793,11 +1005,12 @@ Contact name: ${client.contactName}`
 
   app.post("/api/invoices/:id/send", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const invoice = await storage.getInvoice(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const invoice = await storage.getInvoice(param(req, "id"), tenantId);
       if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-      const client = await storage.getClient(invoice.clientId);
+      const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
-      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+      const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -855,7 +1068,7 @@ Contact name: ${client.contactName}`
       }
 
       await audit(req, "sent", "invoice", invoice.id, `Emailed invoice #${invoice.invoiceNumber} to ${emailTo}`);
-      notifyClientUsers(invoice.clientId, "Invoice Sent", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been sent to your email.`, "invoice", "/portal/invoices");
+      notifyClientUsers(invoice.clientId, "Invoice Sent", `Invoice #${invoice.invoiceNumber} for $${invoice.amount} has been sent to your email.`, "invoice", "/portal/invoices", tenantId);
 
       res.json({ message: `Invoice sent to ${emailTo}`, invoiceNumber: invoice.invoiceNumber });
     } catch (error: any) {
@@ -865,12 +1078,13 @@ Contact name: ${client.contactName}`
 
   app.get("/api/portal/invoices/:id/pdf", isAuthenticated, isClient, async (req: any, res) => {
     try {
-      const invoice = await storage.getInvoice(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const invoice = await storage.getInvoice(param(req, "id"), tenantId);
       if (!invoice) return res.status(404).json({ message: "Invoice not found" });
       if (invoice.clientId !== req.clientId) return res.status(403).json({ message: "Access denied" });
-      const client = await storage.getClient(invoice.clientId);
+      const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
-      const lineItems = await storage.getInvoiceLineItems(invoice.id);
+      const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -906,17 +1120,20 @@ Contact name: ${client.contactName}`
     }
   });
 
-  app.get("/api/admin/chats", isAuthenticated, isAdmin, async (_req, res) => {
-    const clientList = await storage.getClients();
+  app.get("/api/admin/chats", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const clientList = await storage.getClients(tenantId);
     res.json(clientList);
   });
 
   app.get("/api/admin/chats/:clientId", isAuthenticated, isAdmin, async (req, res) => {
-    const messages = await storage.getChatMessages(param(req, "clientId"));
+    const tenantId = (req as any).tenantId;
+    const messages = await storage.getChatMessages(param(req, "clientId"), tenantId);
     res.json(messages);
   });
 
   app.post("/api/admin/chats/:clientId", isAuthenticated, isAdmin, async (req: any, res) => {
+    const tenantId = (req as any).tenantId;
     const dbUser = (req as any).dbUser;
     const parsed = insertChatMessageSchema.safeParse({
       clientId: param(req, "clientId"),
@@ -924,24 +1141,28 @@ Contact name: ${client.contactName}`
       senderName: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || 'Admin',
       senderRole: "admin",
       message: req.body.message,
+      tenantId,
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
-    notifyClientUsers(param(req, "clientId"), "New Message", `You have a new message from ${brandingConfig.companyName}.`, "chat", "/portal/chat");
+    notifyClientUsers(param(req, "clientId"), "New Message", `You have a new message from ${brandingConfig.companyName}.`, "chat", "/portal/chat", tenantId);
     res.status(201).json(msg);
   });
 
   // ===== STAFF MESSAGING =====
-  app.get("/api/admin/staff", isAuthenticated, isAdmin, async (_req, res) => {
+  app.get("/api/admin/staff", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const allUsers = await db.select({
         id: users.id,
         username: users.username,
         firstName: users.firstName,
         lastName: users.lastName,
         role: users.role,
+        tenantId: users.tenantId,
       }).from(users).where(sql`${users.role} IN ('owner', 'admin')`);
-      res.json(allUsers);
+      const filtered = tenantId ? allUsers.filter(u => u.tenantId === tenantId) : allUsers;
+      res.json(filtered);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -959,10 +1180,11 @@ Contact name: ${client.contactName}`
 
   app.get("/api/admin/staff-messages/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = req.dbUser;
       const otherUserId = req.params.userId;
       await storage.markStaffMessagesRead(dbUser.id, otherUserId);
-      const msgs = await storage.getStaffConversation(dbUser.id, otherUserId);
+      const msgs = await storage.getStaffConversation(dbUser.id, otherUserId, tenantId);
       res.json(msgs);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -971,6 +1193,7 @@ Contact name: ${client.contactName}`
 
   app.post("/api/admin/staff-messages/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = req.dbUser;
       const recipientId = req.params.userId;
       const recipientUsers = await db.select().from(users).where(eq(users.id, recipientId));
@@ -983,6 +1206,7 @@ Contact name: ${client.contactName}`
         recipientId,
         recipientName: `${recipient.firstName || ''} ${recipient.lastName || ''}`.trim() || recipient.username,
         message: req.body.message,
+        tenantId,
       });
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
@@ -1003,68 +1227,78 @@ Contact name: ${client.contactName}`
   });
 
   app.get("/api/portal/account", isAuthenticated, isClient, async (req: any, res) => {
-    const client = await storage.getClient(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const client = await storage.getClient(req.clientId, tenantId);
     if (!client) return res.status(404).json({ message: "Client account not found" });
     res.json(client);
   });
 
   app.get("/api/portal/tickets", isAuthenticated, isClient, async (req: any, res) => {
-    const tickets = await storage.getTicketsByClient(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const tickets = await storage.getTicketsByClient(req.clientId, tenantId);
     res.json(tickets);
   });
 
   app.post("/api/portal/tickets", isAuthenticated, isClient, async (req: any, res) => {
+    const tenantId = (req as any).tenantId;
     const parsed = insertServiceTicketSchema.safeParse({
       ...req.body,
       clientId: req.clientId,
       status: "open",
       priority: "medium",
+      tenantId,
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
-    const client = await storage.getClient(req.clientId);
-    notifyAllAdmins("New Service Request", `${client?.companyName || "A client"} submitted a new ${ticket.serviceType} request.`, "ticket", "/admin/tickets");
+    const client = await storage.getClient(req.clientId, tenantId);
+    notifyAllAdmins("New Service Request", `${client?.companyName || "A client"} submitted a new ${ticket.serviceType} request.`, "ticket", "/admin/tickets", tenantId);
     res.status(201).json(ticket);
   });
 
   app.get("/api/portal/documents", isAuthenticated, isClient, async (req: any, res) => {
-    const docs = await storage.getDocumentsByClient(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const docs = await storage.getDocumentsByClient(req.clientId, tenantId);
     res.json(docs);
   });
 
   app.get("/api/portal/invoices", isAuthenticated, isClient, async (req: any, res) => {
-    const invoiceList = await storage.getInvoicesByClient(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const invoiceList = await storage.getInvoicesByClient(req.clientId, tenantId);
     res.json(invoiceList);
   });
 
   app.patch("/api/portal/invoices/:id/approve", isAuthenticated, isClient, async (req: any, res) => {
+    const tenantId = (req as any).tenantId;
     const invoiceId = param(req, "id");
-    const invoice = await storage.getInvoice(invoiceId);
+    const invoice = await storage.getInvoice(invoiceId, tenantId);
     if (!invoice || invoice.clientId !== req.clientId) return res.status(404).json({ message: "Invoice not found" });
     const updated = await storage.updateInvoice(invoiceId, { status: "approved" });
-    notifyAllAdmins("Invoice Approved", `Invoice #${invoice.invoiceNumber} has been approved by the client.`, "invoice", "/admin/invoices");
+    notifyAllAdmins("Invoice Approved", `Invoice #${invoice.invoiceNumber} has been approved by the client.`, "invoice", "/admin/invoices", tenantId);
     res.json(updated);
   });
 
   app.get("/api/portal/chat", isAuthenticated, isClient, async (req: any, res) => {
-    const messages = await storage.getChatMessages(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const messages = await storage.getChatMessages(req.clientId, tenantId);
     res.json(messages);
   });
 
   app.post("/api/portal/chat", isAuthenticated, isClient, async (req: any, res) => {
     const dbUser = (req as any).dbUser;
+    const tenantId = (req as any).tenantId;
     const parsed = insertChatMessageSchema.safeParse({
       clientId: req.clientId,
       senderId: dbUser.id,
       senderName: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || 'Client',
       senderRole: "client",
       message: req.body.message,
+      tenantId,
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
-    const client = await storage.getClient(req.clientId);
-    notifyAllAdmins("New Client Message", `New message from ${client?.companyName || "a client"}.`, "chat", "/admin/chat");
-    const preparerAssignments = await storage.getPreparerAssignmentsByClient(req.clientId);
+    const client = await storage.getClient(req.clientId, tenantId);
+    notifyAllAdmins("New Client Message", `New message from ${client?.companyName || "a client"}.`, "chat", "/admin/chat", tenantId);
+    const preparerAssignments = await storage.getPreparerAssignmentsByClient(req.clientId, tenantId);
     for (const assignment of preparerAssignments) {
       await storage.createNotification({
         userId: assignment.preparerId,
@@ -1073,19 +1307,22 @@ Contact name: ${client.contactName}`
         type: "message",
         link: `/preparer/client/${req.clientId}`,
         read: "false",
+        tenantId,
       });
     }
     res.status(201).json(msg);
   });
 
   // ===== SIGNATURE REQUEST ROUTES (admin) =====
-  app.get("/api/admin/signatures", isAuthenticated, isAdmin, async (_req, res) => {
-    const requests = await storage.getSignatureRequests();
+  app.get("/api/admin/signatures", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const requests = await storage.getSignatureRequests(tenantId);
     res.json(requests);
   });
 
   app.post("/api/admin/signatures", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = (req as any).dbUser;
       const parsed = insertSignatureRequestSchema.safeParse({
         clientId: req.body.clientId,
@@ -1097,10 +1334,11 @@ Contact name: ${client.contactName}`
         signatureData: null,
         signerName: null,
         reminderMethod: null,
+        tenantId,
       });
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const sigReq = await storage.createSignatureRequest(parsed.data);
-      notifyClientUsers(sigReq.clientId, "Document to Sign", `"${sigReq.documentName}" needs your signature.`, "signature", "/portal/signatures");
+      notifyClientUsers(sigReq.clientId, "Document to Sign", `"${sigReq.documentName}" needs your signature.`, "signature", "/portal/signatures", tenantId);
       res.status(201).json(sigReq);
     } catch (error) {
       console.error("Create signature request error:", error);
@@ -1109,14 +1347,16 @@ Contact name: ${client.contactName}`
   });
 
   app.get("/api/admin/signatures/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const sigReq = await storage.getSignatureRequest(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const sigReq = await storage.getSignatureRequest(param(req, "id"), tenantId);
     if (!sigReq) return res.status(404).json({ message: "Not found" });
     res.json(sigReq);
   });
 
   app.post("/api/admin/signatures/:id/remind", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const sigReq = await storage.getSignatureRequest(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const sigReq = await storage.getSignatureRequest(param(req, "id"), tenantId);
       if (!sigReq) return res.status(404).json({ message: "Not found" });
       if (sigReq.status === "signed") return res.status(400).json({ message: "Document already signed" });
 
@@ -1164,19 +1404,22 @@ Contact name: ${client.contactName}`
 
   // ===== CLIENT PORTAL SIGNATURE ROUTES =====
   app.get("/api/portal/signatures", isAuthenticated, isClient, async (req: any, res) => {
-    const requests = await storage.getSignatureRequestsByClient(req.clientId);
+    const tenantId = (req as any).tenantId;
+    const requests = await storage.getSignatureRequestsByClient(req.clientId, tenantId);
     res.json(requests);
   });
 
   app.get("/api/portal/signatures/:id", isAuthenticated, isClient, async (req: any, res) => {
-    const sigReq = await storage.getSignatureRequest(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const sigReq = await storage.getSignatureRequest(param(req, "id"), tenantId);
     if (!sigReq || sigReq.clientId !== req.clientId) return res.status(404).json({ message: "Not found" });
     res.json(sigReq);
   });
 
   app.post("/api/portal/signatures/:id/sign", isAuthenticated, isClient, async (req: any, res) => {
     try {
-      const sigReq = await storage.getSignatureRequest(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const sigReq = await storage.getSignatureRequest(param(req, "id"), tenantId);
       if (!sigReq || sigReq.clientId !== req.clientId) return res.status(404).json({ message: "Not found" });
       if (sigReq.status === "signed") return res.status(400).json({ message: "Already signed" });
 
@@ -1199,7 +1442,7 @@ Contact name: ${client.contactName}`
         signerName: trimmedName,
         signatureData,
       });
-      notifyAllAdmins("Document Signed", `"${sigReq.documentName}" was signed by ${trimmedName}.`, "signature", "/admin/signatures");
+      notifyAllAdmins("Document Signed", `"${sigReq.documentName}" was signed by ${trimmedName}.`, "signature", "/admin/signatures", tenantId);
       res.json(updated);
     } catch (error) {
       console.error("Sign document error:", error);
@@ -1264,19 +1507,22 @@ Contact name: ${client.contactName}`
     }
   });
 
-  app.get("/api/admin/form-templates", isAuthenticated, isAdmin, async (_req, res) => {
-    const templates = await storage.getFormTemplates();
+  app.get("/api/admin/form-templates", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const templates = await storage.getFormTemplates(tenantId);
     res.json(templates);
   });
 
   app.get("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const template = await storage.getFormTemplate(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const template = await storage.getFormTemplate(param(req, "id"), tenantId);
     if (!template) return res.status(404).json({ message: "Template not found" });
     res.json(template);
   });
 
   app.post("/api/admin/form-templates", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertFormTemplateSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertFormTemplateSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const template = await storage.createFormTemplate(parsed.data);
     await audit(req, "created", "form_template", template.id, `Created form template "${template.name}"`);
@@ -1291,26 +1537,30 @@ Contact name: ${client.contactName}`
   });
 
   app.delete("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const id = param(req, "id");
-    const template = await storage.getFormTemplate(id);
+    const template = await storage.getFormTemplate(id, tenantId);
     await storage.deleteFormTemplate(id);
     await audit(req, "deleted", "form_template", id, `Deleted form template "${template?.name || id}"`);
     res.status(204).send();
   });
 
-  app.get("/api/admin/filled-forms", isAuthenticated, isAdmin, async (_req, res) => {
-    const forms = await storage.getFilledForms();
+  app.get("/api/admin/filled-forms", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const forms = await storage.getFilledForms(tenantId);
     res.json(forms);
   });
 
   app.get("/api/admin/filled-forms/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const form = await storage.getFilledForm(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const form = await storage.getFilledForm(param(req, "id"), tenantId);
     if (!form) return res.status(404).json({ message: "Form not found" });
     res.json(form);
   });
 
   app.post("/api/admin/filled-forms", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertFilledFormSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertFilledFormSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const form = await storage.createFilledForm(parsed.data);
     await audit(req, "created", "filled_form", form.id, `Created filled form "${form.name}" for client ${form.clientId}`);
@@ -1325,7 +1575,8 @@ Contact name: ${client.contactName}`
   });
 
   app.post("/api/admin/filled-forms/:id/send-for-signature", isAuthenticated, isAdmin, async (req, res) => {
-    const form = await storage.getFilledForm(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const form = await storage.getFilledForm(param(req, "id"), tenantId);
     if (!form) return res.status(404).json({ message: "Form not found" });
     const sigReq = await storage.createSignatureRequest({
       clientId: form.clientId,
@@ -1337,33 +1588,37 @@ Contact name: ${client.contactName}`
       signerName: null,
       signatureData: null,
       reminderMethod: null,
+      tenantId,
     });
     await storage.updateFilledForm(form.id, { status: "sent_for_signature", signatureRequestId: sigReq.id });
-    await notifyClientUsers(form.clientId, "Document Ready for Signature", `"${form.name}" is ready for your signature.`, "signature", "/portal/signatures");
+    await notifyClientUsers(form.clientId, "Document Ready for Signature", `"${form.name}" is ready for your signature.`, "signature", "/portal/signatures", tenantId);
     await audit(req, "sent_for_signature", "filled_form", form.id, `Sent "${form.name}" for signature (sig request ${sigReq.id})`);
     res.json({ signatureRequest: sigReq });
   });
 
-  app.get("/api/admin/notarizations", isAuthenticated, isAdmin, async (_req, res) => {
-    const notarizations = await storage.getNotarizations();
+  app.get("/api/admin/notarizations", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const notarizations = await storage.getNotarizations(tenantId);
     res.json(notarizations);
   });
 
-  app.get("/api/admin/notarizations/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const n = await storage.getNotarization(param(req, "id"));
+  app.get("/api/admin/notarizations/:id", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const n = await storage.getNotarization(param(req, "id"), tenantId);
     if (!n) return res.status(404).json({ message: "Notarization not found" });
     res.json(n);
   });
 
-  app.post("/api/admin/notarizations", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertNotarizationSchema.safeParse(req.body);
+  app.post("/api/admin/notarizations", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const parsed = insertNotarizationSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const n = await storage.createNotarization(parsed.data);
     await audit(req, "created", "notarization", n.id, `Created notarization "${n.documentName}" for client ${n.clientId}, notary: ${n.notaryName}`);
     res.status(201).json(n);
   });
 
-  app.patch("/api/admin/notarizations/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/notarizations/:id", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
     const n = await storage.updateNotarization(param(req, "id"), req.body);
     if (!n) return res.status(404).json({ message: "Notarization not found" });
     await audit(req, "updated", "notarization", n.id, `Updated notarization "${n.documentName}" — status: ${n.status}`);
@@ -1371,32 +1626,36 @@ Contact name: ${client.contactName}`
   });
 
   app.get("/api/admin/audit-logs", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const limit = parseInt(req.query.limit as string) || 100;
     const offset = parseInt(req.query.offset as string) || 0;
     const entityType = req.query.entityType as string;
     if (entityType) {
-      const logs = await storage.getAuditLogsByEntity(entityType);
+      const logs = await storage.getAuditLogsByEntity(entityType, undefined, tenantId);
       res.json(logs);
     } else {
-      const logs = await storage.getAuditLogs(limit, offset);
+      const logs = await storage.getAuditLogs(limit, offset, tenantId);
       res.json(logs);
     }
   });
 
   // ===== SERVICE ITEMS ROUTES =====
-  app.get("/api/admin/service-items", isAuthenticated, isAdmin, async (_req, res) => {
-    const items = await storage.getServiceItems();
+  app.get("/api/admin/service-items", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const items = await storage.getServiceItems(tenantId);
     res.json(items);
   });
 
   app.get("/api/admin/service-items/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const item = await storage.getServiceItem(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const item = await storage.getServiceItem(param(req, "id"), tenantId);
     if (!item) return res.status(404).json({ message: "Service item not found" });
     res.json(item);
   });
 
   app.post("/api/admin/service-items", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertServiceItemSchema.safeParse(req.body);
+    const tenantId = (req as any).tenantId;
+    const parsed = insertServiceItemSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const item = await storage.createServiceItem(parsed.data);
     await audit(req, "created", "service_item", item.id, `Created service item "${item.name}" — $${item.defaultPrice}`);
@@ -1419,16 +1678,18 @@ Contact name: ${client.contactName}`
 
   // ===== INVOICE LINE ITEMS ROUTES =====
   app.get("/api/invoices/:id/line-items", isAuthenticated, isAdmin, async (req, res) => {
-    const items = await storage.getInvoiceLineItems(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const items = await storage.getInvoiceLineItems(param(req, "id"), tenantId);
     res.json(items);
   });
 
   app.post("/api/invoices/:id/line-items", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const invoiceId = param(req, "id");
-    const parsed = insertInvoiceLineItemSchema.safeParse({ ...req.body, invoiceId });
+    const parsed = insertInvoiceLineItemSchema.safeParse({ ...req.body, invoiceId, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const item = await storage.createInvoiceLineItem(parsed.data);
-    const allItems = await storage.getInvoiceLineItems(invoiceId);
+    const allItems = await storage.getInvoiceLineItems(invoiceId, tenantId);
     const total = allItems.reduce((sum, li) => sum + parseFloat(li.amount), 0);
     await storage.updateInvoice(invoiceId, { amount: total.toFixed(2) });
     res.status(201).json(item);
@@ -1457,12 +1718,13 @@ Contact name: ${client.contactName}`
   });
 
   // ===== ANALYTICS ROUTES (owner only) =====
-  app.get("/api/admin/analytics", isAuthenticated, isOwner, async (_req, res) => {
+  app.get("/api/admin/analytics", isAuthenticated, isOwner, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const [allClients, allTickets, allInvoices, allLineItems] = await Promise.all([
-        storage.getClients(),
-        storage.getTickets(),
-        storage.getInvoices(),
+        storage.getClients(tenantId),
+        storage.getTickets(tenantId),
+        storage.getInvoices(tenantId),
         db.select().from(invoiceLineItems),
       ]);
 
@@ -1548,11 +1810,12 @@ Contact name: ${client.contactName}`
   });
 
   // ===== EMPLOYEE PERFORMANCE ROUTES (owner only) =====
-  app.get("/api/admin/employee-performance", isAuthenticated, isOwner, async (_req, res) => {
+  app.get("/api/admin/employee-performance", isAuthenticated, isOwner, requireModule('employee_performance'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const allUsers = await db.select().from(users);
-      const staffUsers = allUsers.filter(u => u.role === "admin" || u.role === "owner");
-      const allLogs = await storage.getAuditLogs(50000, 0);
+      const staffUsers = allUsers.filter(u => (u.role === "admin" || u.role === "owner") && (!tenantId || u.tenantId === tenantId));
+      const allLogs = await storage.getAuditLogs(50000, 0, tenantId);
 
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -1685,25 +1948,39 @@ Contact name: ${client.contactName}`
   // ===== AI CHAT ROUTES (admin) =====
   app.post("/api/admin/ai-chat", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const { message, history = [] } = req.body;
       if (!message) return res.status(400).json({ message: "Message is required" });
 
-      const [allClients, allTickets, allInvoices, allDocs, allServiceItemsList, knowledgeArticlesList] = await Promise.all([
-        storage.getClients(),
-        storage.getTickets(),
-        storage.getInvoices(),
-        storage.getDocuments(),
-        storage.getServiceItems(),
-        storage.getKnowledgeArticles(),
+      const [allClients, allTickets, allInvoices, allDocs, allServiceItemsList, knowledgeArticlesList, tenant] = await Promise.all([
+        storage.getClients(tenantId),
+        storage.getTickets(tenantId),
+        storage.getInvoices(tenantId),
+        storage.getDocuments(tenantId),
+        storage.getServiceItems(tenantId),
+        storage.getKnowledgeArticles(tenantId),
+        tenantId ? storage.getTenant(tenantId) : Promise.resolve(undefined),
       ]);
+
+      const companyName = await getTenantCompanyName(tenantId);
+      const industry = getIndustryKnowledge(tenant?.industry);
 
       const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
       const outstanding = allInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
 
-      const systemPrompt = `You are an AI assistant for ${brandingConfig.companyName}, a trucking-focused CRM and operations management platform. You serve two key roles:
+      const industrySection = industry.knowledge ? `=== INDUSTRY KNOWLEDGE ===
+
+You are an expert in the following areas and should provide detailed, accurate guidance:
+
+${industry.knowledge}
+
+${industry.guidance}
+- Suggest related services from the ${companyName} service catalog when appropriate` : '';
+
+      const systemPrompt = `You are an AI assistant for ${companyName}, a CRM and operations management platform. You serve two key roles:
 
 1. INTERNAL OPERATIONS ASSISTANT — You have access to live business data and can answer questions about clients, invoices, tickets, documents, and revenue.
-2. TRUCKING INDUSTRY EXPERT & RESEARCH ASSISTANT — You have deep knowledge of the trucking industry, including federal and state regulations, compliance requirements, and business operations. You can help staff research complex regulatory questions.
+2. INDUSTRY EXPERT & RESEARCH ASSISTANT — You have deep knowledge of relevant industry regulations, compliance requirements, and business operations. You can help staff research complex regulatory questions.
 
 === LIVE BUSINESS DATA ===
 
@@ -1731,14 +2008,7 @@ ${knowledgeArticlesList.map(a => `### ${a.title} [Category: ${a.category}]\n${a.
 
 When answering questions about company processes, ALWAYS check the INTERNAL KNOWLEDGE BASE section first. If a relevant article exists, cite it by title and suggest the employee read it at the Knowledge Base page.
 
-=== TRUCKING INDUSTRY KNOWLEDGE ===
-
-You are an expert in the following areas and should provide detailed, accurate guidance:
-
-${truckingIndustryKnowledge}
-
-${truckingIndustryGuidance}
-- Suggest related services from the ${brandingConfig.companyName} service catalog when appropriate
+${industrySection}
 
 === RESEARCH CAPABILITIES ===
 When staff ask you to research regulations, find forms, or look up requirements:
@@ -1810,21 +2080,28 @@ When staff ask you to research regulations, find forms, or look up requirements:
       if (!message) return res.status(400).json({ message: "Message is required" });
 
       const clientId = req.clientId;
-      const [client, clientTickets, clientInvoices, clientDocs, knowledgeArticlesList, allServiceItemsList] = await Promise.all([
-        storage.getClient(clientId),
-        storage.getTicketsByClient(clientId),
-        storage.getInvoicesByClient(clientId),
-        storage.getDocumentsByClient(clientId),
-        storage.getKnowledgeArticles(),
-        storage.getServiceItems(),
+      const tenantId = (req as any).tenantId;
+      const [client, clientTickets, clientInvoices, clientDocs, knowledgeArticlesList, allServiceItemsList, tenant] = await Promise.all([
+        storage.getClient(clientId, tenantId),
+        storage.getTicketsByClient(clientId, tenantId),
+        storage.getInvoicesByClient(clientId, tenantId),
+        storage.getDocumentsByClient(clientId, tenantId),
+        storage.getKnowledgeArticles(tenantId),
+        storage.getServiceItems(tenantId),
+        tenantId ? storage.getTenant(tenantId) : Promise.resolve(undefined),
       ]);
+
+      const companyName = await getTenantCompanyName(tenantId);
+      const industry = getIndustryKnowledge(tenant?.industry);
 
       const totalPaid = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
       const totalDue = clientInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
 
-      const systemPrompt = `You are a helpful AI assistant for ${brandingConfig.companyName}. You are speaking directly with a client — ${client?.companyName || 'a valued client'}.
+      const complianceSection = industry.portalTopics ? `3. **Compliance Guidance**: Explain ${industry.portalTopics} in simple terms.` : '';
 
-Your role is to help this client understand their services, compliance requirements, and how ${brandingConfig.companyName} works. Be friendly, professional, and clear. Avoid technical jargon when possible.
+      const systemPrompt = `You are a helpful AI assistant for ${companyName}. You are speaking directly with a client — ${client?.companyName || 'a valued client'}.
+
+Your role is to help this client understand their services, compliance requirements, and how ${companyName} works. Be friendly, professional, and clear. Avoid technical jargon when possible.
 
 === CLIENT INFORMATION ===
 Company: ${client?.companyName || 'N/A'}
@@ -1844,7 +2121,7 @@ ${clientInvoices.slice(0, 10).map(i => `- Invoice ${i.invoiceNumber} — $${i.am
 ${clientDocs.length > 0 ? clientDocs.slice(0, 15).map(d => `- ${d.name} (${d.type}) — ${d.status}`).join('\n') : 'No documents on file.'}
 
 === AVAILABLE SERVICES ===
-${brandingConfig.companyName} offers the following:
+${companyName} offers the following:
 ${allServiceItemsList.map(s => `- **${s.name}** — ${s.description || s.category} ($${s.defaultPrice})`).join('\n')}
 
 === COMPANY KNOWLEDGE BASE ===
@@ -1857,7 +2134,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
    - Tickets: open (just created), in_progress (being worked on), completed (done), blocked (waiting for documents from you)
    - Invoices: draft (not yet sent), sent (payment due), paid (all set), overdue (past due — please pay)
    - Documents: pending (waiting for upload), received (we have it), approved (verified)
-3. **Compliance Guidance**: Explain ${truckingPortalComplianceTopics} in simple terms.
+${complianceSection}
 4. **Portal Navigation**: Help them find things in their portal:
    - [My Services](/portal/services) — view active services
    - [My Invoices](/portal/invoices) — view and pay invoices
@@ -1865,7 +2142,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
    - [Messages](/portal/chat) — contact our team directly
    - [Tax Documents](/portal/tax-documents) — upload tax docs and review returns
    - [Bookkeeping](/portal/bookkeeping) — view financial summaries
-5. **Escalation**: If the client needs immediate help or has a complex issue, suggest they use the Messages page to contact the ${brandingConfig.companyName} team directly.
+5. **Escalation**: If the client needs immediate help or has a complex issue, suggest they use the Messages page to contact the ${companyName} team directly.
 
 === FORMATTING RULES ===
 - Use **bold** for important values
@@ -1919,39 +2196,42 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
 
   // ===== PORTAL LINE ITEMS ROUTES =====
   app.get("/api/portal/invoices/:id/line-items", isAuthenticated, isClient, async (req: any, res) => {
-    const invoice = await storage.getInvoice(param(req, "id"));
+    const tenantId = (req as any).tenantId;
+    const invoice = await storage.getInvoice(param(req, "id"), tenantId);
     if (!invoice || invoice.clientId !== req.clientId) return res.status(404).json({ message: "Invoice not found" });
-    const items = await storage.getInvoiceLineItems(param(req, "id"));
+    const items = await storage.getInvoiceLineItems(param(req, "id"), tenantId);
     res.json(items);
   });
 
   // ===== TAX PREP ROUTES (admin only) =====
-  app.get("/api/admin/tax-documents", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/tax-documents", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const { clientId, taxYear } = req.query;
     let docs;
     if (clientId) {
-      docs = await storage.getTaxDocumentsByClient(clientId as string);
+      docs = await storage.getTaxDocumentsByClient(clientId as string, tenantId);
     } else if (taxYear) {
-      docs = await storage.getTaxDocumentsByYear(parseInt(taxYear as string));
+      docs = await storage.getTaxDocumentsByYear(parseInt(taxYear as string), tenantId);
     } else {
-      docs = await storage.getTaxDocuments();
+      docs = await storage.getTaxDocuments(tenantId);
     }
     await audit(req, "viewed", "tax_document", "", "Accessed tax documents list");
     res.json(docs);
   });
 
-  app.get("/api/admin/tax-documents/export/csv", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/tax-documents/export/csv", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const { clientId: csvClientId, taxYear: csvTaxYear } = req.query;
     let csvDocs;
     if (csvClientId) {
-      csvDocs = await storage.getTaxDocumentsByClient(csvClientId as string);
+      csvDocs = await storage.getTaxDocumentsByClient(csvClientId as string, tenantId);
     } else if (csvTaxYear) {
-      csvDocs = await storage.getTaxDocumentsByYear(parseInt(csvTaxYear as string));
+      csvDocs = await storage.getTaxDocumentsByYear(parseInt(csvTaxYear as string), tenantId);
     } else {
-      csvDocs = await storage.getTaxDocuments();
+      csvDocs = await storage.getTaxDocuments(tenantId);
     }
 
-    const allClients = await storage.getClients();
+    const allClients = await storage.getClients(tenantId);
     const csvClientMap = new Map(allClients.map(c => [c.id, c]));
 
     const headers = ["Tax Year", "Client Name", "EIN", "Document Type", "Payer/Employer", "Total Income", "Federal Withholding", "State Withholding", "SSN Last 4", "Confidence", "Status", "Risk Flags", "Notes"];
@@ -1983,15 +2263,17 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     res.send(csv);
   });
 
-  app.get("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const doc = await storage.getTaxDocument(param(req, "id"));
+  app.get("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
     if (!doc) return res.status(404).json({ message: "Tax document not found" });
     await audit(req, "viewed", "tax_document", doc.id, `Viewed tax document — ${doc.documentType}`);
     res.json(doc);
   });
 
-  app.post("/api/admin/tax-documents", isAuthenticated, isAdmin, async (req, res) => {
-    const parsed = insertTaxDocumentSchema.safeParse(req.body);
+  app.post("/api/admin/tax-documents", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const parsed = insertTaxDocumentSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const data = { ...parsed.data };
     if (data.ssnLastFour && data.ssnLastFour.length > 4) {
@@ -2002,7 +2284,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     res.status(201).json(doc);
   });
 
-  app.post("/api/admin/tax-documents/upload", isAuthenticated, isAdmin, (req, res, next) => {
+  app.post("/api/admin/tax-documents/upload", isAuthenticated, isAdmin, requireModule('tax_preparation'), (req, res, next) => {
     taxDocUpload.single("file")(req, res, (err: any) => {
       if (err) {
         if (err instanceof multer.MulterError) {
@@ -2067,8 +2349,9 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     }
   });
 
-  app.get("/api/admin/tax-documents/:id/download", isAuthenticated, isAdmin, async (req, res) => {
-    const doc = await storage.getTaxDocument(param(req, "id"));
+  app.get("/api/admin/tax-documents/:id/download", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
     if (!doc || !doc.filePath) {
       return res.status(404).json({ message: "File not found" });
     }
@@ -2081,7 +2364,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     res.download(fullPath, doc.fileName || "document");
   });
 
-  app.patch("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
     const allowedFields = ["clientId", "taxYear", "documentType", "payerName", "documentContent", "notes", "status", "ssnLastFour"];
     const updateData: Record<string, any> = {};
     for (const key of allowedFields) {
@@ -2101,7 +2384,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     res.json(doc);
   });
 
-  app.delete("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/tax-documents/:id", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
     const id = param(req, "id");
     const doc = await storage.getTaxDocument(id);
     if (doc?.filePath) {
@@ -2116,19 +2399,21 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
     res.status(204).send();
   });
 
-  app.post("/api/admin/tax-documents/:id/analyze", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/tax-documents/:id/analyze", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
     try {
-      const doc = await storage.getTaxDocument(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
       if (!doc) return res.status(404).json({ message: "Tax document not found" });
 
-      const client = await storage.getClient(doc.clientId);
+      const client = await storage.getClient(doc.clientId, tenantId);
 
       const openai = new OpenAI({
         apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
         baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
       });
 
-      const systemPrompt = `You are a professional tax intake analyst for a U.S.-based tax preparation firm specializing in trucking companies. Your job is to analyze tax document information and extract structured data.
+      const tenantCompanyName = await getTenantCompanyName(tenantId);
+      const systemPrompt = `You are a professional tax intake analyst for ${tenantCompanyName}, a U.S.-based tax preparation firm. Your job is to analyze tax document information and extract structured data.
 
 IMPORTANT: This is an intake analysis, not tax advice.
 
@@ -2218,10 +2503,11 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.get("/api/admin/tax-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/tax-summary/:clientId", isAuthenticated, isAdmin, requireModule('tax_preparation'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const clientId = param(req, "clientId");
     const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
-    const docs = await storage.getTaxDocumentsByClient(clientId);
+    const docs = await storage.getTaxDocumentsByClient(clientId, tenantId);
     const yearDocs = docs.filter(d => d.taxYear === taxYear);
 
     const totalIncome = yearDocs.reduce((s, d) => s + parseFloat(d.totalIncome || "0"), 0);
@@ -2261,12 +2547,13 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     });
   });
 
-  app.get("/api/admin/tax-prep/bookkeeping-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/tax-prep/bookkeeping-summary/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
       const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
 
-      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (!sub) {
         return res.json({ hasBookkeeping: false });
       }
@@ -2368,16 +2655,18 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
   });
 
   // ===== BOOKKEEPING ROUTES (admin) =====
-  app.get("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, async (_req, res) => {
-    const subs = await storage.getBookkeepingSubscriptions();
+  app.get("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const subs = await storage.getBookkeepingSubscriptions(tenantId);
     res.json(subs);
   });
 
-  app.post("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/bookkeeping/subscriptions", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const { clientId } = req.body;
       if (!clientId) return res.status(400).json({ message: "clientId is required" });
-      const existing = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const existing = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (existing) return res.status(400).json({ message: "Client already has a bookkeeping subscription" });
       const sub = await storage.createBookkeepingSubscription({
         clientId,
@@ -2385,6 +2674,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
         price: "50.00",
         status: "active",
         startDate: new Date(),
+        tenantId,
       });
       await audit(req, "created", "bookkeeping_subscription", sub.id, `Activated bookkeeping for client ${clientId}`);
       res.json(sub);
@@ -2393,7 +2683,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.patch("/api/admin/bookkeeping/subscriptions/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/bookkeeping/subscriptions/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
       const allowed = z.object({
         status: z.enum(["active", "inactive", "cancelled", "past_due", "pending"]).optional(),
@@ -2412,12 +2702,13 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.get("/api/admin/bookkeeping/transactions", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/bookkeeping/transactions", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const { clientId, month, year } = req.query;
     if (!clientId || typeof clientId !== "string") return res.status(400).json({ message: "clientId required" });
     const m = month ? parseInt(month as string) : undefined;
     const y = year ? parseInt(year as string) : undefined;
-    const txns = await storage.getBankTransactions(clientId, m, y);
+    const txns = await storage.getBankTransactions(clientId, m, y, tenantId);
     res.json(txns);
   });
 
@@ -2427,8 +2718,9 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     else cb(new Error("Only image files are allowed"));
   }});
 
-  app.post("/api/admin/bookkeeping/upload-statement/:clientId", isAuthenticated, isAdmin, csvUpload.single("file"), async (req, res) => {
+  app.post("/api/admin/bookkeeping/upload-statement/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), csvUpload.single("file"), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
       const file = req.file;
       if (!file) return res.status(400).json({ message: "CSV file required" });
@@ -2447,7 +2739,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.patch("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
       const allowed = z.object({
         manualCategory: z.string().nullable().optional(),
@@ -2463,22 +2755,23 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.delete("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/bookkeeping/transactions/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     await storage.deleteBankTransaction(param(req, "id"));
     res.json({ success: true });
   });
 
-  app.post("/api/admin/bookkeeping/ai-categorize/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/bookkeeping/ai-categorize/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
       const { month, year } = req.body;
       const m = month ? parseInt(month) : undefined;
       const y = year ? parseInt(year) : undefined;
-      const txns = await storage.getBankTransactions(clientId, m, y);
+      const txns = await storage.getBankTransactions(clientId, m, y, tenantId);
       const uncategorized = txns.filter(t => !t.aiCategory && !t.manualCategory);
       if (uncategorized.length === 0) return res.json({ message: "All transactions already categorized", count: 0 });
 
-      const categories = await storage.getTransactionCategories();
+      const categories = await storage.getTransactionCategories(tenantId);
       const categoryNames = categories.map(c => c.name);
 
       const openai = new OpenAI({
@@ -2497,9 +2790,9 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
           messages: [
             {
               role: "system",
-              content: `You are a trucking company bookkeeper. Categorize each transaction into one of these categories: ${categoryNames.join(", ")}. Return a JSON array of objects with "index" (1-based), "category" (exact category name), and "confidence" (0-100). Only return the JSON array, no other text.`
+              content: `You are a bookkeeper for ${await getTenantCompanyName(tenantId)}. Categorize each transaction into one of these categories: ${categoryNames.join(", ")}. Return a JSON array of objects with "index" (1-based), "category" (exact category name), and "confidence" (0-100). Only return the JSON array, no other text.`
             },
-            { role: "user", content: `Categorize these trucking company transactions:\n${txnList}` }
+            { role: "user", content: `Categorize these transactions:\n${txnList}` }
           ],
           temperature: 0.1,
         });
@@ -2530,21 +2823,23 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.get("/api/admin/bookkeeping/summaries", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/bookkeeping/summaries", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const { clientId } = req.query;
     if (!clientId || typeof clientId !== "string") return res.status(400).json({ message: "clientId required" });
-    const summaries = await storage.getMonthlySummaries(clientId);
+    const summaries = await storage.getMonthlySummaries(clientId, tenantId);
     res.json(summaries);
   });
 
-  app.post("/api/admin/bookkeeping/generate-summary/:clientId", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/bookkeeping/generate-summary/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
       const { month, year } = req.body;
       if (!month || !year) return res.status(400).json({ message: "month and year required" });
 
-      const txns = await storage.getBankTransactions(clientId, parseInt(month), parseInt(year));
-      const categories = await storage.getTransactionCategories();
+      const txns = await storage.getBankTransactions(clientId, parseInt(month), parseInt(year), tenantId);
+      const categories = await storage.getTransactionCategories(tenantId);
       const incomeCategories = categories.filter(c => c.parentCategory === "Income").map(c => c.name);
 
       let totalIncome = 0;
@@ -2563,7 +2858,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
         }
       }
 
-      const existing = await storage.getMonthlySummary(clientId, parseInt(month), parseInt(year));
+      const existing = await storage.getMonthlySummary(clientId, parseInt(month), parseInt(year), tenantId);
       const summaryData = {
         clientId,
         month: parseInt(month),
@@ -2572,6 +2867,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
         totalExpenses: totalExpenses.toFixed(2),
         netIncome: (totalIncome - totalExpenses).toFixed(2),
         categoryBreakdown: JSON.stringify(breakdown),
+        tenantId,
       };
 
       let summary;
@@ -2587,14 +2883,16 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.get("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, async (_req, res) => {
-    const cats = await storage.getTransactionCategories();
+  app.get("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const cats = await storage.getTransactionCategories(tenantId);
     res.json(cats);
   });
 
-  app.post("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/bookkeeping/categories", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
-      const parsed = insertTransactionCategorySchema.parse(req.body);
+      const tenantId = (req as any).tenantId;
+      const parsed = insertTransactionCategorySchema.parse({ ...req.body, tenantId });
       const cat = await storage.createTransactionCategory(parsed);
       res.json(cat);
     } catch (error: any) {
@@ -2602,49 +2900,52 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.patch("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     const allowed = z.object({ name: z.string().optional(), description: z.string().nullable().optional(), parentCategory: z.string().nullable().optional() }).parse(req.body);
     const cat = await storage.updateTransactionCategory(param(req, "id"), allowed);
     if (!cat) return res.status(404).json({ message: "Category not found" });
     res.json(cat);
   });
 
-  app.delete("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/bookkeeping/categories/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     await storage.deleteTransactionCategory(param(req, "id"));
     res.json({ success: true });
   });
 
-  app.get("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const { clientId } = req.query;
     if (clientId && typeof clientId === "string") {
-      const assignments = await storage.getPreparerAssignmentsByClient(clientId);
+      const assignments = await storage.getPreparerAssignmentsByClient(clientId, tenantId);
       res.json(assignments);
     } else {
       const allPreparers = await db.select().from(users).where(eq(users.role, "preparer"));
       const assignments = [];
       for (const p of allPreparers) {
-        const a = await storage.getPreparerAssignments(p.id);
+        const a = await storage.getPreparerAssignments(p.id, tenantId);
         assignments.push(...a);
       }
       res.json(assignments);
     }
   });
 
-  app.post("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/bookkeeping/preparer-assignments", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const { preparerId, clientId } = req.body;
       if (!preparerId || !clientId) return res.status(400).json({ message: "preparerId and clientId required" });
       const [prepUser] = await db.select().from(users).where(eq(users.id, preparerId));
       if (!prepUser || prepUser.role !== "preparer") return res.status(400).json({ message: "Invalid preparer user" });
-      const client = await storage.getClient(clientId);
+      const client = await storage.getClient(clientId, tenantId);
       if (!client) return res.status(400).json({ message: "Client not found" });
       const dbUser = (req as any).dbUser;
       const assignment = await storage.createPreparerAssignment({
         preparerId,
         clientId,
         assignedBy: dbUser.id,
+        tenantId,
       });
-      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (sub) {
         await storage.updateBookkeepingSubscription(sub.id, { preparerId });
       }
@@ -2655,10 +2956,11 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.delete("/api/admin/bookkeeping/preparer-assignments/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/bookkeeping/preparer-assignments/:id", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const assignment = await db.select().from(preparerAssignments).where(eq(preparerAssignments.id, param(req, "id")));
     if (assignment.length > 0) {
-      const sub = await storage.getBookkeepingSubscriptionByClient(assignment[0].clientId);
+      const sub = await storage.getBookkeepingSubscriptionByClient(assignment[0].clientId, tenantId);
       if (sub && sub.preparerId === assignment[0].preparerId) {
         await storage.updateBookkeepingSubscription(sub.id, { preparerId: null });
       }
@@ -2668,22 +2970,26 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     res.json({ success: true });
   });
 
-  app.get("/api/admin/bookkeeping/preparers", isAuthenticated, isAdmin, async (_req, res) => {
+  app.get("/api/admin/bookkeeping/preparers", isAuthenticated, isAdmin, requireModule('bookkeeping'), async (req, res) => {
+    const tenantId = (req as any).tenantId;
     const preparers = await db.select().from(users).where(eq(users.role, "preparer"));
-    res.json(preparers.map(p => ({ id: p.id, username: p.username, firstName: p.firstName, lastName: p.lastName, email: p.email })));
+    const filtered = tenantId ? preparers.filter(p => p.tenantId === tenantId) : preparers;
+    res.json(filtered.map(p => ({ id: p.id, username: p.username, firstName: p.firstName, lastName: p.lastName, email: p.email })));
   });
 
   // ===== CLIENT PORTAL BOOKKEEPING ROUTES =====
-  app.get("/api/portal/bookkeeping/subscription", isAuthenticated, isClient, async (req, res) => {
+  app.get("/api/portal/bookkeeping/subscription", isAuthenticated, isClient, requireModule('bookkeeping'), async (req, res) => {
     const clientId = (req as any).clientId;
-    const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+    const tenantId = (req as any).tenantId;
+    const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
     res.json(sub || null);
   });
 
-  app.post("/api/portal/bookkeeping/subscribe", isAuthenticated, isClient, async (req, res) => {
+  app.post("/api/portal/bookkeeping/subscribe", isAuthenticated, isClient, requireModule('bookkeeping'), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const existing = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const tenantId = (req as any).tenantId;
+      const existing = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (existing && existing.status === "active") {
         return res.status(400).json({ message: "You already have an active bookkeeping subscription" });
       }
@@ -2702,6 +3008,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
         price: "50.00",
         status: "active",
         startDate: new Date(),
+        tenantId,
       });
       await audit(req, "created", "bookkeeping_subscription", sub.id, `Client self-activated bookkeeping — $50.00/mo`);
       res.json(sub);
@@ -2710,19 +3017,21 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  app.get("/api/portal/bookkeeping/transactions", isAuthenticated, isClient, async (req, res) => {
+  app.get("/api/portal/bookkeeping/transactions", isAuthenticated, isClient, requireModule('bookkeeping'), async (req, res) => {
     const clientId = (req as any).clientId;
+    const tenantId = (req as any).tenantId;
     const { month, year } = req.query;
     const m = month ? parseInt(month as string) : undefined;
     const y = year ? parseInt(year as string) : undefined;
-    const txns = await storage.getBankTransactions(clientId, m, y);
+    const txns = await storage.getBankTransactions(clientId, m, y, tenantId);
     res.json(txns);
   });
 
-  app.post("/api/portal/bookkeeping/upload-statement", isAuthenticated, isClient, csvUpload.single("file"), async (req, res) => {
+  app.post("/api/portal/bookkeeping/upload-statement", isAuthenticated, isClient, requireModule('bookkeeping'), csvUpload.single("file"), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const tenantId = (req as any).tenantId;
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (!sub || sub.status !== "active") return res.status(403).json({ message: "Active bookkeeping subscription required" });
 
       const file = req.file;
@@ -2742,7 +3051,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
     }
   });
 
-  async function analyzeReceiptWithAI(imageBase64: string, mimeType: string): Promise<{
+  async function analyzeReceiptWithAI(imageBase64: string, mimeType: string, tenantId?: string): Promise<{
     vendor: string; amount: number; date: string; category: string; description: string; confidence: number;
   }> {
     const openai = new OpenAI({
@@ -2750,15 +3059,16 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
       baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
     });
 
-    const categories = await storage.getTransactionCategories();
+    const categories = await storage.getTransactionCategories(tenantId);
     const categoryNames = categories.map(c => c.name).join(", ");
+    const companyName = await getTenantCompanyName(tenantId);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a receipt analysis assistant for a trucking company bookkeeping system. Analyze the receipt image and extract the following information. Return ONLY valid JSON with these fields:
+          content: `You are a receipt analysis assistant for ${companyName}'s bookkeeping system. Analyze the receipt image and extract the following information. Return ONLY valid JSON with these fields:
 - "vendor": string (business/store name)
 - "amount": number (total amount paid, positive number)
 - "date": string (transaction date in YYYY-MM-DD format)
@@ -2766,7 +3076,7 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
 - "description": string (brief description of the purchase, e.g. "Fuel purchase at Pilot Travel Center")
 - "confidence": number (0-100, your confidence in the extraction accuracy)
 
-If you cannot read a field clearly, make your best estimate and lower the confidence score. For the category, pick the most appropriate one from the list for a trucking company.`,
+If you cannot read a field clearly, make your best estimate and lower the confidence score. For the category, pick the most appropriate one from the list.`,
         },
         {
           role: "user",
@@ -2793,17 +3103,18 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     };
   }
 
-  app.post("/api/portal/bookkeeping/upload-receipt", isAuthenticated, isClient, receiptUpload.single("receipt"), async (req, res) => {
+  app.post("/api/portal/bookkeeping/upload-receipt", isAuthenticated, isClient, requireModule('bookkeeping'), receiptUpload.single("receipt"), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const tenantId = (req as any).tenantId;
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (!sub || sub.status !== "active") return res.status(403).json({ message: "Active bookkeeping subscription required" });
 
       const file = req.file;
       if (!file) return res.status(400).json({ message: "Receipt image required" });
 
       const imageBase64 = file.buffer.toString("base64");
-      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype);
+      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype, tenantId);
 
       const txDate = new Date(extracted.date);
       if (isNaN(txDate.getTime())) throw new Error("Could not parse date from receipt");
@@ -2829,20 +3140,22 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.post("/api/admin/bookkeeping/upload-receipt/:clientId", isAuthenticated, isAdmin, receiptUpload.single("receipt"), async (req, res) => {
+  app.post("/api/admin/bookkeeping/upload-receipt/:clientId", isAuthenticated, isAdmin, requireModule('bookkeeping'), receiptUpload.single("receipt"), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "clientId");
       const file = req.file;
       if (!file) return res.status(400).json({ message: "Receipt image required" });
 
       const imageBase64 = file.buffer.toString("base64");
-      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype);
+      const extracted = await analyzeReceiptWithAI(imageBase64, file.mimetype, tenantId);
 
       const txDate = new Date(extracted.date);
       if (isNaN(txDate.getTime())) throw new Error("Could not parse date from receipt");
 
       const transaction = await storage.createBankTransaction({
         clientId,
+        tenantId,
         transactionDate: txDate,
         description: extracted.description || `${extracted.vendor} purchase`,
         amount: String(-Math.abs(extracted.amount)),
@@ -2862,24 +3175,26 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.get("/api/portal/bookkeeping/summaries", isAuthenticated, isClient, async (req, res) => {
+  app.get("/api/portal/bookkeeping/summaries", isAuthenticated, isClient, requireModule('bookkeeping'), async (req, res) => {
     const clientId = (req as any).clientId;
-    const summaries = await storage.getMonthlySummaries(clientId);
+    const tenantId = (req as any).tenantId;
+    const summaries = await storage.getMonthlySummaries(clientId, tenantId);
     res.json(summaries);
   });
 
   // ===== CLIENT PORTAL: TAX DOCUMENTS =====
-  app.get("/api/portal/tax-documents", isAuthenticated, isClient, async (req, res) => {
+  app.get("/api/portal/tax-documents", isAuthenticated, isClient, requireModule('tax_preparation'), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const docs = await storage.getTaxDocumentsByClient(clientId);
+      const tenantId = (req as any).tenantId;
+      const docs = await storage.getTaxDocumentsByClient(clientId, tenantId);
       res.json(docs);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
-  app.post("/api/portal/tax-documents/upload", isAuthenticated, isClient, (req, res, next) => {
+  app.post("/api/portal/tax-documents/upload", isAuthenticated, isClient, requireModule('tax_preparation'), (req, res, next) => {
     taxDocUpload.single("file")(req, res, (err: any) => {
       if (err) {
         if (err instanceof multer.MulterError) {
@@ -2931,10 +3246,11 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.get("/api/portal/tax-documents/:id/download", isAuthenticated, isClient, async (req, res) => {
+  app.get("/api/portal/tax-documents/:id/download", isAuthenticated, isClient, requireModule('tax_preparation'), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const doc = await storage.getTaxDocument(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
       if (!doc || doc.clientId !== clientId || !doc.filePath) {
         return res.status(404).json({ message: "File not found" });
       }
@@ -2949,10 +3265,11 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.post("/api/portal/tax-documents/:id/approve", isAuthenticated, isClient, async (req, res) => {
+  app.post("/api/portal/tax-documents/:id/approve", isAuthenticated, isClient, requireModule('tax_preparation'), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const doc = await storage.getTaxDocument(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
       if (!doc || doc.clientId !== clientId) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -2963,7 +3280,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         status: "approved",
         approvedAt: new Date(),
       });
-      await notifyAllAdmins("Tax Return Approved", `Client approved tax document: ${doc.fileName || doc.documentType}`, "document");
+      await notifyAllAdmins("Tax Return Approved", `Client approved tax document: ${doc.fileName || doc.documentType}`, "document", undefined, tenantId);
       await audit(req, "approved", "tax_document", doc.id, `Client approved tax return: ${doc.fileName}`);
       res.json(updated);
     } catch (error: any) {
@@ -2971,10 +3288,11 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.post("/api/portal/tax-documents/:id/reject", isAuthenticated, isClient, async (req, res) => {
+  app.post("/api/portal/tax-documents/:id/reject", isAuthenticated, isClient, requireModule('tax_preparation'), async (req, res) => {
     try {
       const clientId = (req as any).clientId;
-      const doc = await storage.getTaxDocument(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const doc = await storage.getTaxDocument(param(req, "id"), tenantId);
       if (!doc || doc.clientId !== clientId) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -2989,7 +3307,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         status: "rejected",
         rejectionFeedback: feedback.trim(),
       });
-      await notifyAllAdmins("Tax Return Rejected", `Client rejected tax document: ${doc.fileName || doc.documentType}. Feedback: ${feedback || "No feedback provided"}`, "document");
+      await notifyAllAdmins("Tax Return Rejected", `Client rejected tax document: ${doc.fileName || doc.documentType}. Feedback: ${feedback || "No feedback provided"}`, "document", undefined, tenantId);
       await audit(req, "rejected", "tax_document", doc.id, `Client rejected tax return: ${doc.fileName}`);
       res.json(updated);
     } catch (error: any) {
@@ -3000,15 +3318,16 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   // ===== PREPARER PORTAL ROUTES =====
   app.get("/api/preparer/clients", isAuthenticated, isPreparer, async (req, res) => {
     const dbUser = (req as any).dbUser;
-    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    const tenantId = (req as any).tenantId;
+    const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
     const clientIds = assignments.map(a => a.clientId);
     if (clientIds.length === 0) return res.json([]);
 
     const clientList = [];
     for (const cid of clientIds) {
-      const client = await storage.getClient(cid);
+      const client = await storage.getClient(cid, tenantId);
       if (client) {
-        const sub = await storage.getBookkeepingSubscriptionByClient(cid);
+        const sub = await storage.getBookkeepingSubscriptionByClient(cid, tenantId);
         clientList.push({ ...client, bookkeepingSubscription: sub });
       }
     }
@@ -3017,35 +3336,38 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/preparer/clients/:id/transactions", isAuthenticated, isPreparer, async (req, res) => {
     const dbUser = (req as any).dbUser;
+    const tenantId = (req as any).tenantId;
     const clientId = param(req, "id");
-    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
     if (!assignments.some(a => a.clientId === clientId)) {
       return res.status(403).json({ message: "Not assigned to this client" });
     }
     const { month, year } = req.query;
     const m = month ? parseInt(month as string) : undefined;
     const y = year ? parseInt(year as string) : undefined;
-    const txns = await storage.getBankTransactions(clientId, m, y);
+    const txns = await storage.getBankTransactions(clientId, m, y, tenantId);
     res.json(txns);
   });
 
   app.get("/api/preparer/clients/:id/summaries", isAuthenticated, isPreparer, async (req, res) => {
     const dbUser = (req as any).dbUser;
+    const tenantId = (req as any).tenantId;
     const clientId = param(req, "id");
-    const assignments = await storage.getPreparerAssignments(dbUser.id);
+    const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
     if (!assignments.some(a => a.clientId === clientId)) {
       return res.status(403).json({ message: "Not assigned to this client" });
     }
-    const summaries = await storage.getMonthlySummaries(clientId);
+    const summaries = await storage.getMonthlySummaries(clientId, tenantId);
     res.json(summaries);
   });
 
   app.patch("/api/preparer/transactions/:id", isAuthenticated, isPreparer, async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
-      const txn = await storage.getBankTransaction(param(req, "id"));
+      const tenantId = (req as any).tenantId;
+      const txn = await storage.getBankTransaction(param(req, "id"), tenantId);
       if (!txn) return res.status(404).json({ message: "Transaction not found" });
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === txn.clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
@@ -3060,16 +3382,17 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== PREPARER: TAX DOCUMENTS =====
-  app.get("/api/preparer/clients/:id/tax-documents", isAuthenticated, isPreparer, async (req, res) => {
+  app.get("/api/preparer/clients/:id/tax-documents", isAuthenticated, isPreparer, requireModule('tax_preparation'), async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
       const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : undefined;
-      let docs = await storage.getTaxDocumentsByClient(clientId);
+      let docs = await storage.getTaxDocumentsByClient(clientId, tenantId);
       if (taxYear) docs = docs.filter(d => d.taxYear === taxYear);
       res.json(docs);
     } catch (error: any) {
@@ -3077,7 +3400,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.post("/api/preparer/clients/:id/tax-documents/upload", isAuthenticated, isPreparer, (req, res, next) => {
+  app.post("/api/preparer/clients/:id/tax-documents/upload", isAuthenticated, isPreparer, requireModule('tax_preparation'), (req, res, next) => {
     taxDocUpload.single("file")(req, res, (err: any) => {
       if (err) {
         if (err instanceof multer.MulterError) {
@@ -3093,8 +3416,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   }, async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
         return res.status(403).json({ message: "Not assigned to this client" });
@@ -3125,6 +3449,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         status: "pending",
         uploadedBy: dbUser.id,
         uploadedByRole: "preparer",
+        tenantId,
       });
 
       await audit(req, "created", "tax_document", doc.id, `Preparer uploaded tax document — ${req.file.originalname} (${doc.documentType}) for tax year ${taxYear}`);
@@ -3135,16 +3460,17 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.patch("/api/preparer/clients/:id/tax-documents/:docId/send-for-review", isAuthenticated, isPreparer, async (req, res) => {
+  app.patch("/api/preparer/clients/:id/tax-documents/:docId/send-for-review", isAuthenticated, isPreparer, requireModule('tax_preparation'), async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
       const docId = req.params.docId;
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
-      const doc = await storage.getTaxDocument(docId);
+      const doc = await storage.getTaxDocument(docId, tenantId);
       if (!doc || doc.clientId !== clientId) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -3152,7 +3478,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         return res.status(400).json({ message: `Cannot send for review — document is currently "${doc.status}"` });
       }
       const updated = await storage.updateTaxDocument(docId, { status: "ready_for_review" });
-      await notifyClientUsers(clientId, "Tax Return Ready", "Your tax return is ready for review", "document", "/portal/tax-documents");
+      await notifyClientUsers(clientId, "Tax Return Ready", "Your tax return is ready for review", "document", "/portal/tax-documents", tenantId);
       await audit(req, "updated", "tax_document", docId, `Sent tax document for client review`);
       res.json(updated);
     } catch (error: any) {
@@ -3164,12 +3490,13 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   app.get("/api/preparer/clients/:id/chat", isAuthenticated, isPreparer, async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
-      const messages = await storage.getChatMessages(clientId);
+      const messages = await storage.getChatMessages(clientId, tenantId);
       res.json(messages);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3179,8 +3506,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   app.post("/api/preparer/clients/:id/chat", isAuthenticated, isPreparer, async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
@@ -3195,11 +3523,12 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         senderName: `${preparerName} (Preparer)`,
         senderRole: "admin",
         message: message.trim(),
+        tenantId,
       });
-      await notifyClientUsers(clientId, "New Message", `New message from your tax preparer`, "message", `/portal/chat`);
-      const client = await storage.getClient(clientId);
+      await notifyClientUsers(clientId, "New Message", `New message from your tax preparer`, "message", `/portal/chat`, tenantId);
+      const client = await storage.getClient(clientId, tenantId);
       const clientName = client?.companyName || "a client";
-      await notifyAllAdmins("Preparer Message", `${preparerName} (Preparer) sent a message to ${clientName}`, "message", `/admin/chat`);
+      await notifyAllAdmins("Preparer Message", `${preparerName} (Preparer) sent a message to ${clientName}`, "message", `/admin/chat`, tenantId);
       res.status(201).json(msg);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3207,22 +3536,23 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== PREPARER: BOOKKEEPING SUMMARY =====
-  app.get("/api/preparer/clients/:id/bookkeeping-summary", isAuthenticated, isPreparer, async (req, res) => {
+  app.get("/api/preparer/clients/:id/bookkeeping-summary", isAuthenticated, isPreparer, requireModule('bookkeeping'), async (req, res) => {
     try {
       const dbUser = (req as any).dbUser;
+      const tenantId = (req as any).tenantId;
       const clientId = param(req, "id");
-      const assignments = await storage.getPreparerAssignments(dbUser.id);
+      const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
       if (!assignments.some(a => a.clientId === clientId)) {
         return res.status(403).json({ message: "Not assigned to this client" });
       }
       const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : new Date().getFullYear();
-      const sub = await storage.getBookkeepingSubscriptionByClient(clientId);
+      const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
       if (!sub) return res.json({ hasBookkeeping: false });
 
-      const summaries = await storage.getMonthlySummaries(clientId);
+      const summaries = await storage.getMonthlySummaries(clientId, tenantId);
       const yearSummaries = summaries.filter(s => s.year === taxYear);
 
-      const transactions = await storage.getBankTransactions(clientId);
+      const transactions = await storage.getBankTransactions(clientId, undefined, undefined, tenantId);
       const yearTransactions = transactions.filter(tx => {
         if (tx.statementYear === taxYear) return true;
         if (tx.transactionDate) {
@@ -3274,8 +3604,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== BOOKKEEPING CATEGORIES (public for authenticated) =====
-  app.get("/api/bookkeeping/categories", isAuthenticated, async (_req, res) => {
-    const cats = await storage.getTransactionCategories();
+  app.get("/api/bookkeeping/categories", isAuthenticated, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const cats = await storage.getTransactionCategories(tenantId);
     res.json(cats);
   });
 
@@ -3296,7 +3627,8 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/tickets/:ticketId/required-docs", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const docs = await storage.getTicketRequiredDocs(req.params.ticketId);
+      const tenantId = (req as any).tenantId;
+      const docs = await storage.getTicketRequiredDocs(req.params.ticketId, tenantId);
       res.json(docs);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3305,11 +3637,13 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.post("/api/tickets/:ticketId/required-docs", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const doc = await storage.createTicketRequiredDoc({
         ticketId: req.params.ticketId,
         documentName: req.body.documentName,
         documentType: req.body.documentType,
         status: "pending",
+        tenantId,
       });
       await recomputeTicketBlockedStatus(req.params.ticketId);
       await audit(req, "created", "ticket_required_doc", doc.id, `Added required doc "${req.body.documentName}" to ticket`);
@@ -3346,18 +3680,20 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== RECURRING TEMPLATES =====
-  app.get("/api/admin/recurring-templates", isAuthenticated, isAdmin, async (_req, res) => {
+  app.get("/api/admin/recurring-templates", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
-      const templates = await storage.getRecurringTemplates();
+      const tenantId = (req as any).tenantId;
+      const templates = await storage.getRecurringTemplates(tenantId);
       res.json(templates);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
-  app.post("/api/admin/recurring-templates", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/recurring-templates", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
-      const template = await storage.createRecurringTemplate(req.body);
+      const tenantId = (req as any).tenantId;
+      const template = await storage.createRecurringTemplate({ ...req.body, tenantId });
       await audit(req, "created", "recurring_template", template.id, `Created recurring template "${template.name}"`);
       res.json(template);
     } catch (error: any) {
@@ -3365,7 +3701,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.patch("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
       const template = await storage.updateRecurringTemplate(req.params.id, req.body);
       res.json(template);
@@ -3374,7 +3710,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.delete("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
       await storage.deleteRecurringTemplate(req.params.id);
       res.json({ success: true });
@@ -3384,19 +3720,21 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== CLIENT RECURRING SCHEDULES =====
-  app.get("/api/admin/recurring-schedules", isAuthenticated, isAdmin, async (req, res) => {
+  app.get("/api/admin/recurring-schedules", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const clientId = req.query.clientId as string | undefined;
-      const schedules = await storage.getClientRecurringSchedules(clientId);
+      const schedules = await storage.getClientRecurringSchedules(clientId, tenantId);
       res.json(schedules);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
-  app.post("/api/admin/recurring-schedules", isAuthenticated, isAdmin, async (req, res) => {
+  app.post("/api/admin/recurring-schedules", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
-      const schedule = await storage.createClientRecurringSchedule(req.body);
+      const tenantId = (req as any).tenantId;
+      const schedule = await storage.createClientRecurringSchedule({ ...req.body, tenantId });
       await audit(req, "created", "recurring_schedule", schedule.id, `Assigned recurring schedule to client`);
       res.json(schedule);
     } catch (error: any) {
@@ -3404,7 +3742,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.patch("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.patch("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
       const schedule = await storage.updateClientRecurringSchedule(req.params.id, req.body);
       res.json(schedule);
@@ -3413,7 +3751,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
-  app.delete("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, async (req, res) => {
+  app.delete("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
       await storage.deleteClientRecurringSchedule(req.params.id);
       res.json({ success: true });
@@ -3423,31 +3761,32 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   });
 
   // ===== ENHANCED ANALYTICS =====
-  app.get("/api/admin/analytics/enhanced", isAuthenticated, isOwner, async (_req, res) => {
+  app.get("/api/admin/analytics/enhanced", isAuthenticated, isOwner, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const now = new Date();
 
-      const allTickets = await storage.getTickets();
+      const allTickets = await storage.getTickets(tenantId);
       const openTickets = allTickets.filter(t => t.status === "open" || t.status === "in_progress" || t.status === "blocked");
       const ticketsDue7 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 7 * 86400000) && new Date(t.dueDate) > now);
       const ticketsDue14 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 14 * 86400000) && new Date(t.dueDate) > now);
       const ticketsDue30 = openTickets.filter(t => t.dueDate && new Date(t.dueDate) <= new Date(now.getTime() + 30 * 86400000) && new Date(t.dueDate) > now);
       const overdueTickets = openTickets.filter(t => t.dueDate && new Date(t.dueDate) < now);
 
-      const allDocs = await storage.getDocuments();
+      const allDocs = await storage.getDocuments(tenantId);
       const pendingDocs = allDocs.filter(d => d.status === "pending");
       const docsByClient: Record<string, number> = {};
       for (const doc of pendingDocs) {
         docsByClient[doc.clientId] = (docsByClient[doc.clientId] || 0) + 1;
       }
-      const allClients = await storage.getClients();
+      const allClients = await storage.getClients(tenantId);
       const clientMap = Object.fromEntries(allClients.map(c => [c.id, c.companyName]));
       const topDocBlockers = Object.entries(docsByClient)
         .map(([clientId, count]) => ({ clientId, companyName: clientMap[clientId] || "Unknown", pendingCount: count }))
         .sort((a, b) => b.pendingCount - a.pendingCount)
         .slice(0, 10);
 
-      const allInvoices = await storage.getInvoices();
+      const allInvoices = await storage.getInvoices(tenantId);
       const unpaidInvoices = allInvoices.filter(i => i.status === "sent" || i.status === "overdue" || i.status === "approved");
       let current = 0, days30 = 0, days60 = 0, days90 = 0;
       for (const inv of unpaidInvoices) {
@@ -3489,8 +3828,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/custom-field-definitions", isAuthenticated, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const entityType = req.query.entityType as string | undefined;
-      const definitions = await storage.getCustomFieldDefinitions(entityType);
+      const definitions = await storage.getCustomFieldDefinitions(entityType, tenantId);
       res.json(definitions.filter(d => d.isActive));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3499,8 +3839,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/admin/custom-fields", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const entityType = req.query.entityType as string | undefined;
-      const definitions = await storage.getCustomFieldDefinitions(entityType);
+      const definitions = await storage.getCustomFieldDefinitions(entityType, tenantId);
       res.json(definitions);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3509,7 +3850,8 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.post("/api/admin/custom-fields", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const parsed = insertCustomFieldDefinitionSchema.safeParse(req.body);
+      const tenantId = (req as any).tenantId;
+      const parsed = insertCustomFieldDefinitionSchema.safeParse({ ...req.body, tenantId });
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const definition = await storage.createCustomFieldDefinition(parsed.data);
       await audit(req, "created", "custom_field_definition", definition.id, `Created custom field "${definition.label}"`);
@@ -3521,8 +3863,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.patch("/api/admin/custom-fields/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const id = param(req, "id");
-      const existing = await storage.getCustomFieldDefinition(id);
+      const existing = await storage.getCustomFieldDefinition(id, tenantId);
       if (!existing) return res.status(404).json({ message: "Custom field definition not found" });
       const updated = await storage.updateCustomFieldDefinition(id, req.body);
       await audit(req, "updated", "custom_field_definition", id, `Updated custom field "${updated?.label}"`);
@@ -3534,8 +3877,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.delete("/api/admin/custom-fields/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const id = param(req, "id");
-      const existing = await storage.getCustomFieldDefinition(id);
+      const existing = await storage.getCustomFieldDefinition(id, tenantId);
       if (!existing) return res.status(404).json({ message: "Custom field definition not found" });
       await storage.deleteCustomFieldDefinition(id);
       await audit(req, "deleted", "custom_field_definition", id, `Deleted custom field "${existing.label}"`);
@@ -3547,6 +3891,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/custom-fields/:entityType/:entityId", isAuthenticated, async (req: any, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const entityType = param(req, "entityType");
       const entityId = param(req, "entityId");
       const dbUser = req.dbUser;
@@ -3558,13 +3903,13 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         if (entityType !== "client") {
           return res.status(403).json({ message: "Access denied" });
         }
-        const assignments = await storage.getPreparerAssignments(dbUser.id);
+        const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
         const assignedClientIds = assignments.map((a: any) => String(a.clientId));
         if (!assignedClientIds.includes(String(entityId))) {
           return res.status(403).json({ message: "Access denied" });
         }
       }
-      const values = await storage.getCustomFieldValues(entityType, entityId);
+      const values = await storage.getCustomFieldValues(entityType, entityId, tenantId);
       res.json(values);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3573,6 +3918,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.post("/api/custom-fields/:entityType/:entityId", isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const entityType = param(req, "entityType");
       const entityId = param(req, "entityId");
       const { fields } = req.body;
@@ -3586,6 +3932,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
           entityType,
           entityId,
           value: field.value,
+          tenantId,
         });
         if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
         const saved = await storage.setCustomFieldValue(parsed.data);

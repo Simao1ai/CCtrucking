@@ -24,6 +24,7 @@ import {
   MessagesSquare,
   Building2,
   Briefcase,
+  Settings2,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant } from "@/context/tenant-context";
@@ -103,6 +104,7 @@ const navGroups: NavGroup[] = [
       { title: "Employee Performance", url: "/admin/employee-performance", icon: Award, ownerOnly: true },
       { title: "Audit Log", url: "/admin/audit", icon: History, ownerOnly: true },
       { title: "Users", url: "/admin/users", icon: UserCog },
+      { title: "Tenant Settings", url: "/admin/tenant-settings", icon: Settings2, ownerOnly: true },
       { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
     ],
   },
@@ -132,8 +134,9 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {navGroups.map((group, groupIndex) => {
+          const ownerRoles = ["owner", "tenant_owner", "platform_owner"];
           const visibleItems = group.items.filter(
-            (item) => !item.ownerOnly || user?.role === "owner"
+            (item) => !item.ownerOnly || (user?.role && ownerRoles.includes(user.role))
           );
           if (visibleItems.length === 0) return null;
 
@@ -216,7 +219,7 @@ export function AppSidebar() {
                   : user.username}
               </span>
               <span className="text-xs text-muted-foreground truncate">
-                {user.role === "owner" ? "Owner" : "Admin"}
+                {["owner", "tenant_owner", "platform_owner"].includes(user.role) ? "Owner" : "Admin"}
               </span>
             </div>
           </div>

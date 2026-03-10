@@ -23,9 +23,26 @@ const defaultBranding: BrandingConfig = {
 
 const TenantContext = createContext<BrandingConfig>(defaultBranding);
 
+function getTenantSlug(): string | null {
+  const hostname = window.location.hostname;
+  const parts = hostname.split(".");
+  if (parts.length >= 3) {
+    return parts[0];
+  }
+  return null;
+}
+
 export function TenantProvider({ children }: { children: React.ReactNode }) {
+  const slug = getTenantSlug();
+  const queryKey = slug ? ["/api/branding", { slug }] : ["/api/branding"];
   const { data } = useQuery<BrandingConfig>({
-    queryKey: ["/api/branding"],
+    queryKey,
+    queryFn: async () => {
+      const url = slug ? `/api/branding?slug=${encodeURIComponent(slug)}` : "/api/branding";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch branding");
+      return res.json();
+    },
     staleTime: 1000 * 60 * 30,
   });
 

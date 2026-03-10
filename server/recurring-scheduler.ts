@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clientRecurringSchedules, recurringTemplates, serviceTickets, clients } from "@shared/schema";
+import { clientRecurringSchedules, recurringTemplates, serviceTickets, clients, tenants } from "@shared/schema";
 import { eq, and, lte } from "drizzle-orm";
 
 function computeNextDueDate(currentDueDate: Date, frequencyType: string): Date {
@@ -22,6 +22,12 @@ function computeNextDueDate(currentDueDate: Date, frequencyType: string): Date {
 
 export async function checkRecurringSchedules() {
   try {
+    const activeTenantRows = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.status, "active"));
+    const activeTenantIds = activeTenantRows.map((t) => t.id);
+
     const activeSchedules = await db
       .select()
       .from(clientRecurringSchedules)
@@ -30,6 +36,8 @@ export async function checkRecurringSchedules() {
     const now = new Date();
 
     for (const schedule of activeSchedules) {
+      if (schedule.tenantId && !activeTenantIds.includes(schedule.tenantId)) continue;
+
       const [template] = await db
         .select()
         .from(recurringTemplates)
@@ -55,6 +63,7 @@ export async function checkRecurringSchedules() {
 
       await db.insert(serviceTickets).values({
         clientId: schedule.clientId,
+        tenantId: schedule.tenantId,
         title: `${template.name} - ${client.companyName}`,
         serviceType: template.serviceType,
         status: "open",

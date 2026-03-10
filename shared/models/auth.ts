@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: text("role").notNull().default("client"),
   clientId: varchar("client_id"),
+  tenantId: varchar('tenant_id'),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

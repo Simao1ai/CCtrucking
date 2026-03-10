@@ -1,10 +1,17 @@
 import { db } from "./db";
-import { invoices, clients } from "@shared/schema";
+import { invoices, clients, tenants } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { sendReminderEmail } from "./invoice-email";
 
 export async function checkAndSendReminders() {
   try {
+    const activeTenantRows = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.status, "active"));
+
+    const activeTenantIds = activeTenantRows.map((t) => t.id);
+
     const unpaidInvoices = await db
       .select()
       .from(invoices)
@@ -19,6 +26,7 @@ export async function checkAndSendReminders() {
 
     for (const invoice of unpaidInvoices) {
       if (!invoice.dueDate) continue;
+      if (invoice.tenantId && !activeTenantIds.includes(invoice.tenantId)) continue;
 
       const dueDate = new Date(invoice.dueDate);
       if (now < dueDate) continue;

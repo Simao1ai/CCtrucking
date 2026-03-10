@@ -1,10 +1,51 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export * from "./models/auth";
 export * from "./models/chat";
+
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: varchar("slug").unique().notNull(),
+  status: text("status").notNull().default("active"),
+  plan: text("plan").notNull().default("basic"),
+  industry: text("industry"),
+  contactEmail: text("contact_email").notNull(),
+  contactPhone: text("contact_phone"),
+  ownerUserId: varchar("owner_user_id"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const tenantBranding = pgTable("tenant_branding", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id).unique(),
+  companyName: text("company_name"),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color"),
+  accentColor: text("accent_color"),
+  tagline: text("tagline"),
+  sidebarIcon: text("sidebar_icon"),
+  loginMessage: text("login_message"),
+  supportEmail: text("support_email"),
+  supportPhone: text("support_phone"),
+  websiteUrl: text("website_url"),
+  address: text("address"),
+});
+
+export const tenantSettings = pgTable("tenant_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  type: text("type").notNull().default("string"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by"),
+});
 
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -24,6 +65,7 @@ export const clients = pgTable("clients", {
   pipelineStage: text("pipeline_stage").default("new"),
   nextActionDate: timestamp("next_action_date"),
   nextActionNote: text("next_action_note"),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const serviceTickets = pgTable("service_tickets", {
@@ -40,6 +82,7 @@ export const serviceTickets = pgTable("service_tickets", {
   lockedAt: timestamp("locked_at"),
   lockedByName: text("locked_by_name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const documents = pgTable("documents", {
@@ -50,6 +93,7 @@ export const documents = pgTable("documents", {
   type: text("type").notNull(),
   status: text("status").notNull().default("pending"),
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const invoices = pgTable("invoices", {
@@ -65,6 +109,7 @@ export const invoices = pgTable("invoices", {
   lastReminderSent: timestamp("last_reminder_sent"),
   reminderCount: integer("reminder_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const chatMessages = pgTable("chat_messages", {
@@ -75,6 +120,7 @@ export const chatMessages = pgTable("chat_messages", {
   senderRole: text("sender_role").notNull().default("client"),
   message: text("message").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const signatureRequests = pgTable("signature_requests", {
@@ -91,6 +137,7 @@ export const signatureRequests = pgTable("signature_requests", {
   reminderSentAt: timestamp("reminder_sent_at"),
   reminderMethod: text("reminder_method"),
   createdBy: varchar("created_by"),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const notifications = pgTable("notifications", {
@@ -102,6 +149,7 @@ export const notifications = pgTable("notifications", {
   link: text("link"),
   read: text("read").notNull().default("false"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const formTemplates = pgTable("form_templates", {
@@ -112,6 +160,7 @@ export const formTemplates = pgTable("form_templates", {
   category: text("category").notNull().default("General"),
   createdBy: varchar("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const filledForms = pgTable("filled_forms", {
@@ -125,6 +174,7 @@ export const filledForms = pgTable("filled_forms", {
   signatureRequestId: varchar("signature_request_id").references(() => signatureRequests.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const notarizations = pgTable("notarizations", {
@@ -140,6 +190,7 @@ export const notarizations = pgTable("notarizations", {
   notes: text("notes"),
   performedBy: varchar("performed_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const auditLogs = pgTable("audit_logs", {
@@ -151,6 +202,7 @@ export const auditLogs = pgTable("audit_logs", {
   entityId: varchar("entity_id"),
   details: text("details"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const serviceItems = pgTable("service_items", {
@@ -161,6 +213,7 @@ export const serviceItems = pgTable("service_items", {
   defaultPrice: decimal("default_price", { precision: 10, scale: 2 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const invoiceLineItems = pgTable("invoice_line_items", {
@@ -172,6 +225,7 @@ export const invoiceLineItems = pgTable("invoice_line_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const staffMessages = pgTable("staff_messages", {
@@ -183,7 +237,12 @@ export const staffMessages = pgTable("staff_messages", {
   message: text("message").notNull(),
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
+
+export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTenantBrandingSchema = createInsertSchema(tenantBranding).omit({ id: true });
+export const insertTenantSettingsSchema = createInsertSchema(tenantSettings).omit({ id: true, updatedAt: true });
 
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
@@ -225,6 +284,7 @@ export const taxDocuments = pgTable("tax_documents", {
   analyzedAt: timestamp("analyzed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const pushSubscriptions = pgTable("push_subscriptions", {
@@ -234,6 +294,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const bookkeepingSubscriptions = pgTable("bookkeeping_subscriptions", {
@@ -248,6 +309,7 @@ export const bookkeepingSubscriptions = pgTable("bookkeeping_subscriptions", {
   startDate: timestamp("start_date").notNull().defaultNow(),
   endDate: timestamp("end_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const bankTransactions = pgTable("bank_transactions", {
@@ -268,6 +330,7 @@ export const bankTransactions = pgTable("bank_transactions", {
   source: text("source").default("csv"),
   receiptData: text("receipt_data"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const transactionCategories = pgTable("transaction_categories", {
@@ -277,6 +340,7 @@ export const transactionCategories = pgTable("transaction_categories", {
   parentCategory: text("parent_category"),
   isDefault: boolean("is_default").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const monthlySummaries = pgTable("monthly_summaries", {
@@ -290,6 +354,7 @@ export const monthlySummaries = pgTable("monthly_summaries", {
   categoryBreakdown: text("category_breakdown"),
   generatedAt: timestamp("generated_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const preparerAssignments = pgTable("preparer_assignments", {
@@ -298,6 +363,7 @@ export const preparerAssignments = pgTable("preparer_assignments", {
   clientId: varchar("client_id").notNull().references(() => clients.id),
   assignedBy: varchar("assigned_by").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const ticketRequiredDocuments = pgTable("ticket_required_documents", {
@@ -308,6 +374,7 @@ export const ticketRequiredDocuments = pgTable("ticket_required_documents", {
   status: text("status").notNull().default("pending"),
   documentId: varchar("document_id").references(() => documents.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const recurringTemplates = pgTable("recurring_templates", {
@@ -321,6 +388,7 @@ export const recurringTemplates = pgTable("recurring_templates", {
   requiredDocuments: text("required_documents"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const clientRecurringSchedules = pgTable("client_recurring_schedules", {
@@ -331,6 +399,7 @@ export const clientRecurringSchedules = pgTable("client_recurring_schedules", {
   lastGeneratedDate: timestamp("last_generated_date"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const clientNotes = pgTable("client_notes", {
@@ -341,6 +410,7 @@ export const clientNotes = pgTable("client_notes", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const knowledgeArticles = pgTable("knowledge_articles", {
@@ -353,6 +423,7 @@ export const knowledgeArticles = pgTable("knowledge_articles", {
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const customFieldDefinitions = pgTable("custom_field_definitions", {
@@ -368,6 +439,7 @@ export const customFieldDefinitions = pgTable("custom_field_definitions", {
   industryPackSource: text("industry_pack_source"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const customFieldValues = pgTable("custom_field_values", {
@@ -378,6 +450,7 @@ export const customFieldValues = pgTable("custom_field_values", {
   value: text("value"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
 export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({ id: true, createdAt: true, updatedAt: true });
@@ -398,6 +471,12 @@ export const insertTicketRequiredDocumentSchema = createInsertSchema(ticketRequi
 export const insertRecurringTemplateSchema = createInsertSchema(recurringTemplates).omit({ id: true, createdAt: true });
 export const insertClientRecurringScheduleSchema = createInsertSchema(clientRecurringSchedules).omit({ id: true, createdAt: true });
 
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type TenantBranding = typeof tenantBranding.$inferSelect;
+export type InsertTenantBranding = z.infer<typeof insertTenantBrandingSchema>;
+export type TenantSettings = typeof tenantSettings.$inferSelect;
+export type InsertTenantSettings = z.infer<typeof insertTenantSettingsSchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type ServiceTicket = typeof serviceTickets.$inferSelect;
