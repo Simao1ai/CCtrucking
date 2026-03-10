@@ -218,7 +218,7 @@ async function notifyUser(userId: string, title: string, message: string, type: 
 async function notifyAllAdmins(title: string, message: string, type: string, link?: string, tenantId?: string) {
   try {
     const allUsers = await db.select().from(users);
-    const admins = allUsers.filter(u => (u.role === "admin" || u.role === "owner") && (!tenantId || u.tenantId === tenantId));
+    const admins = allUsers.filter(u => ADMIN_ROLES.includes(u.role) && (!tenantId || u.tenantId === tenantId));
     for (const admin of admins) {
       await notifyUser(admin.id, title, message, type, link, tenantId);
     }
@@ -366,6 +366,7 @@ export async function registerRoutes(
         email: email || null,
         role,
         clientId: clientId || null,
+        tenantId: (req as any).tenantId,
       });
 
       const { password: _, ...safeUser } = user;
@@ -379,6 +380,12 @@ export async function registerRoutes(
   app.patch("/api/auth/assign-client", isAuthenticated, isAdmin, async (req, res) => {
     const { userId, clientId } = req.body;
     if (!userId || !clientId) return res.status(400).json({ message: "userId and clientId required" });
+    const tenantId = (req as any).tenantId;
+    const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
+    if (!targetUser) return res.status(404).json({ message: "User not found" });
+    if (tenantId && targetUser.tenantId !== tenantId) {
+      return res.status(403).json({ message: "Cannot modify users outside your tenant" });
+    }
     const [updated] = await db.update(users).set({ clientId, role: "client" }).where(eq(users.id, userId)).returning();
     if (!updated) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = updated;
@@ -388,6 +395,12 @@ export async function registerRoutes(
   app.patch("/api/auth/set-admin", isAuthenticated, isAdmin, async (req, res) => {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ message: "userId required" });
+    const tenantId = (req as any).tenantId;
+    const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
+    if (!targetUser) return res.status(404).json({ message: "User not found" });
+    if (tenantId && targetUser.tenantId !== tenantId) {
+      return res.status(403).json({ message: "Cannot modify users outside your tenant" });
+    }
     const [updated] = await db.update(users).set({ role: "admin" }).where(eq(users.id, userId)).returning();
     if (!updated) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = updated;
@@ -399,6 +412,12 @@ export async function registerRoutes(
     const currentUserId = (req.session as any).userId;
     if (targetId === currentUserId) {
       return res.status(400).json({ message: "Cannot delete your own account" });
+    }
+    const tenantId = (req as any).tenantId;
+    const [targetUser] = await db.select().from(users).where(eq(users.id, targetId));
+    if (!targetUser) return res.status(404).json({ message: "User not found" });
+    if (tenantId && targetUser.tenantId !== tenantId) {
+      return res.status(403).json({ message: "Cannot modify users outside your tenant" });
     }
     await db.delete(users).where(eq(users.id, targetId));
     res.status(204).send();
@@ -536,7 +555,7 @@ export async function registerRoutes(
     const ticket = await storage.getTicket(ticketId, tenantId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    const isOwnerOrAdmin = dbUser.role === "owner" || dbUser.role === "admin";
+    const isOwnerOrAdmin = ADMIN_ROLES.includes(dbUser.role);
     if (ticket.lockedBy !== dbUser.id && !isOwnerOrAdmin) {
       return res.status(403).json({ message: "Only the lock holder or an admin can release this ticket" });
     }
@@ -1814,7 +1833,7 @@ Contact name: ${client.contactName}`
     try {
       const tenantId = (req as any).tenantId;
       const allUsers = await db.select().from(users);
-      const staffUsers = allUsers.filter(u => (u.role === "admin" || u.role === "owner") && (!tenantId || u.tenantId === tenantId));
+      const staffUsers = allUsers.filter(u => ADMIN_ROLES.includes(u.role) && (!tenantId || u.tenantId === tenantId));
       const allLogs = await storage.getAuditLogs(50000, 0, tenantId);
 
       const now = new Date();

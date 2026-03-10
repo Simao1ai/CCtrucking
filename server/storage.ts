@@ -42,26 +42,26 @@ export interface IStorage {
   getClients(tenantId?: string): Promise<Client[]>;
   getClient(id: string, tenantId?: string): Promise<Client | undefined>;
   createClient(data: InsertClient): Promise<Client>;
-  updateClient(id: string, data: Partial<InsertClient>): Promise<Client | undefined>;
-  deleteClient(id: string): Promise<void>;
+  updateClient(id: string, data: Partial<InsertClient>, tenantId?: string): Promise<Client | undefined>;
+  deleteClient(id: string, tenantId?: string): Promise<void>;
 
   getTickets(tenantId?: string): Promise<ServiceTicket[]>;
   getTicket(id: string, tenantId?: string): Promise<ServiceTicket | undefined>;
   getTicketsByClient(clientId: string, tenantId?: string): Promise<ServiceTicket[]>;
   createTicket(data: InsertServiceTicket): Promise<ServiceTicket>;
-  updateTicket(id: string, data: Partial<InsertServiceTicket>): Promise<ServiceTicket | undefined>;
+  updateTicket(id: string, data: Partial<InsertServiceTicket>, tenantId?: string): Promise<ServiceTicket | undefined>;
 
   getDocuments(tenantId?: string): Promise<Document[]>;
   getDocument(id: string, tenantId?: string): Promise<Document | undefined>;
   getDocumentsByClient(clientId: string, tenantId?: string): Promise<Document[]>;
   createDocument(data: InsertDocument): Promise<Document>;
-  updateDocument(id: string, data: Partial<InsertDocument>): Promise<Document | undefined>;
+  updateDocument(id: string, data: Partial<InsertDocument>, tenantId?: string): Promise<Document | undefined>;
 
   getInvoices(tenantId?: string): Promise<Invoice[]>;
   getInvoice(id: string, tenantId?: string): Promise<Invoice | undefined>;
   getInvoicesByClient(clientId: string, tenantId?: string): Promise<Invoice[]>;
   createInvoice(data: InsertInvoice): Promise<Invoice>;
-  updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice | undefined>;
+  updateInvoice(id: string, data: Partial<InsertInvoice>, tenantId?: string): Promise<Invoice | undefined>;
 
   getChatMessages(clientId: string, tenantId?: string): Promise<ChatMessage[]>;
   createChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
@@ -69,38 +69,38 @@ export interface IStorage {
   getStaffMessages(userId: string, tenantId?: string): Promise<StaffMessage[]>;
   getStaffConversation(userId1: string, userId2: string, tenantId?: string): Promise<StaffMessage[]>;
   createStaffMessage(data: InsertStaffMessage): Promise<StaffMessage>;
-  markStaffMessagesRead(recipientId: string, senderId: string): Promise<void>;
+  markStaffMessagesRead(recipientId: string, senderId: string, tenantId?: string): Promise<void>;
   getUnreadStaffMessageCount(userId: string): Promise<number>;
 
   getSignatureRequests(tenantId?: string): Promise<SignatureRequest[]>;
   getSignatureRequest(id: string, tenantId?: string): Promise<SignatureRequest | undefined>;
   getSignatureRequestsByClient(clientId: string, tenantId?: string): Promise<SignatureRequest[]>;
   createSignatureRequest(data: InsertSignatureRequest): Promise<SignatureRequest>;
-  updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined>;
+  updateSignatureRequest(id: string, data: Partial<SignatureRequest>, tenantId?: string): Promise<SignatureRequest | undefined>;
 
   getNotificationsByUser(userId: string, tenantId?: string): Promise<Notification[]>;
   getUnreadCountByUser(userId: string): Promise<number>;
   createNotification(data: InsertNotification): Promise<Notification>;
-  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
-  markAllNotificationsRead(userId: string): Promise<void>;
+  markNotificationRead(id: string, userId: string, tenantId?: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string, tenantId?: string): Promise<void>;
 
   getFormTemplates(tenantId?: string): Promise<FormTemplate[]>;
   getFormTemplate(id: string, tenantId?: string): Promise<FormTemplate | undefined>;
   createFormTemplate(data: InsertFormTemplate): Promise<FormTemplate>;
-  updateFormTemplate(id: string, data: Partial<InsertFormTemplate>): Promise<FormTemplate | undefined>;
-  deleteFormTemplate(id: string): Promise<void>;
+  updateFormTemplate(id: string, data: Partial<InsertFormTemplate>, tenantId?: string): Promise<FormTemplate | undefined>;
+  deleteFormTemplate(id: string, tenantId?: string): Promise<void>;
 
   getFilledForms(tenantId?: string): Promise<FilledForm[]>;
   getFilledForm(id: string, tenantId?: string): Promise<FilledForm | undefined>;
   getFilledFormsByClient(clientId: string, tenantId?: string): Promise<FilledForm[]>;
   createFilledForm(data: InsertFilledForm): Promise<FilledForm>;
-  updateFilledForm(id: string, data: Partial<InsertFilledForm>): Promise<FilledForm | undefined>;
+  updateFilledForm(id: string, data: Partial<InsertFilledForm>, tenantId?: string): Promise<FilledForm | undefined>;
 
   getNotarizations(tenantId?: string): Promise<Notarization[]>;
   getNotarization(id: string, tenantId?: string): Promise<Notarization | undefined>;
   getNotarizationsByClient(clientId: string, tenantId?: string): Promise<Notarization[]>;
   createNotarization(data: InsertNotarization): Promise<Notarization>;
-  updateNotarization(id: string, data: Partial<InsertNotarization>): Promise<Notarization | undefined>;
+  updateNotarization(id: string, data: Partial<InsertNotarization>, tenantId?: string): Promise<Notarization | undefined>;
 
   getAuditLogs(limit?: number, offset?: number, tenantId?: string): Promise<AuditLog[]>;
   getAuditLogsByEntity(entityType: string, entityId?: string, tenantId?: string): Promise<AuditLog[]>;
@@ -109,21 +109,21 @@ export interface IStorage {
   getServiceItems(tenantId?: string): Promise<ServiceItem[]>;
   getServiceItem(id: string, tenantId?: string): Promise<ServiceItem | undefined>;
   createServiceItem(data: InsertServiceItem): Promise<ServiceItem>;
-  updateServiceItem(id: string, data: Partial<InsertServiceItem>): Promise<ServiceItem | undefined>;
-  deleteServiceItem(id: string): Promise<void>;
+  updateServiceItem(id: string, data: Partial<InsertServiceItem>, tenantId?: string): Promise<ServiceItem | undefined>;
+  deleteServiceItem(id: string, tenantId?: string): Promise<void>;
 
   getInvoiceLineItems(invoiceId: string, tenantId?: string): Promise<InvoiceLineItem[]>;
   createInvoiceLineItem(data: InsertInvoiceLineItem): Promise<InvoiceLineItem>;
-  updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined>;
-  deleteInvoiceLineItem(id: string): Promise<void>;
+  updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>, tenantId?: string): Promise<InvoiceLineItem | undefined>;
+  deleteInvoiceLineItem(id: string, tenantId?: string): Promise<void>;
 
   getTaxDocuments(tenantId?: string): Promise<TaxDocument[]>;
   getTaxDocumentsByClient(clientId: string, tenantId?: string): Promise<TaxDocument[]>;
   getTaxDocumentsByYear(taxYear: number, tenantId?: string): Promise<TaxDocument[]>;
   getTaxDocument(id: string, tenantId?: string): Promise<TaxDocument | undefined>;
   createTaxDocument(data: InsertTaxDocument): Promise<TaxDocument>;
-  updateTaxDocument(id: string, data: Partial<InsertTaxDocument>): Promise<TaxDocument | undefined>;
-  deleteTaxDocument(id: string): Promise<void>;
+  updateTaxDocument(id: string, data: Partial<InsertTaxDocument>, tenantId?: string): Promise<TaxDocument | undefined>;
+  deleteTaxDocument(id: string, tenantId?: string): Promise<void>;
 
   getPushSubscriptionsByUser(userId: string): Promise<PushSubscription[]>;
   getAllPushSubscriptions(tenantId?: string): Promise<PushSubscription[]>;
@@ -135,72 +135,72 @@ export interface IStorage {
   getBookkeepingSubscription(id: string, tenantId?: string): Promise<BookkeepingSubscription | undefined>;
   getBookkeepingSubscriptionByClient(clientId: string, tenantId?: string): Promise<BookkeepingSubscription | undefined>;
   createBookkeepingSubscription(data: InsertBookkeepingSubscription): Promise<BookkeepingSubscription>;
-  updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>): Promise<BookkeepingSubscription | undefined>;
+  updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>, tenantId?: string): Promise<BookkeepingSubscription | undefined>;
 
   getBankTransactions(clientId: string, month?: number, year?: number, tenantId?: string): Promise<BankTransaction[]>;
   getBankTransaction(id: string, tenantId?: string): Promise<BankTransaction | undefined>;
   createBankTransaction(data: InsertBankTransaction): Promise<BankTransaction>;
   createBankTransactions(data: InsertBankTransaction[]): Promise<BankTransaction[]>;
-  updateBankTransaction(id: string, data: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined>;
-  deleteBankTransaction(id: string): Promise<void>;
+  updateBankTransaction(id: string, data: Partial<InsertBankTransaction>, tenantId?: string): Promise<BankTransaction | undefined>;
+  deleteBankTransaction(id: string, tenantId?: string): Promise<void>;
 
   getTransactionCategories(tenantId?: string): Promise<TransactionCategory[]>;
   createTransactionCategory(data: InsertTransactionCategory): Promise<TransactionCategory>;
-  updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>): Promise<TransactionCategory | undefined>;
-  deleteTransactionCategory(id: string): Promise<void>;
+  updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>, tenantId?: string): Promise<TransactionCategory | undefined>;
+  deleteTransactionCategory(id: string, tenantId?: string): Promise<void>;
 
   getMonthlySummaries(clientId: string, tenantId?: string): Promise<MonthlySummary[]>;
   getMonthlySummary(clientId: string, month: number, year: number): Promise<MonthlySummary | undefined>;
   createMonthlySummary(data: InsertMonthlySummary): Promise<MonthlySummary>;
-  updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>): Promise<MonthlySummary | undefined>;
+  updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>, tenantId?: string): Promise<MonthlySummary | undefined>;
 
   getPreparerAssignments(preparerId: string, tenantId?: string): Promise<PreparerAssignment[]>;
   getPreparerAssignmentsByClient(clientId: string, tenantId?: string): Promise<PreparerAssignment[]>;
   createPreparerAssignment(data: InsertPreparerAssignment): Promise<PreparerAssignment>;
-  deletePreparerAssignment(id: string): Promise<void>;
+  deletePreparerAssignment(id: string, tenantId?: string): Promise<void>;
 
   getTicketRequiredDocs(ticketId: string, tenantId?: string): Promise<TicketRequiredDocument[]>;
   createTicketRequiredDoc(data: InsertTicketRequiredDocument): Promise<TicketRequiredDocument>;
-  updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>): Promise<TicketRequiredDocument | undefined>;
-  deleteTicketRequiredDoc(id: string): Promise<void>;
+  updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>, tenantId?: string): Promise<TicketRequiredDocument | undefined>;
+  deleteTicketRequiredDoc(id: string, tenantId?: string): Promise<void>;
 
   getRecurringTemplates(tenantId?: string): Promise<RecurringTemplate[]>;
   getRecurringTemplate(id: string, tenantId?: string): Promise<RecurringTemplate | undefined>;
   createRecurringTemplate(data: InsertRecurringTemplate): Promise<RecurringTemplate>;
-  updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>): Promise<RecurringTemplate | undefined>;
-  deleteRecurringTemplate(id: string): Promise<void>;
+  updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>, tenantId?: string): Promise<RecurringTemplate | undefined>;
+  deleteRecurringTemplate(id: string, tenantId?: string): Promise<void>;
 
   getClientRecurringSchedules(clientId?: string, tenantId?: string): Promise<ClientRecurringSchedule[]>;
   getActiveSchedules(tenantId?: string): Promise<ClientRecurringSchedule[]>;
   createClientRecurringSchedule(data: InsertClientRecurringSchedule): Promise<ClientRecurringSchedule>;
-  updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>): Promise<ClientRecurringSchedule | undefined>;
-  deleteClientRecurringSchedule(id: string): Promise<void>;
+  updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>, tenantId?: string): Promise<ClientRecurringSchedule | undefined>;
+  deleteClientRecurringSchedule(id: string, tenantId?: string): Promise<void>;
 
-  claimTicket(ticketId: string, userId: string, userName: string): Promise<ServiceTicket | undefined>;
-  releaseTicket(ticketId: string): Promise<ServiceTicket | undefined>;
+  claimTicket(ticketId: string, userId: string, userName: string, tenantId?: string): Promise<ServiceTicket | undefined>;
+  releaseTicket(ticketId: string, tenantId?: string): Promise<ServiceTicket | undefined>;
 
   getClientNotes(clientId: string, tenantId?: string): Promise<ClientNote[]>;
   getClientNote(id: string, tenantId?: string): Promise<ClientNote | undefined>;
   createClientNote(data: InsertClientNote): Promise<ClientNote>;
-  updateClientNote(id: string, content: string): Promise<ClientNote | undefined>;
-  deleteClientNote(id: string): Promise<void>;
+  updateClientNote(id: string, content: string, tenantId?: string): Promise<ClientNote | undefined>;
+  deleteClientNote(id: string, tenantId?: string): Promise<void>;
 
   getKnowledgeArticles(tenantId?: string): Promise<KnowledgeArticle[]>;
   getKnowledgeArticle(id: string, tenantId?: string): Promise<KnowledgeArticle | undefined>;
   createKnowledgeArticle(data: InsertKnowledgeArticle): Promise<KnowledgeArticle>;
-  updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined>;
-  deleteKnowledgeArticle(id: string): Promise<void>;
+  updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>, tenantId?: string): Promise<KnowledgeArticle | undefined>;
+  deleteKnowledgeArticle(id: string, tenantId?: string): Promise<void>;
   searchKnowledgeArticles(query: string, tenantId?: string): Promise<KnowledgeArticle[]>;
 
   getCustomFieldDefinitions(entityType?: string, tenantId?: string): Promise<CustomFieldDefinition[]>;
   getCustomFieldDefinition(id: string, tenantId?: string): Promise<CustomFieldDefinition | undefined>;
   createCustomFieldDefinition(data: InsertCustomFieldDefinition): Promise<CustomFieldDefinition>;
-  updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>): Promise<CustomFieldDefinition | undefined>;
-  deleteCustomFieldDefinition(id: string): Promise<void>;
+  updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>, tenantId?: string): Promise<CustomFieldDefinition | undefined>;
+  deleteCustomFieldDefinition(id: string, tenantId?: string): Promise<void>;
 
   getCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<CustomFieldValue[]>;
   setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue>;
-  deleteCustomFieldValues(entityType: string, entityId: string): Promise<void>;
+  deleteCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<void>;
 
   getTenant(id: string): Promise<Tenant | undefined>;
   updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined>;
@@ -233,13 +233,17 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
-  async updateClient(id: string, data: Partial<InsertClient>): Promise<Client | undefined> {
-    const [client] = await db.update(clients).set(data).where(eq(clients.id, id)).returning();
+  async updateClient(id: string, data: Partial<InsertClient>, tenantId?: string): Promise<Client | undefined> {
+    const conditions = [eq(clients.id, id)];
+    if (tenantId) conditions.push(eq(clients.tenantId, tenantId));
+    const [client] = await db.update(clients).set(data).where(and(...conditions)).returning();
     return client;
   }
 
-  async deleteClient(id: string): Promise<void> {
-    await db.delete(clients).where(eq(clients.id, id));
+  async deleteClient(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(clients.id, id)];
+    if (tenantId) conditions.push(eq(clients.tenantId, tenantId));
+    await db.delete(clients).where(and(...conditions));
   }
 
   async getTickets(tenantId?: string): Promise<ServiceTicket[]> {
@@ -267,8 +271,10 @@ export class DatabaseStorage implements IStorage {
     return ticket;
   }
 
-  async updateTicket(id: string, data: Partial<InsertServiceTicket>): Promise<ServiceTicket | undefined> {
-    const [ticket] = await db.update(serviceTickets).set(data).where(eq(serviceTickets.id, id)).returning();
+  async updateTicket(id: string, data: Partial<InsertServiceTicket>, tenantId?: string): Promise<ServiceTicket | undefined> {
+    const conditions = [eq(serviceTickets.id, id)];
+    if (tenantId) conditions.push(eq(serviceTickets.tenantId, tenantId));
+    const [ticket] = await db.update(serviceTickets).set(data).where(and(...conditions)).returning();
     return ticket;
   }
 
@@ -297,8 +303,10 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async updateDocument(id: string, data: Partial<InsertDocument>): Promise<Document | undefined> {
-    const [doc] = await db.update(documents).set(data).where(eq(documents.id, id)).returning();
+  async updateDocument(id: string, data: Partial<InsertDocument>, tenantId?: string): Promise<Document | undefined> {
+    const conditions = [eq(documents.id, id)];
+    if (tenantId) conditions.push(eq(documents.tenantId, tenantId));
+    const [doc] = await db.update(documents).set(data).where(and(...conditions)).returning();
     return doc;
   }
 
@@ -327,8 +335,10 @@ export class DatabaseStorage implements IStorage {
     return invoice;
   }
 
-  async updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice | undefined> {
-    const [invoice] = await db.update(invoices).set(data).where(eq(invoices.id, id)).returning();
+  async updateInvoice(id: string, data: Partial<InsertInvoice>, tenantId?: string): Promise<Invoice | undefined> {
+    const conditions = [eq(invoices.id, id)];
+    if (tenantId) conditions.push(eq(invoices.tenantId, tenantId));
+    const [invoice] = await db.update(invoices).set(data).where(and(...conditions)).returning();
     return invoice;
   }
 
@@ -376,10 +386,12 @@ export class DatabaseStorage implements IStorage {
     return msg;
   }
 
-  async markStaffMessagesRead(recipientId: string, senderId: string): Promise<void> {
+  async markStaffMessagesRead(recipientId: string, senderId: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(staffMessages.recipientId, recipientId), eq(staffMessages.senderId, senderId)];
+    if (tenantId) conditions.push(eq(staffMessages.tenantId, tenantId));
     await db.update(staffMessages)
       .set({ read: true })
-      .where(and(eq(staffMessages.recipientId, recipientId), eq(staffMessages.senderId, senderId)));
+      .where(and(...conditions));
   }
 
   async getUnreadStaffMessageCount(userId: string): Promise<number> {
@@ -414,8 +426,10 @@ export class DatabaseStorage implements IStorage {
     return req;
   }
 
-  async updateSignatureRequest(id: string, data: Partial<SignatureRequest>): Promise<SignatureRequest | undefined> {
-    const [req] = await db.update(signatureRequests).set(data).where(eq(signatureRequests.id, id)).returning();
+  async updateSignatureRequest(id: string, data: Partial<SignatureRequest>, tenantId?: string): Promise<SignatureRequest | undefined> {
+    const conditions = [eq(signatureRequests.id, id)];
+    if (tenantId) conditions.push(eq(signatureRequests.tenantId, tenantId));
+    const [req] = await db.update(signatureRequests).set(data).where(and(...conditions)).returning();
     return req;
   }
 
@@ -435,15 +449,21 @@ export class DatabaseStorage implements IStorage {
     return notif;
   }
 
-  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
-    const [notif] = await db.select().from(notifications).where(eq(notifications.id, id));
+  async markNotificationRead(id: string, userId: string, tenantId?: string): Promise<Notification | undefined> {
+    const selectConditions = [eq(notifications.id, id)];
+    if (tenantId) selectConditions.push(eq(notifications.tenantId, tenantId));
+    const [notif] = await db.select().from(notifications).where(and(...selectConditions));
     if (!notif || notif.userId !== userId) return undefined;
-    const [updated] = await db.update(notifications).set({ read: "true" }).where(eq(notifications.id, id)).returning();
+    const conditions = [eq(notifications.id, id)];
+    if (tenantId) conditions.push(eq(notifications.tenantId, tenantId));
+    const [updated] = await db.update(notifications).set({ read: "true" }).where(and(...conditions)).returning();
     return updated;
   }
 
-  async markAllNotificationsRead(userId: string): Promise<void> {
-    await db.update(notifications).set({ read: "true" }).where(eq(notifications.userId, userId));
+  async markAllNotificationsRead(userId: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(notifications.userId, userId)];
+    if (tenantId) conditions.push(eq(notifications.tenantId, tenantId));
+    await db.update(notifications).set({ read: "true" }).where(and(...conditions));
   }
 
   async getFormTemplates(tenantId?: string): Promise<FormTemplate[]> {
@@ -465,13 +485,17 @@ export class DatabaseStorage implements IStorage {
     return t;
   }
 
-  async updateFormTemplate(id: string, data: Partial<InsertFormTemplate>): Promise<FormTemplate | undefined> {
-    const [t] = await db.update(formTemplates).set(data).where(eq(formTemplates.id, id)).returning();
+  async updateFormTemplate(id: string, data: Partial<InsertFormTemplate>, tenantId?: string): Promise<FormTemplate | undefined> {
+    const conditions = [eq(formTemplates.id, id)];
+    if (tenantId) conditions.push(eq(formTemplates.tenantId, tenantId));
+    const [t] = await db.update(formTemplates).set(data).where(and(...conditions)).returning();
     return t;
   }
 
-  async deleteFormTemplate(id: string): Promise<void> {
-    await db.delete(formTemplates).where(eq(formTemplates.id, id));
+  async deleteFormTemplate(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(formTemplates.id, id)];
+    if (tenantId) conditions.push(eq(formTemplates.tenantId, tenantId));
+    await db.delete(formTemplates).where(and(...conditions));
   }
 
   async getFilledForms(tenantId?: string): Promise<FilledForm[]> {
@@ -499,8 +523,10 @@ export class DatabaseStorage implements IStorage {
     return f;
   }
 
-  async updateFilledForm(id: string, data: Partial<InsertFilledForm>): Promise<FilledForm | undefined> {
-    const [f] = await db.update(filledForms).set({ ...data, updatedAt: new Date() }).where(eq(filledForms.id, id)).returning();
+  async updateFilledForm(id: string, data: Partial<InsertFilledForm>, tenantId?: string): Promise<FilledForm | undefined> {
+    const conditions = [eq(filledForms.id, id)];
+    if (tenantId) conditions.push(eq(filledForms.tenantId, tenantId));
+    const [f] = await db.update(filledForms).set({ ...data, updatedAt: new Date() }).where(and(...conditions)).returning();
     return f;
   }
 
@@ -529,8 +555,10 @@ export class DatabaseStorage implements IStorage {
     return n;
   }
 
-  async updateNotarization(id: string, data: Partial<InsertNotarization>): Promise<Notarization | undefined> {
-    const [n] = await db.update(notarizations).set(data).where(eq(notarizations.id, id)).returning();
+  async updateNotarization(id: string, data: Partial<InsertNotarization>, tenantId?: string): Promise<Notarization | undefined> {
+    const conditions = [eq(notarizations.id, id)];
+    if (tenantId) conditions.push(eq(notarizations.tenantId, tenantId));
+    const [n] = await db.update(notarizations).set(data).where(and(...conditions)).returning();
     return n;
   }
 
@@ -572,13 +600,17 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
-  async updateServiceItem(id: string, data: Partial<InsertServiceItem>): Promise<ServiceItem | undefined> {
-    const [item] = await db.update(serviceItems).set(data).where(eq(serviceItems.id, id)).returning();
+  async updateServiceItem(id: string, data: Partial<InsertServiceItem>, tenantId?: string): Promise<ServiceItem | undefined> {
+    const conditions = [eq(serviceItems.id, id)];
+    if (tenantId) conditions.push(eq(serviceItems.tenantId, tenantId));
+    const [item] = await db.update(serviceItems).set(data).where(and(...conditions)).returning();
     return item;
   }
 
-  async deleteServiceItem(id: string): Promise<void> {
-    await db.delete(serviceItems).where(eq(serviceItems.id, id));
+  async deleteServiceItem(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(serviceItems.id, id)];
+    if (tenantId) conditions.push(eq(serviceItems.tenantId, tenantId));
+    await db.delete(serviceItems).where(and(...conditions));
   }
 
   async getInvoiceLineItems(invoiceId: string, tenantId?: string): Promise<InvoiceLineItem[]> {
@@ -592,13 +624,17 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
-  async updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined> {
-    const [item] = await db.update(invoiceLineItems).set(data).where(eq(invoiceLineItems.id, id)).returning();
+  async updateInvoiceLineItem(id: string, data: Partial<InsertInvoiceLineItem>, tenantId?: string): Promise<InvoiceLineItem | undefined> {
+    const conditions = [eq(invoiceLineItems.id, id)];
+    if (tenantId) conditions.push(eq(invoiceLineItems.tenantId, tenantId));
+    const [item] = await db.update(invoiceLineItems).set(data).where(and(...conditions)).returning();
     return item;
   }
 
-  async deleteInvoiceLineItem(id: string): Promise<void> {
-    await db.delete(invoiceLineItems).where(eq(invoiceLineItems.id, id));
+  async deleteInvoiceLineItem(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(invoiceLineItems.id, id)];
+    if (tenantId) conditions.push(eq(invoiceLineItems.tenantId, tenantId));
+    await db.delete(invoiceLineItems).where(and(...conditions));
   }
 
   async getTaxDocuments(tenantId?: string): Promise<TaxDocument[]> {
@@ -632,13 +668,17 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async updateTaxDocument(id: string, data: Partial<InsertTaxDocument>): Promise<TaxDocument | undefined> {
-    const [doc] = await db.update(taxDocuments).set({ ...data, updatedAt: new Date() }).where(eq(taxDocuments.id, id)).returning();
+  async updateTaxDocument(id: string, data: Partial<InsertTaxDocument>, tenantId?: string): Promise<TaxDocument | undefined> {
+    const conditions = [eq(taxDocuments.id, id)];
+    if (tenantId) conditions.push(eq(taxDocuments.tenantId, tenantId));
+    const [doc] = await db.update(taxDocuments).set({ ...data, updatedAt: new Date() }).where(and(...conditions)).returning();
     return doc;
   }
 
-  async deleteTaxDocument(id: string): Promise<void> {
-    await db.delete(taxDocuments).where(eq(taxDocuments.id, id));
+  async deleteTaxDocument(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(taxDocuments.id, id)];
+    if (tenantId) conditions.push(eq(taxDocuments.tenantId, tenantId));
+    await db.delete(taxDocuments).where(and(...conditions));
   }
 
   async getPushSubscriptionsByUser(userId: string): Promise<PushSubscription[]> {
@@ -695,8 +735,10 @@ export class DatabaseStorage implements IStorage {
     return sub;
   }
 
-  async updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>): Promise<BookkeepingSubscription | undefined> {
-    const [sub] = await db.update(bookkeepingSubscriptions).set(data).where(eq(bookkeepingSubscriptions.id, id)).returning();
+  async updateBookkeepingSubscription(id: string, data: Partial<InsertBookkeepingSubscription>, tenantId?: string): Promise<BookkeepingSubscription | undefined> {
+    const conditions = [eq(bookkeepingSubscriptions.id, id)];
+    if (tenantId) conditions.push(eq(bookkeepingSubscriptions.tenantId, tenantId));
+    const [sub] = await db.update(bookkeepingSubscriptions).set(data).where(and(...conditions)).returning();
     return sub;
   }
 
@@ -725,13 +767,17 @@ export class DatabaseStorage implements IStorage {
     return db.insert(bankTransactions).values(data).returning();
   }
 
-  async updateBankTransaction(id: string, data: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined> {
-    const [txn] = await db.update(bankTransactions).set(data).where(eq(bankTransactions.id, id)).returning();
+  async updateBankTransaction(id: string, data: Partial<InsertBankTransaction>, tenantId?: string): Promise<BankTransaction | undefined> {
+    const conditions = [eq(bankTransactions.id, id)];
+    if (tenantId) conditions.push(eq(bankTransactions.tenantId, tenantId));
+    const [txn] = await db.update(bankTransactions).set(data).where(and(...conditions)).returning();
     return txn;
   }
 
-  async deleteBankTransaction(id: string): Promise<void> {
-    await db.delete(bankTransactions).where(eq(bankTransactions.id, id));
+  async deleteBankTransaction(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(bankTransactions.id, id)];
+    if (tenantId) conditions.push(eq(bankTransactions.tenantId, tenantId));
+    await db.delete(bankTransactions).where(and(...conditions));
   }
 
   async getTransactionCategories(tenantId?: string): Promise<TransactionCategory[]> {
@@ -746,13 +792,17 @@ export class DatabaseStorage implements IStorage {
     return cat;
   }
 
-  async updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>): Promise<TransactionCategory | undefined> {
-    const [cat] = await db.update(transactionCategories).set(data).where(eq(transactionCategories.id, id)).returning();
+  async updateTransactionCategory(id: string, data: Partial<InsertTransactionCategory>, tenantId?: string): Promise<TransactionCategory | undefined> {
+    const conditions = [eq(transactionCategories.id, id)];
+    if (tenantId) conditions.push(eq(transactionCategories.tenantId, tenantId));
+    const [cat] = await db.update(transactionCategories).set(data).where(and(...conditions)).returning();
     return cat;
   }
 
-  async deleteTransactionCategory(id: string): Promise<void> {
-    await db.delete(transactionCategories).where(eq(transactionCategories.id, id));
+  async deleteTransactionCategory(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(transactionCategories.id, id)];
+    if (tenantId) conditions.push(eq(transactionCategories.tenantId, tenantId));
+    await db.delete(transactionCategories).where(and(...conditions));
   }
 
   async getMonthlySummaries(clientId: string, tenantId?: string): Promise<MonthlySummary[]> {
@@ -773,8 +823,10 @@ export class DatabaseStorage implements IStorage {
     return summary;
   }
 
-  async updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>): Promise<MonthlySummary | undefined> {
-    const [summary] = await db.update(monthlySummaries).set(data).where(eq(monthlySummaries.id, id)).returning();
+  async updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>, tenantId?: string): Promise<MonthlySummary | undefined> {
+    const conditions = [eq(monthlySummaries.id, id)];
+    if (tenantId) conditions.push(eq(monthlySummaries.tenantId, tenantId));
+    const [summary] = await db.update(monthlySummaries).set(data).where(and(...conditions)).returning();
     return summary;
   }
 
@@ -795,8 +847,10 @@ export class DatabaseStorage implements IStorage {
     return assignment;
   }
 
-  async deletePreparerAssignment(id: string): Promise<void> {
-    await db.delete(preparerAssignments).where(eq(preparerAssignments.id, id));
+  async deletePreparerAssignment(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(preparerAssignments.id, id)];
+    if (tenantId) conditions.push(eq(preparerAssignments.tenantId, tenantId));
+    await db.delete(preparerAssignments).where(and(...conditions));
   }
 
   async getTicketRequiredDocs(ticketId: string, tenantId?: string): Promise<TicketRequiredDocument[]> {
@@ -810,13 +864,17 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>): Promise<TicketRequiredDocument | undefined> {
-    const [doc] = await db.update(ticketRequiredDocuments).set(data).where(eq(ticketRequiredDocuments.id, id)).returning();
+  async updateTicketRequiredDoc(id: string, data: Partial<InsertTicketRequiredDocument>, tenantId?: string): Promise<TicketRequiredDocument | undefined> {
+    const conditions = [eq(ticketRequiredDocuments.id, id)];
+    if (tenantId) conditions.push(eq(ticketRequiredDocuments.tenantId, tenantId));
+    const [doc] = await db.update(ticketRequiredDocuments).set(data).where(and(...conditions)).returning();
     return doc;
   }
 
-  async deleteTicketRequiredDoc(id: string): Promise<void> {
-    await db.delete(ticketRequiredDocuments).where(eq(ticketRequiredDocuments.id, id));
+  async deleteTicketRequiredDoc(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(ticketRequiredDocuments.id, id)];
+    if (tenantId) conditions.push(eq(ticketRequiredDocuments.tenantId, tenantId));
+    await db.delete(ticketRequiredDocuments).where(and(...conditions));
   }
 
   async getRecurringTemplates(tenantId?: string): Promise<RecurringTemplate[]> {
@@ -838,13 +896,17 @@ export class DatabaseStorage implements IStorage {
     return template;
   }
 
-  async updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>): Promise<RecurringTemplate | undefined> {
-    const [template] = await db.update(recurringTemplates).set(data).where(eq(recurringTemplates.id, id)).returning();
+  async updateRecurringTemplate(id: string, data: Partial<InsertRecurringTemplate>, tenantId?: string): Promise<RecurringTemplate | undefined> {
+    const conditions = [eq(recurringTemplates.id, id)];
+    if (tenantId) conditions.push(eq(recurringTemplates.tenantId, tenantId));
+    const [template] = await db.update(recurringTemplates).set(data).where(and(...conditions)).returning();
     return template;
   }
 
-  async deleteRecurringTemplate(id: string): Promise<void> {
-    await db.delete(recurringTemplates).where(eq(recurringTemplates.id, id));
+  async deleteRecurringTemplate(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(recurringTemplates.id, id)];
+    if (tenantId) conditions.push(eq(recurringTemplates.tenantId, tenantId));
+    await db.delete(recurringTemplates).where(and(...conditions));
   }
 
   async getClientRecurringSchedules(clientId?: string, tenantId?: string): Promise<ClientRecurringSchedule[]> {
@@ -869,27 +931,35 @@ export class DatabaseStorage implements IStorage {
     return schedule;
   }
 
-  async updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>): Promise<ClientRecurringSchedule | undefined> {
-    const [schedule] = await db.update(clientRecurringSchedules).set(data).where(eq(clientRecurringSchedules.id, id)).returning();
+  async updateClientRecurringSchedule(id: string, data: Partial<InsertClientRecurringSchedule>, tenantId?: string): Promise<ClientRecurringSchedule | undefined> {
+    const conditions = [eq(clientRecurringSchedules.id, id)];
+    if (tenantId) conditions.push(eq(clientRecurringSchedules.tenantId, tenantId));
+    const [schedule] = await db.update(clientRecurringSchedules).set(data).where(and(...conditions)).returning();
     return schedule;
   }
 
-  async deleteClientRecurringSchedule(id: string): Promise<void> {
-    await db.delete(clientRecurringSchedules).where(eq(clientRecurringSchedules.id, id));
+  async deleteClientRecurringSchedule(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(clientRecurringSchedules.id, id)];
+    if (tenantId) conditions.push(eq(clientRecurringSchedules.tenantId, tenantId));
+    await db.delete(clientRecurringSchedules).where(and(...conditions));
   }
 
-  async claimTicket(ticketId: string, userId: string, userName: string): Promise<ServiceTicket | undefined> {
+  async claimTicket(ticketId: string, userId: string, userName: string, tenantId?: string): Promise<ServiceTicket | undefined> {
+    const conditions = [eq(serviceTickets.id, ticketId)];
+    if (tenantId) conditions.push(eq(serviceTickets.tenantId, tenantId));
     const [ticket] = await db.update(serviceTickets)
       .set({ lockedBy: userId, lockedAt: new Date(), lockedByName: userName })
-      .where(eq(serviceTickets.id, ticketId))
+      .where(and(...conditions))
       .returning();
     return ticket;
   }
 
-  async releaseTicket(ticketId: string): Promise<ServiceTicket | undefined> {
+  async releaseTicket(ticketId: string, tenantId?: string): Promise<ServiceTicket | undefined> {
+    const conditions = [eq(serviceTickets.id, ticketId)];
+    if (tenantId) conditions.push(eq(serviceTickets.tenantId, tenantId));
     const [ticket] = await db.update(serviceTickets)
       .set({ lockedBy: null, lockedAt: null, lockedByName: null })
-      .where(eq(serviceTickets.id, ticketId))
+      .where(and(...conditions))
       .returning();
     return ticket;
   }
@@ -912,13 +982,17 @@ export class DatabaseStorage implements IStorage {
     return note;
   }
 
-  async updateClientNote(id: string, content: string): Promise<ClientNote | undefined> {
-    const [note] = await db.update(clientNotes).set({ content, updatedAt: new Date() }).where(eq(clientNotes.id, id)).returning();
+  async updateClientNote(id: string, content: string, tenantId?: string): Promise<ClientNote | undefined> {
+    const conditions = [eq(clientNotes.id, id)];
+    if (tenantId) conditions.push(eq(clientNotes.tenantId, tenantId));
+    const [note] = await db.update(clientNotes).set({ content, updatedAt: new Date() }).where(and(...conditions)).returning();
     return note;
   }
 
-  async deleteClientNote(id: string): Promise<void> {
-    await db.delete(clientNotes).where(eq(clientNotes.id, id));
+  async deleteClientNote(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(clientNotes.id, id)];
+    if (tenantId) conditions.push(eq(clientNotes.tenantId, tenantId));
+    await db.delete(clientNotes).where(and(...conditions));
   }
 
   async getKnowledgeArticles(tenantId?: string): Promise<KnowledgeArticle[]> {
@@ -940,13 +1014,17 @@ export class DatabaseStorage implements IStorage {
     return article;
   }
 
-  async updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined> {
-    const [article] = await db.update(knowledgeArticles).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeArticles.id, id)).returning();
+  async updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>, tenantId?: string): Promise<KnowledgeArticle | undefined> {
+    const conditions = [eq(knowledgeArticles.id, id)];
+    if (tenantId) conditions.push(eq(knowledgeArticles.tenantId, tenantId));
+    const [article] = await db.update(knowledgeArticles).set({ ...data, updatedAt: new Date() }).where(and(...conditions)).returning();
     return article;
   }
 
-  async deleteKnowledgeArticle(id: string): Promise<void> {
-    await db.delete(knowledgeArticles).where(eq(knowledgeArticles.id, id));
+  async deleteKnowledgeArticle(id: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(knowledgeArticles.id, id)];
+    if (tenantId) conditions.push(eq(knowledgeArticles.tenantId, tenantId));
+    await db.delete(knowledgeArticles).where(and(...conditions));
   }
 
   async searchKnowledgeArticles(query: string, tenantId?: string): Promise<KnowledgeArticle[]> {
@@ -986,14 +1064,20 @@ export class DatabaseStorage implements IStorage {
     return def;
   }
 
-  async updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>): Promise<CustomFieldDefinition | undefined> {
-    const [def] = await db.update(customFieldDefinitions).set(data).where(eq(customFieldDefinitions.id, id)).returning();
+  async updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>, tenantId?: string): Promise<CustomFieldDefinition | undefined> {
+    const conditions = [eq(customFieldDefinitions.id, id)];
+    if (tenantId) conditions.push(eq(customFieldDefinitions.tenantId, tenantId));
+    const [def] = await db.update(customFieldDefinitions).set(data).where(and(...conditions)).returning();
     return def;
   }
 
-  async deleteCustomFieldDefinition(id: string): Promise<void> {
-    await db.delete(customFieldValues).where(eq(customFieldValues.fieldDefinitionId, id));
-    await db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+  async deleteCustomFieldDefinition(id: string, tenantId?: string): Promise<void> {
+    const valConditions: any[] = [eq(customFieldValues.fieldDefinitionId, id)];
+    if (tenantId) valConditions.push(eq(customFieldValues.tenantId, tenantId));
+    await db.delete(customFieldValues).where(and(...valConditions));
+    const conditions = [eq(customFieldDefinitions.id, id)];
+    if (tenantId) conditions.push(eq(customFieldDefinitions.tenantId, tenantId));
+    await db.delete(customFieldDefinitions).where(and(...conditions));
   }
 
   async getCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<CustomFieldValue[]> {
@@ -1022,10 +1106,10 @@ export class DatabaseStorage implements IStorage {
     return val;
   }
 
-  async deleteCustomFieldValues(entityType: string, entityId: string): Promise<void> {
-    await db.delete(customFieldValues).where(
-      and(eq(customFieldValues.entityType, entityType), eq(customFieldValues.entityId, entityId))
-    );
+  async deleteCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<void> {
+    const conditions = [eq(customFieldValues.entityType, entityType), eq(customFieldValues.entityId, entityId)];
+    if (tenantId) conditions.push(eq(customFieldValues.tenantId, tenantId));
+    await db.delete(customFieldValues).where(and(...conditions));
   }
 
   async getTenant(id: string): Promise<Tenant | undefined> {

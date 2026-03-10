@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db } from "@db";
+import { db } from "../db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 

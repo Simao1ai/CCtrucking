@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db } from "@db";
+import { db } from "../db";
 import { tenantSettings } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
@@ -39,14 +39,15 @@ export function requireModule(moduleName: string) {
       }
       next();
     } catch (err) {
-      next();
+      return res.status(500).json({ message: "Error checking module access" });
     }
   };
 }
 
 export function clearModuleCache(tenantId?: string) {
   if (tenantId) {
-    for (const key of moduleCache.keys()) {
+    const keys = Array.from(moduleCache.keys());
+    for (const key of keys) {
       if (key.startsWith(`${tenantId}:`)) {
         moduleCache.delete(key);
       }

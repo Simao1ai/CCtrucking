@@ -1,12 +1,30 @@
-# CC Trucking Services - Operations Platform
+# CC Trucking Services - Operations Platform (Multi-Tenant SaaS)
 
 ## Overview
-CC Trucking Services is a SaaS platform providing a comprehensive CRM and operations management solution for trucking companies. It features distinct Admin, Client, and Preparer Portals to streamline trucking operations, enhance client communication, and provide valuable business insights. The platform supports managing client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), documents, invoicing, forms, notarizations, bookkeeping, and business analytics.
+CC Trucking Services is a multi-tenant SaaS platform providing a comprehensive CRM and operations management solution for trucking companies. It features distinct Admin, Client, and Preparer Portals to streamline trucking operations, enhance client communication, and provide valuable business insights. The platform supports managing client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), documents, invoicing, forms, notarizations, bookkeeping, and business analytics. Strategic goal: convert to a named, independently-owned multi-tenant SaaS product leased to multiple trucking companies.
 
 ## User Preferences
 I prefer iterative development, so please provide updates frequently. I value clear and concise communication. When making changes, please ask for confirmation before implementing major architectural shifts.
 
+## SaaS Roadmap Progress
+- **Phase 0 COMPLETE**: Full SaaS audit (PHASE_0_SAAS_AUDIT.md)
+- **Phase 1 COMPLETE**: Centralized branding, tenant context, industry packs, custom fields
+- **Phase 2 COMPLETE**: Multi-tenant architecture (see details below)
+- **Phase 3-7**: Pending (data partitioning, commercial layer, onboarding, launch prep)
+
 ## System Architecture
+
+### Multi-Tenant Architecture (Phase 2)
+- **Tenant Tables**: `tenants`, `tenant_branding`, `tenant_settings` — stores org config, branding, module toggles
+- **Tenant Isolation**: `tenant_id` column added to ALL 28+ entity tables; all storage methods (105+) filter by tenantId
+- **Current Tenant**: CC Trucking Services (id: `cc-trucking-tenant-001`, slug: `cctrucking`)
+- **Role System**: 6 roles — `platform_owner`, `platform_admin`, `tenant_owner`, `tenant_admin` (new), plus legacy `owner`, `admin`, `client`, `preparer`
+- **Middleware**: `server/middleware/tenant.ts` (resolveTenant, requireTenant, isPlatformOwner/Admin, isTenantOwner/Admin), `server/middleware/module-gates.ts` (requireModule)
+- **Module Feature Gates**: Bookkeeping, tax prep, notarizations, compliance scheduling, employee performance — togglable per tenant
+- **Branding from DB**: `GET /api/branding` loads from `tenant_branding` table, falls back to static config
+- **Tenant Settings UI**: `/admin/tenant-settings` with General, Branding, Modules, Users tabs (owner-only)
+- **Scheduler Isolation**: Invoice reminders and recurring compliance skip suspended/inactive tenants
+- **AI Tenant Scoping**: All AI prompts load company name, industry knowledge, and data scoped to tenant
 
 ### UI/UX Decisions
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter for routing.
@@ -17,8 +35,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
 
 ### Technical Implementations
 - **Backend**: Express.js with a RESTful API.
-- **Database**: PostgreSQL with Drizzle ORM.
-- **Authentication**: Custom username/password authentication with bcrypt and session-based management; role-based access control ("owner", "admin", "client", "preparer").
+- **Database**: PostgreSQL with Drizzle ORM. All tables have `tenant_id` column with indexes.
+- **Authentication**: Custom username/password authentication with bcrypt and session-based management; role-based access control with 6 roles (platform_owner, platform_admin, tenant_owner, tenant_admin, client, preparer) plus legacy owner/admin.
 - **Service Catalog**: Predefined service items with categories and default pricing.
 - **Form Management**: Reusable form templates with auto-fill and status tracking.
 - **Notarization Tracking**: System for recording in-house notarization details.

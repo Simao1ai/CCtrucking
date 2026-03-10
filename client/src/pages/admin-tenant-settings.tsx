@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -537,10 +537,11 @@ export default function AdminTenantSettings() {
 
   return (
     <div className="p-6 space-y-6">
-      <PageHeader>
-        <PageHeaderHeading data-testid="text-page-title">Tenant Settings</PageHeaderHeading>
-        <PageHeaderDescription>Manage your organization's settings, branding, and modules</PageHeaderDescription>
-      </PageHeader>
+      <PageHeader
+        title="Tenant Settings"
+        description="Manage your organization's settings, branding, and modules"
+        icon={<Building2 className="h-5 w-5 text-muted-foreground" />}
+      />
 
       <Tabs defaultValue="general">
         <TabsList data-testid="tabs-tenant-settings">
