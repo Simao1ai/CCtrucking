@@ -7,21 +7,30 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Shield, Building2, UserCog, Plus, Trash2 } from "lucide-react";
+import { Users, Shield, Building2, UserCog, Plus, Trash2, Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import type { User } from "@shared/models/auth";
 import type { Client } from "@shared/schema";
 
 type SafeUser = Omit<User, "password">;
 
+interface UsageData {
+  plan: string;
+  planName: string;
+  userCount: number;
+  userLimit: number;
+}
+
 export default function AdminUsers() {
   const { toast } = useToast();
   const [assignDialog, setAssignDialog] = useState<{ open: boolean; userId: string; userName: string }>({ open: false, userId: "", userName: "" });
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [createDialog, setCreateDialog] = useState(false);
+  const [credentialsDialog, setCredentialsDialog] = useState<{ open: boolean; username: string; password: string; role: string } | null>(null);
   const [newUser, setNewUser] = useState({ username: "", password: "", firstName: "", lastName: "", email: "", role: "client", clientId: "" });
 
   const { data: userList = [], isLoading } = useQuery<SafeUser[]>({
@@ -32,18 +41,29 @@ export default function AdminUsers() {
     queryKey: ["/api/clients"],
   });
 
+  const { data: usage } = useQuery<UsageData>({
+    queryKey: ["/api/tenant/usage"],
+  });
+
+  const atUserLimit = usage && usage.userLimit !== -1 && usage.userCount >= usage.userLimit;
+  const nearUserLimit = usage && usage.userLimit !== -1 && usage.userCount >= usage.userLimit * 0.8;
+
   const createUserMutation = useMutation({
     mutationFn: async (data: typeof newUser) => {
       await apiRequest("POST", "/api/admin/create-user", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tenant/usage"] });
       setCreateDialog(false);
+      setCredentialsDialog({ open: true, username: newUser.username, password: newUser.password, role: newUser.role });
       setNewUser({ username: "", password: "", firstName: "", lastName: "", email: "", role: "client", clientId: "" });
-      toast({ title: "Success", description: "Account created successfully" });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message.includes("Username already exists") ? "Username already exists" : "Failed to create account", variant: "destructive" });
+      const msg = error.message.includes("Username already exists") ? "Username already exists"
+        : error.message.includes("PLAN_LIMIT_REACHED") ? "User limit reached for your current plan. Please upgrade."
+        : "Failed to create account";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
 
@@ -99,8 +119,13 @@ export default function AdminUsers() {
           <p className="text-muted-foreground text-sm mt-1">Create and manage user accounts</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-sm">{userList.length} users</Badge>
-          <Button onClick={() => setCreateDialog(true)} data-testid="button-create-user">
+          {usage && usage.userLimit !== -1 && (
+            <Badge variant="outline" className={`text-sm ${nearUserLimit ? "border-yellow-500 text-yellow-700" : ""}`} data-testid="badge-user-count">
+              {usage.userCount} / {usage.userLimit} users
+            </Badge>
+          )}
+          {!usage?.userLimit && <Badge variant="outline" className="text-sm">{userList.length} users</Badge>}
+          <Button onClick={() => setCreateDialog(true)} disabled={!!atUserLimit} data-testid="button-create-user">
             <Plus className="w-4 h-4 mr-1" />
             Create Account
           </Button>
@@ -357,6 +382,57 @@ export default function AdminUsers() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {atUserLimit && (
+        <Card className="border-yellow-500/50 bg-yellow-500/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">User limit reached</p>
+              <p className="text-xs text-muted-foreground">Your {usage?.planName} plan allows {usage?.userLimit} users. Contact your platform admin to upgrade.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!credentialsDialog?.open} onOpenChange={(open) => !open && setCredentialsDialog(null)}>
+        <DialogContent className="max-w-sm" data-testid="dialog-credentials">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              Account Created
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Share these credentials with the new user. They can change their password after first login.</p>
+          <div className="space-y-3 bg-muted/50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Username</p>
+                <p className="font-mono text-sm font-medium" data-testid="text-created-username">{credentialsDialog?.username}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(credentialsDialog?.username || ""); toast({ title: "Copied!" }); }} data-testid="button-copy-username">
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Password</p>
+                <p className="font-mono text-sm font-medium" data-testid="text-created-password">{credentialsDialog?.password}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(credentialsDialog?.password || ""); toast({ title: "Copied!" }); }} data-testid="button-copy-password">
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Role</p>
+              <Badge className="mt-0.5" data-testid="badge-created-role">{credentialsDialog?.role}</Badge>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCredentialsDialog(null)} data-testid="button-close-credentials">Done</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

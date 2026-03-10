@@ -17,6 +17,8 @@ export const tenants = pgTable("tenants", {
   contactPhone: text("contact_phone"),
   ownerUserId: varchar("owner_user_id"),
   metadata: jsonb("metadata"),
+  onboardingCompleted: boolean("onboarding_completed").default(false),
+  onboardingProgress: jsonb("onboarding_progress").default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

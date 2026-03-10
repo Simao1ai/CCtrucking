@@ -12,7 +12,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Phase 2 COMPLETE**: Multi-tenant architecture (see details below)
 - **Phase 3 COMPLETE**: Platform Operations Layer (see details below)
 - **Phase 4 COMPLETE**: Commercial Layer (see details below)
-- **Phase 5-7**: Pending (onboarding, advanced features, launch prep)
+- **Phase 5 COMPLETE**: Onboarding & Provisioning (see details below)
+- **Phase 6-7**: Pending (hardening/launch, programmatic API)
 
 ## System Architecture
 
@@ -36,6 +37,14 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Usage API**: `GET /api/tenant/usage` returns client/user/AI counts vs limits; `GET /api/tenant/plan-features` returns available features; `GET /api/tenant/plans` returns all plan definitions
 - **Subscription UI**: `/admin/subscription` page (owner-only) with usage meters, plan comparison table, current plan badge
 - **Data Isolation**: `stripTenantId` on all PATCH/PUT routes; tenant-scoped storage methods for staff messages, custom fields
+
+### Onboarding & Provisioning (Phase 5)
+- **Tenant Creation Wizard**: Multi-step wizard on `/platform` — Company Info (name, slug, email, industry), Plan Selection, Owner Account creation, Review & Create; POST `/api/platform/tenants` seeds branding, modules per plan, and initial owner user
+- **Onboarding Checklist**: `GET /api/tenant/onboarding` auto-detects 5 setup steps (branding, first client, team member, ticket, invoice); shown on admin dashboard until completed
+- **Client CSV Import**: `POST /api/admin/clients/import` with client-side CSV parsing, column mapping, validation preview, plan limit checks; import results with error reporting
+- **Client CSV Export**: `GET /api/admin/clients/export/csv` downloads all clients as CSV
+- **User Invitation Flow**: Enhanced user creation with credentials display dialog (copy-able username/password), plan limit awareness (usage badge, limit warning, disabled button at limit)
+- **DB Changes**: `onboarding_completed` boolean and `onboarding_progress` jsonb columns on `tenants` table
 
 ### Platform Operations Layer (Phase 3)
 - **Super Admin Dashboard**: `/platform` route with PlatformLayout, PlatformSidebar — shows tenant overview, revenue chart, AI usage, health stats

@@ -4123,20 +4123,49 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.post("/api/platform/tenants", isAuthenticated, isPlatformAdmin, async (req, res) => {
     try {
-      const parsed = insertTenantSchema.safeParse(req.body);
+      const { ownerUsername, ownerPassword, ownerEmail, ownerFirstName, ownerLastName, ...tenantData } = req.body;
+      const parsed = insertTenantSchema.safeParse(tenantData);
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const tenant = await storage.createTenant(parsed.data);
-      await db.insert(tenantBranding).values({ tenantId: tenant.id });
-      const defaultModules = [
+      await db.insert(tenantBranding).values({ tenantId: tenant.id, companyName: tenant.name });
+      const plan = tenant.plan || "basic";
+      const { getPlanDefinition } = await import("@shared/plan-config");
+      const planDef = getPlanDefinition(plan as any);
+      const planModules = planDef.features.modules;
+      const allModules = [
         "tickets", "invoices", "documents", "chat", "signatures",
         "forms", "notarizations", "tax_prep", "bookkeeping", "knowledge_base",
         "staff_chat", "recurring", "analytics", "ai_chat",
+        "compliance_scheduling", "employee_performance",
       ];
-      for (const mod of defaultModules) {
-        await storage.upsertTenantSetting(tenant.id, `modules.${mod}`, "true", "boolean");
+      for (const mod of allModules) {
+        const enabled = planModules.includes(mod) || ["staff_chat", "recurring", "analytics", "ai_chat"].includes(mod);
+        await storage.upsertTenantSetting(tenant.id, `modules.${mod}`, enabled ? "true" : "false", "boolean");
       }
-      await audit(req, "created", "tenant", tenant.id, `Created tenant "${tenant.name}"`);
-      res.status(201).json(tenant);
+
+      let ownerUser = null;
+      if (ownerUsername && ownerPassword) {
+        const existing = await authStorage.getUserByUsername(ownerUsername);
+        if (existing) {
+          return res.status(400).json({ message: `Username "${ownerUsername}" already exists` });
+        }
+        const hashedPassword = await bcrypt.hash(ownerPassword, 10);
+        ownerUser = await authStorage.createUser({
+          username: ownerUsername,
+          password: hashedPassword,
+          firstName: ownerFirstName || null,
+          lastName: ownerLastName || null,
+          email: ownerEmail || null,
+          role: "owner",
+          clientId: null,
+          tenantId: tenant.id,
+        });
+        await db.update(tenants).set({ ownerUserId: ownerUser.id }).where(eq(tenants.id, tenant.id));
+      }
+
+      await audit(req, "created", "tenant", tenant.id, `Created tenant "${tenant.name}"${ownerUser ? ` with owner @${ownerUsername}` : ""}`);
+      const { password: _, ...safeOwner } = ownerUser || { password: null };
+      res.status(201).json({ ...tenant, ownerUser: ownerUser ? safeOwner : null });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -4363,6 +4392,130 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.get("/api/tenant/plans", isAuthenticated, async (req, res) => {
     res.json(PLAN_DEFINITIONS);
+  });
+
+  app.get("/api/tenant/onboarding", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.json({ steps: [], completed: false });
+
+      const existingClients = await storage.getClients(tenantId);
+      const [userCountResult] = await db.select({ count: count() }).from(users).where(eq(users.tenantId, tenantId));
+      const tenantTickets = await storage.getTickets(tenantId);
+      const tenantInvoices = await storage.getInvoices(tenantId);
+      const branding = await storage.getTenantBrandingByTenantId(tenantId);
+
+      const brandingConfigured = !!(branding && branding.companyName && branding.primaryColor);
+      const firstClientAdded = existingClients.length > 0;
+      const userInvited = Number(userCountResult?.count || 0) > 1;
+      const firstTicketCreated = tenantTickets.length > 0;
+      const firstInvoiceSent = tenantInvoices.some(inv => inv.status !== "draft");
+
+      const steps = [
+        { id: "branding", label: "Configure your company branding", completed: brandingConfigured, link: "/admin/tenant-settings" },
+        { id: "client", label: "Add your first client", completed: firstClientAdded, link: "/admin/clients" },
+        { id: "user", label: "Invite a team member", completed: userInvited, link: "/admin/users" },
+        { id: "ticket", label: "Create a service ticket", completed: firstTicketCreated, link: "/admin/tickets" },
+        { id: "invoice", label: "Send your first invoice", completed: firstInvoiceSent, link: "/admin/invoices" },
+      ];
+
+      const allCompleted = steps.every(s => s.completed);
+      if (allCompleted) {
+        await db.update(tenants).set({ onboardingCompleted: true }).where(eq(tenants.id, tenantId));
+      }
+
+      res.json({ steps, completed: allCompleted, completedCount: steps.filter(s => s.completed).length, totalSteps: steps.length });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch onboarding status" });
+    }
+  });
+
+  app.post("/api/admin/clients/import", isAuthenticated, isAdmin, express.json({ limit: "10mb" }), async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { rows } = req.body;
+      if (!rows || !Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "No rows provided" });
+      }
+
+      if (tenantId) {
+        const plan = await getTenantPlan(tenantId);
+        const limits = getPlanLimits(plan);
+        const existingClients = await storage.getClients(tenantId);
+        const remainingCapacity = limits.maxClients === -1 ? Infinity : limits.maxClients - existingClients.length;
+        if (rows.length > remainingCapacity) {
+          return res.status(403).json({
+            message: `Cannot import ${rows.length} clients. Only ${remainingCapacity} slots remaining on your ${plan} plan (${existingClients.length}/${limits.maxClients} used).`,
+            code: "PLAN_LIMIT_REACHED",
+          });
+        }
+      }
+
+      const results: { row: number; status: string; error?: string; clientId?: string }[] = [];
+      let successCount = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        try {
+          if (!row.companyName || !row.contactName || !row.email || !row.phone) {
+            results.push({ row: i + 1, status: "error", error: "Missing required fields (companyName, contactName, email, phone)" });
+            continue;
+          }
+          const clientData = {
+            companyName: row.companyName,
+            contactName: row.contactName,
+            email: row.email,
+            phone: row.phone,
+            address: row.address || null,
+            city: row.city || null,
+            state: row.state || null,
+            zipCode: row.zipCode || null,
+            dotNumber: row.dotNumber || null,
+            mcNumber: row.mcNumber || null,
+            einNumber: row.einNumber || null,
+            status: row.status || "active",
+            notes: row.notes || null,
+            tenantId,
+          };
+          const parsed = insertClientSchema.safeParse(clientData);
+          if (!parsed.success) {
+            results.push({ row: i + 1, status: "error", error: parsed.error.errors.map(e => e.message).join(", ") });
+            continue;
+          }
+          const client = await storage.createClient(parsed.data);
+          results.push({ row: i + 1, status: "success", clientId: client.id });
+          successCount++;
+        } catch (err: any) {
+          results.push({ row: i + 1, status: "error", error: err.message });
+        }
+      }
+
+      await audit(req, "imported", "client", "", `Imported ${successCount}/${rows.length} clients via CSV`);
+      res.json({ totalRows: rows.length, successCount, errorCount: rows.length - successCount, results });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/clients/export/csv", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const allClients = await storage.getClients(tenantId);
+      const headers = ["companyName", "contactName", "email", "phone", "address", "city", "state", "zipCode", "dotNumber", "mcNumber", "einNumber", "status", "notes"];
+      const csvRows = [headers.join(",")];
+      for (const client of allClients) {
+        const row = headers.map(h => {
+          const val = (client as any)[h] || "";
+          return `"${String(val).replace(/"/g, '""')}"`;
+        });
+        csvRows.push(row.join(","));
+      }
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename=clients-export-${new Date().toISOString().split("T")[0]}.csv`);
+      res.send(csvRows.join("\n"));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.post("/api/platform/impersonate/:tenantId", isAuthenticated, async (req, res) => {

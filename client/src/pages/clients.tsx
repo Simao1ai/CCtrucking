@@ -20,7 +20,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { format } from "date-fns";
-import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Calendar, Users, UserCheck, UserPlus } from "lucide-react";
+import { Plus, Search, Building2, Phone, Mail, MapPin, Hash, Calendar, Users, UserCheck, UserPlus, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 const PIPELINE_STAGES = [
   { value: "new", label: "New" },
@@ -335,12 +337,328 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
   );
 }
 
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let current = "";
+  let inQuotes = false;
+  let row: string[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(current.trim());
+        current = "";
+      } else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        row.push(current.trim());
+        current = "";
+        if (row.some(cell => cell !== "")) rows.push(row);
+        row = [];
+        if (ch === '\r') i++;
+      } else {
+        current += ch;
+      }
+    }
+  }
+  row.push(current.trim());
+  if (row.some(cell => cell !== "")) rows.push(row);
+  return rows;
+}
+
+const REQUIRED_FIELDS = ["companyName", "contactName", "email", "phone"];
+const ALL_FIELDS = ["companyName", "contactName", "email", "phone", "address", "city", "state", "zipCode", "dotNumber", "mcNumber", "einNumber", "status", "notes"];
+
+type ImportStep = "upload" | "preview" | "importing" | "results";
+type ImportResult = {
+  totalRows: number;
+  successCount: number;
+  errorCount: number;
+  results: { row: number; status: string; error?: string; clientId?: number }[];
+};
+
+function CSVImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const [step, setStep] = useState<ImportStep>("upload");
+  const [dataRows, setDataRows] = useState<Record<string, string>[]>([]);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  const resetState = () => {
+    setStep("upload");
+    setDataRows([]);
+    setImportResult(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length < 2) {
+        toast({ title: "Invalid CSV", description: "CSV must have a header row and at least one data row.", variant: "destructive" });
+        return;
+      }
+      const hdrs = parsed[0];
+
+      const autoMap: Record<number, string> = {};
+      hdrs.forEach((h, i) => {
+        const normalized = h.toLowerCase().replace(/[^a-z]/g, "");
+        const match = ALL_FIELDS.find(f => f.toLowerCase() === normalized);
+        if (match) autoMap[i] = match;
+      });
+
+      const rows = parsed.slice(1).map(row => {
+        const obj: Record<string, string> = {};
+        hdrs.forEach((_, i) => {
+          const field = autoMap[i];
+          if (field) obj[field] = row[i] ?? "";
+        });
+        return obj;
+      });
+      setDataRows(rows);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.name.endsWith('.csv')) {
+      toast({ title: "Invalid file", description: "Please drop a .csv file.", variant: "destructive" });
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    handleFileChange({ target: input } as unknown as React.ChangeEvent<HTMLInputElement>);
+  };
+
+  const validationErrors = (row: Record<string, string>) => {
+    return REQUIRED_FIELDS.filter(f => !row[f] || row[f].trim() === "");
+  };
+
+  const totalValid = dataRows.filter(r => validationErrors(r).length === 0).length;
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      setStep("importing");
+      const res = await apiRequest("POST", "/api/admin/clients/import", { rows: dataRows });
+      return await res.json() as ImportResult;
+    },
+    onSuccess: (data) => {
+      setImportResult(data);
+      setStep("results");
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+      setStep("preview");
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) resetState(); onOpenChange(v); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5" />
+            Import Clients from CSV
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === "upload" && (
+          <div className="space-y-4">
+            <div
+              className="border-2 border-dashed rounded-md p-8 text-center space-y-3 cursor-pointer"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              data-testid="dropzone-csv"
+            >
+              <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Drag and drop a CSV file here, or click to browse</p>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                className="hidden"
+                id="csv-file-input"
+                data-testid="input-csv-file"
+              />
+              <Button variant="outline" onClick={() => document.getElementById("csv-file-input")?.click()} data-testid="button-browse-csv">
+                Browse Files
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Required columns: companyName, contactName, email, phone</p>
+              <p>Optional columns: address, city, state, zipCode, dotNumber, mcNumber, einNumber, status, notes</p>
+            </div>
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm text-muted-foreground" data-testid="text-preview-count">
+                {dataRows.length} rows found, {totalValid} valid
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={resetState} data-testid="button-back-upload">
+                  Back
+                </Button>
+                <Button
+                  onClick={() => importMutation.mutate()}
+                  disabled={totalValid === 0}
+                  data-testid="button-start-import"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import {totalValid} Clients
+                </Button>
+              </div>
+            </div>
+
+            <div className="border rounded-md overflow-auto max-h-72">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">#</TableHead>
+                    {REQUIRED_FIELDS.map(f => (
+                      <TableHead key={f} className="text-xs">{f}*</TableHead>
+                    ))}
+                    <TableHead className="text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dataRows.slice(0, 5).map((row, i) => {
+                    const errors = validationErrors(row);
+                    return (
+                      <TableRow key={i} data-testid={`row-preview-${i}`}>
+                        <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                        {REQUIRED_FIELDS.map(f => (
+                          <TableCell
+                            key={f}
+                            className={`text-xs ${errors.includes(f) ? "text-destructive bg-destructive/10" : ""}`}
+                            data-testid={`cell-preview-${i}-${f}`}
+                          >
+                            {row[f] || <span className="italic text-destructive">missing</span>}
+                          </TableCell>
+                        ))}
+                        <TableCell>
+                          {errors.length === 0 ? (
+                            <Badge variant="secondary" className="text-xs" data-testid={`badge-valid-${i}`}>
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Valid
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs" data-testid={`badge-invalid-${i}`}>
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              {errors.length} missing
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            {dataRows.length > 5 && (
+              <p className="text-xs text-muted-foreground">Showing first 5 of {dataRows.length} rows</p>
+            )}
+
+            <div className="text-sm" data-testid="text-import-summary">
+              Ready to import {totalValid} clients
+              {dataRows.length - totalValid > 0 && (
+                <span className="text-destructive ml-1">({dataRows.length - totalValid} rows with errors will be skipped)</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === "importing" && (
+          <div className="flex flex-col items-center justify-center py-8 space-y-4" data-testid="importing-progress">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-foreground" />
+            <p className="text-sm text-muted-foreground">Importing clients...</p>
+          </div>
+        )}
+
+        {step === "results" && importResult && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold" data-testid="text-total-rows">{importResult.totalRows}</p>
+                  <p className="text-xs text-muted-foreground">Total Rows</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-success-count">{importResult.successCount}</p>
+                  <p className="text-xs text-muted-foreground">Imported</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-destructive" data-testid="text-error-count">{importResult.errorCount}</p>
+                  <p className="text-xs text-muted-foreground">Errors</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {importResult.results.filter(r => r.status === "error").length > 0 && (
+              <div className="border rounded-md overflow-auto max-h-48">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Row</TableHead>
+                      <TableHead className="text-xs">Error</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importResult.results.filter(r => r.status === "error").map((r, i) => (
+                      <TableRow key={i} data-testid={`row-error-${i}`}>
+                        <TableCell className="text-xs">{r.row}</TableCell>
+                        <TableCell className="text-xs text-destructive">{r.error}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button onClick={() => { resetState(); onOpenChange(false); }} data-testid="button-close-import">
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Clients() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | undefined>();
   const [tab, setTab] = useState("all");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const { data: clients, isLoading } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
 
@@ -375,20 +693,31 @@ export default function Clients() {
         title="Clients"
         description="Manage your trucking company accounts"
         actions={
-          <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleClose(); else setDialogOpen(true); }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setEditingClient(undefined); setDialogOpen(true); }} data-testid="button-add-client">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Client
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingClient ? "Edit Client" : "Add New Client"}</DialogTitle>
-              </DialogHeader>
-              <ClientForm onSuccess={handleClose} existingClient={editingClient} />
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => window.open("/api/admin/clients/export/csv", "_blank")} data-testid="button-export-csv">
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)} data-testid="button-import-csv">
+              <Upload className="w-4 h-4 mr-2" />
+              Import CSV
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleClose(); else setDialogOpen(true); }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingClient(undefined); setDialogOpen(true); }} data-testid="button-add-client">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Client
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingClient ? "Edit Client" : "Add New Client"}</DialogTitle>
+                </DialogHeader>
+                <ClientForm onSuccess={handleClose} existingClient={editingClient} />
+              </DialogContent>
+            </Dialog>
+            <CSVImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
+          </div>
         }
       />
 

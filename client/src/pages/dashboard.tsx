@@ -1,21 +1,42 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Users, Ticket, Receipt, DollarSign, Clock,
   AlertTriangle, CheckCircle, Plus, ArrowRight, AlertCircle,
-  CalendarClock, FileWarning, Ban, TrendingUp, ChevronRight
+  CalendarClock, FileWarning, Ban, TrendingUp, ChevronRight,
+  CheckCircle2, Circle, X, Rocket
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import type { Client, ServiceTicket, Invoice, Document } from "@shared/schema";
 
+interface OnboardingStep {
+  id: string;
+  label: string;
+  completed: boolean;
+  link: string;
+}
+
+interface OnboardingData {
+  steps: OnboardingStep[];
+  completed: boolean;
+  completedCount: number;
+  totalSteps: number;
+}
+
 export default function Dashboard() {
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const { data: clients, isLoading: loadingClients } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
   const { data: tickets, isLoading: loadingTickets } = useQuery<ServiceTicket[]>({ queryKey: ["/api/tickets"] });
   const { data: invoices, isLoading: loadingInvoices } = useQuery<Invoice[]>({ queryKey: ["/api/invoices"] });
   const { data: documents, isLoading: loadingDocs } = useQuery<Document[]>({ queryKey: ["/api/documents"] });
+  const { data: onboarding } = useQuery<OnboardingData>({ queryKey: ["/api/tenant/onboarding"] });
 
   const loading = loadingClients || loadingTickets || loadingInvoices || loadingDocs;
 
@@ -62,6 +83,63 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
+          {onboarding && !onboarding.completed && !onboardingDismissed && (
+            <Card className="relative" data-testid="card-onboarding-checklist">
+              <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Rocket className="w-5 h-5 text-primary" />
+                  <div>
+                    <h2 className="text-sm font-semibold" data-testid="text-onboarding-title">Getting Started</h2>
+                    <p className="text-xs text-muted-foreground" data-testid="text-onboarding-progress">
+                      {onboarding.completedCount} of {onboarding.totalSteps} steps completed
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setOnboardingDismissed(true)}
+                  data-testid="button-dismiss-onboarding"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="px-4 pb-3">
+                <Progress
+                  value={(onboarding.completedCount / onboarding.totalSteps) * 100}
+                  className="h-2"
+                  data-testid="progress-onboarding"
+                />
+              </div>
+              <div className="divide-y divide-border/50 px-4 pb-3">
+                {onboarding.steps.map((step) => (
+                  <div
+                    key={step.id}
+                    className="flex items-center gap-3 py-2.5"
+                    data-testid={`onboarding-step-${step.id}`}
+                  >
+                    {step.completed ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                    )}
+                    <span
+                      className={`text-sm flex-1 ${step.completed ? "line-through text-muted-foreground" : "font-medium"}`}
+                      data-testid={`text-step-label-${step.id}`}
+                    >
+                      {step.label}
+                    </span>
+                    <Button variant="ghost" size="sm" asChild data-testid={`button-step-go-${step.id}`}>
+                      <Link href={step.link}>
+                        Go <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Link>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <div className="flex items-center justify-between" data-testid="page-header">
             <div>
               <h1 className="text-lg font-semibold tracking-tight" data-testid="page-title">{greeting}</h1>
