@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories } from "@shared/schema";
-import { sql } from "drizzle-orm";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues } from "@shared/schema";
+import { sql, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { truckingServiceItems, truckingTransactionCategories, truckingRecurringTemplates, truckingSampleClients, truckingCustomFieldDefinitions } from "./industry-packs/trucking-seed-data";
 
 async function seedUsers() {
   const existingUsers = await db.select().from(users);
@@ -35,27 +36,7 @@ async function seedTransactionCategories() {
   const existing = await db.select().from(transactionCategories);
   if (existing.length > 0) return;
 
-  await db.insert(transactionCategories).values([
-    { name: "Fuel", description: "Diesel, gasoline, and other fuel purchases", parentCategory: "expense", isDefault: true },
-    { name: "Maintenance", description: "Vehicle repairs, parts, and preventive maintenance", parentCategory: "expense", isDefault: true },
-    { name: "Tolls", description: "Highway and bridge toll charges", parentCategory: "expense", isDefault: true },
-    { name: "Insurance", description: "Vehicle, cargo, and liability insurance premiums", parentCategory: "expense", isDefault: true },
-    { name: "Payroll", description: "Driver wages, benefits, and payroll taxes", parentCategory: "expense", isDefault: true },
-    { name: "Permits", description: "Operating permits, oversize/overweight permits", parentCategory: "expense", isDefault: true },
-    { name: "Equipment", description: "Truck parts, trailers, and equipment purchases", parentCategory: "expense", isDefault: true },
-    { name: "Meals", description: "Driver meals and per diem expenses", parentCategory: "expense", isDefault: true },
-    { name: "Parking", description: "Truck parking and rest stop fees", parentCategory: "expense", isDefault: true },
-    { name: "License & Registration", description: "Vehicle registration, CDL renewals, and licensing fees", parentCategory: "expense", isDefault: true },
-    { name: "Lease Payments", description: "Truck and trailer lease or loan payments", parentCategory: "expense", isDefault: true },
-    { name: "Office", description: "Office supplies, software, and administrative costs", parentCategory: "expense", isDefault: true },
-    { name: "Professional Services", description: "Accounting, legal, and consulting fees", parentCategory: "expense", isDefault: true },
-    { name: "Taxes", description: "IFTA, HVUT, and other tax payments", parentCategory: "expense", isDefault: true },
-    { name: "Freight Revenue", description: "Income from hauling freight and loads", parentCategory: "income", isDefault: true },
-    { name: "Fuel Surcharge", description: "Fuel surcharge income from shippers", parentCategory: "income", isDefault: true },
-    { name: "Accessorial Income", description: "Detention, layover, and stop-off charges", parentCategory: "income", isDefault: true },
-    { name: "Other Income", description: "Miscellaneous income not categorized elsewhere", parentCategory: "income", isDefault: true },
-    { name: "Other Expense", description: "Miscellaneous expenses not categorized elsewhere", parentCategory: "expense", isDefault: true },
-  ]);
+  await db.insert(transactionCategories).values(truckingTransactionCategories);
   console.log("Transaction categories seeded.");
 }
 
@@ -64,72 +45,15 @@ export async function seedDatabase() {
   await seedServiceItems();
   await seedRecurringTemplates();
   await seedTransactionCategories();
+  await seedCustomFieldDefinitions();
 
   const existingClients = await db.select().from(clients);
-  if (existingClients.length > 0) return;
+  if (existingClients.length > 0) {
+    await migrateClientDataToCustomFields();
+    return;
+  }
 
-  const [c1, c2, c3, c4] = await db.insert(clients).values([
-    {
-      companyName: "Lone Star Freight LLC",
-      contactName: "Marcus Johnson",
-      email: "marcus@lonestarfreight.com",
-      phone: "(214) 555-0187",
-      dotNumber: "DOT-3845291",
-      mcNumber: "MC-982145",
-      einNumber: "75-4821930",
-      address: "4520 Industrial Blvd",
-      city: "Dallas",
-      state: "TX",
-      zipCode: "75247",
-      status: "active",
-      notes: "Long-haul carrier, 12 trucks. Priority client.",
-    },
-    {
-      companyName: "Summit Logistics Inc",
-      contactName: "Rachel Chen",
-      email: "rachel@summitlogistics.net",
-      phone: "(303) 555-0294",
-      dotNumber: "DOT-2917384",
-      mcNumber: "MC-743829",
-      einNumber: "84-3719285",
-      address: "890 Mountain View Dr",
-      city: "Denver",
-      state: "CO",
-      zipCode: "80202",
-      status: "active",
-      notes: "Regional carrier, specializes in refrigerated goods.",
-    },
-    {
-      companyName: "Atlantic Coast Transport",
-      contactName: "David Williams",
-      email: "david@atlanticcoast.com",
-      phone: "(404) 555-0341",
-      dotNumber: "DOT-4829175",
-      mcNumber: "MC-291847",
-      einNumber: "58-9281734",
-      address: "2100 Peachtree Rd NE",
-      city: "Atlanta",
-      state: "GA",
-      zipCode: "30309",
-      status: "active",
-      notes: "Flatbed and dry van fleet. 8 vehicles.",
-    },
-    {
-      companyName: "Pacific Route Carriers",
-      contactName: "Lisa Park",
-      email: "lisa@pacificroute.com",
-      phone: "(206) 555-0412",
-      dotNumber: "DOT-5738291",
-      mcNumber: "MC-483921",
-      einNumber: "91-8374625",
-      address: "750 Harbor Ave SW",
-      city: "Seattle",
-      state: "WA",
-      zipCode: "98126",
-      status: "prospect",
-      notes: "New prospect, interested in quarterly tax services.",
-    },
-  ]).returning();
+  const [c1, c2, c3, c4] = await db.insert(clients).values(truckingSampleClients).returning();
 
   const now = new Date();
   const futureDate = (days: number) => new Date(now.getTime() + days * 86400000);
@@ -296,6 +220,8 @@ export async function seedDatabase() {
     },
   ]);
 
+  await migrateClientDataToCustomFields();
+
   console.log("Database seeded successfully.");
 }
 
@@ -303,68 +229,7 @@ async function seedServiceItems() {
   const existing = await db.select().from(serviceItems);
   if (existing.length > 0) return;
 
-  await db.insert(serviceItems).values([
-    {
-      name: "IFTA Quarterly Filing",
-      description: "International Fuel Tax Agreement quarterly tax return preparation and filing for interstate carriers.",
-      category: "Tax & Compliance",
-      defaultPrice: "450.00",
-    },
-    {
-      name: "MCS-150 Biennial Update",
-      description: "Mandatory biennial update of motor carrier information with FMCSA.",
-      category: "DOT Compliance",
-      defaultPrice: "150.00",
-    },
-    {
-      name: "UCR Annual Registration",
-      description: "Unified Carrier Registration annual renewal for interstate operations.",
-      category: "Registration",
-      defaultPrice: "175.00",
-    },
-    {
-      name: "Annual DOT Compliance Review",
-      description: "Comprehensive annual review of DOT compliance documentation, driver files, and vehicle records.",
-      category: "DOT Compliance",
-      defaultPrice: "1250.00",
-    },
-    {
-      name: "Business Entity Setup",
-      description: "LLC formation, EIN application, and initial business structure setup for new trucking companies.",
-      category: "Business Setup",
-      defaultPrice: "1800.00",
-    },
-    {
-      name: "Quarterly Tax Preparation",
-      description: "Quarterly estimated tax calculation and filing for trucking businesses.",
-      category: "Tax & Compliance",
-      defaultPrice: "350.00",
-    },
-    {
-      name: "Bookkeeping - Monthly Service",
-      description: "Monthly bookkeeping service including bank reconciliation, expense categorization, and financial reporting.",
-      category: "Bookkeeping",
-      defaultPrice: "50.00",
-    },
-    {
-      name: "Permit & Authority Filing",
-      description: "Filing for operating authority, permits, and interstate carrier credentials.",
-      category: "Registration",
-      defaultPrice: "500.00",
-    },
-    {
-      name: "Insurance Filing (Form E/H)",
-      description: "Filing of insurance certificates and endorsements with FMCSA.",
-      category: "DOT Compliance",
-      defaultPrice: "125.00",
-    },
-    {
-      name: "BOC-3 Process Agent Filing",
-      description: "Designation of process agents (BOC-3) filing required for interstate carriers.",
-      category: "Registration",
-      defaultPrice: "75.00",
-    },
-  ]);
+  await db.insert(serviceItems).values(truckingServiceItems);
   console.log("Service catalog items seeded.");
 }
 
@@ -372,43 +237,56 @@ async function seedRecurringTemplates() {
   const existing = await db.select().from(recurringTemplates);
   if (existing.length > 0) return;
 
-  await db.insert(recurringTemplates).values([
-    {
-      name: "IFTA Quarterly Filing",
-      serviceType: "IFTA Permit",
-      description: "Quarterly IFTA tax return filing. Requires fuel receipts and mileage records.",
-      priority: "high",
-      frequencyType: "quarterly",
-      daysBefore: 30,
-      requiredDocuments: JSON.stringify(["Fuel Receipts", "Mileage Report"]),
-    },
-    {
-      name: "UCR Annual Registration",
-      serviceType: "UCR Registration",
-      description: "Annual Unified Carrier Registration renewal.",
-      priority: "medium",
-      frequencyType: "annual",
-      daysBefore: 60,
-      requiredDocuments: JSON.stringify(["Current UCR Certificate"]),
-    },
-    {
-      name: "MCS-150 Biennial Update",
-      serviceType: "MCS-150 Update",
-      description: "Biennial update of motor carrier census information.",
-      priority: "medium",
-      frequencyType: "biennial",
-      daysBefore: 60,
-      requiredDocuments: JSON.stringify(["Fleet Size Report", "Driver Count"]),
-    },
-    {
-      name: "Annual DOT Compliance Review",
-      serviceType: "DOT Permit",
-      description: "Comprehensive annual DOT compliance audit and documentation review.",
-      priority: "high",
-      frequencyType: "annual",
-      daysBefore: 45,
-      requiredDocuments: JSON.stringify(["Insurance Certificate", "Vehicle Inspection Reports", "Driver Qualification Files"]),
-    },
-  ]);
+  await db.insert(recurringTemplates).values(truckingRecurringTemplates);
   console.log("Recurring templates seeded.");
+}
+
+async function seedCustomFieldDefinitions() {
+  const existing = await db.select().from(customFieldDefinitions);
+  const truckingFields = existing.filter(f => f.industryPackSource === "trucking");
+  if (truckingFields.length >= truckingCustomFieldDefinitions.length) return;
+
+  for (const fieldDef of truckingCustomFieldDefinitions) {
+    const alreadyExists = existing.find(f => f.name === fieldDef.name && f.industryPackSource === "trucking");
+    if (!alreadyExists) {
+      await db.insert(customFieldDefinitions).values(fieldDef);
+    }
+  }
+  console.log("Trucking custom field definitions seeded.");
+}
+
+async function migrateClientDataToCustomFields() {
+  const definitions = await db.select().from(customFieldDefinitions);
+  const dotDef = definitions.find(d => d.name === "dotNumber" && d.industryPackSource === "trucking");
+  const mcDef = definitions.find(d => d.name === "mcNumber" && d.industryPackSource === "trucking");
+  const einDef = definitions.find(d => d.name === "einNumber" && d.industryPackSource === "trucking");
+
+  if (!dotDef || !mcDef || !einDef) return;
+
+  const allClients = await db.select().from(clients);
+  const existingValues = await db.select().from(customFieldValues);
+
+  for (const client of allClients) {
+    const fieldMap: Array<{ def: typeof dotDef; value: string | null }> = [
+      { def: dotDef, value: client.dotNumber },
+      { def: mcDef, value: client.mcNumber },
+      { def: einDef, value: client.einNumber },
+    ];
+
+    for (const { def, value } of fieldMap) {
+      if (!value) continue;
+      const alreadyExists = existingValues.find(
+        v => v.fieldDefinitionId === def.id && v.entityId === client.id && v.entityType === "client"
+      );
+      if (!alreadyExists) {
+        await db.insert(customFieldValues).values({
+          fieldDefinitionId: def.id,
+          entityType: "client",
+          entityId: client.id,
+          value,
+        });
+      }
+    }
+  }
+  console.log("Client DOT/MC/EIN data migrated to custom field values.");
 }

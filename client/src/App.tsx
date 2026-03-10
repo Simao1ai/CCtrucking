@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { TenantProvider, useTenant, useTenantIcon } from "@/context/tenant-context";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PortalSidebar } from "@/components/portal-sidebar";
@@ -168,14 +169,17 @@ function PreparerLayout({ children }: { children: React.ReactNode }) {
 }
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
+  const branding = useTenant();
+  const BrandIcon = useTenantIcon();
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <a href="/" className="flex items-center gap-2" data-testid="link-logo">
           <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
+            <BrandIcon className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-sm">CC Trucking Services</span>
+          <span className="font-semibold text-sm">{branding.companyName}</span>
         </a>
         <nav className="flex items-center gap-1">
           <a href="/" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-home">Home</a>
@@ -197,6 +201,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <TenantProvider>
       <TooltipProvider>
         <Switch>
           <Route path="/">
@@ -324,6 +329,7 @@ function App() {
         </Switch>
         <Toaster />
       </TooltipProvider>
+      </TenantProvider>
     </QueryClientProvider>
   );
 }

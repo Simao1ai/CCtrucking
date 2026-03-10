@@ -5,6 +5,7 @@ import {
   formTemplates, filledForms, notarizations, auditLogs, serviceItems, invoiceLineItems, taxDocuments, pushSubscriptions,
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes, knowledgeArticles,
+  customFieldDefinitions, customFieldValues,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -31,6 +32,8 @@ import {
   type ClientRecurringSchedule, type InsertClientRecurringSchedule,
   type ClientNote, type InsertClientNote,
   type KnowledgeArticle, type InsertKnowledgeArticle,
+  type CustomFieldDefinition, type InsertCustomFieldDefinition,
+  type CustomFieldValue, type InsertCustomFieldValue,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -186,6 +189,16 @@ export interface IStorage {
   updateKnowledgeArticle(id: string, data: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined>;
   deleteKnowledgeArticle(id: string): Promise<void>;
   searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]>;
+
+  getCustomFieldDefinitions(entityType?: string): Promise<CustomFieldDefinition[]>;
+  getCustomFieldDefinition(id: string): Promise<CustomFieldDefinition | undefined>;
+  createCustomFieldDefinition(data: InsertCustomFieldDefinition): Promise<CustomFieldDefinition>;
+  updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>): Promise<CustomFieldDefinition | undefined>;
+  deleteCustomFieldDefinition(id: string): Promise<void>;
+
+  getCustomFieldValues(entityType: string, entityId: string): Promise<CustomFieldValue[]>;
+  setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue>;
+  deleteCustomFieldValues(entityType: string, entityId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -794,6 +807,65 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(knowledgeArticles).where(
       sql`LOWER(${knowledgeArticles.title}) LIKE ${lowerQuery} OR LOWER(${knowledgeArticles.content}) LIKE ${lowerQuery} OR LOWER(${knowledgeArticles.category}) LIKE ${lowerQuery}`
     ).orderBy(desc(knowledgeArticles.pinned), desc(knowledgeArticles.updatedAt));
+  }
+
+  async getCustomFieldDefinitions(entityType?: string): Promise<CustomFieldDefinition[]> {
+    if (entityType) {
+      return db.select().from(customFieldDefinitions).where(eq(customFieldDefinitions.entityType, entityType)).orderBy(customFieldDefinitions.sortOrder);
+    }
+    return db.select().from(customFieldDefinitions).orderBy(customFieldDefinitions.sortOrder);
+  }
+
+  async getCustomFieldDefinition(id: string): Promise<CustomFieldDefinition | undefined> {
+    const [def] = await db.select().from(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+    return def;
+  }
+
+  async createCustomFieldDefinition(data: InsertCustomFieldDefinition): Promise<CustomFieldDefinition> {
+    const [def] = await db.insert(customFieldDefinitions).values(data).returning();
+    return def;
+  }
+
+  async updateCustomFieldDefinition(id: string, data: Partial<InsertCustomFieldDefinition>): Promise<CustomFieldDefinition | undefined> {
+    const [def] = await db.update(customFieldDefinitions).set(data).where(eq(customFieldDefinitions.id, id)).returning();
+    return def;
+  }
+
+  async deleteCustomFieldDefinition(id: string): Promise<void> {
+    await db.delete(customFieldValues).where(eq(customFieldValues.fieldDefinitionId, id));
+    await db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+  }
+
+  async getCustomFieldValues(entityType: string, entityId: string): Promise<CustomFieldValue[]> {
+    return db.select().from(customFieldValues).where(
+      and(eq(customFieldValues.entityType, entityType), eq(customFieldValues.entityId, entityId))
+    );
+  }
+
+  async setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue> {
+    const entityType = data.entityType ?? "client";
+    const existing = await db.select().from(customFieldValues).where(
+      and(
+        eq(customFieldValues.fieldDefinitionId, data.fieldDefinitionId),
+        eq(customFieldValues.entityType, entityType),
+        eq(customFieldValues.entityId, data.entityId)
+      )
+    );
+    if (existing.length > 0) {
+      const [updated] = await db.update(customFieldValues)
+        .set({ value: data.value, updatedAt: new Date() })
+        .where(eq(customFieldValues.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [val] = await db.insert(customFieldValues).values(data).returning();
+    return val;
+  }
+
+  async deleteCustomFieldValues(entityType: string, entityId: string): Promise<void> {
+    await db.delete(customFieldValues).where(
+      and(eq(customFieldValues.entityType, entityType), eq(customFieldValues.entityId, entityId))
+    );
   }
 }
 

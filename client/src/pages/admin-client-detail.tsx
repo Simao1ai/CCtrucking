@@ -14,7 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest, FilledForm, Notarization, ClientNote } from "@shared/schema";
+import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, SignatureRequest, FilledForm, Notarization, ClientNote, CustomFieldDefinition, CustomFieldValue } from "@shared/schema";
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
@@ -96,6 +96,19 @@ export default function AdminClientDetail() {
 
   const { data: notes = [] } = useQuery<ClientNote[]>({
     queryKey: ["/api/clients", clientId, "notes"],
+    enabled: !!clientId,
+  });
+
+  const { data: customFieldDefs = [] } = useQuery<CustomFieldDefinition[]>({
+    queryKey: ["/api/admin/custom-fields", "client"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/custom-fields?entityType=client");
+      return res.json();
+    },
+  });
+
+  const { data: customFieldValues = [] } = useQuery<CustomFieldValue[]>({
+    queryKey: ["/api/custom-fields", "client", clientId],
     enabled: !!clientId,
   });
 
@@ -317,6 +330,32 @@ export default function AdminClientDetail() {
                 </div>
               </>
             )}
+
+            {(() => {
+              const nonIndustryFields = customFieldDefs.filter(d => d.isActive && !d.industryPackSource);
+              const fieldsWithValues = nonIndustryFields.filter(d => {
+                const val = customFieldValues.find(v => v.fieldDefinitionId === d.id);
+                return val && val.value;
+              });
+              if (fieldsWithValues.length === 0) return null;
+              return (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Custom Fields</p>
+                    {fieldsWithValues.map(def => {
+                      const val = customFieldValues.find(v => v.fieldDefinitionId === def.id);
+                      return (
+                        <div key={def.id} className="flex items-center justify-between" data-testid={`text-custom-field-${def.name}`}>
+                          <span className="text-[11px] text-muted-foreground">{def.label}</span>
+                          <span className="text-sm font-medium">{val?.value}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
 
             {client.notes && (
               <>

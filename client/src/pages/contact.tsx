@@ -7,10 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Phone, Mail, MapPin, Clock, Send, Truck } from "lucide-react";
+import { ArrowLeft, Phone, Mail, MapPin, Clock, Send, Truck, Building2, Briefcase } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 
 export default function Contact() {
   const { toast } = useToast();
+  const branding = useTenant();
+  const IconMap: Record<string, typeof Truck> = { Truck, Building2, Briefcase };
+  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
   const [sending, setSending] = useState(false);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -130,8 +134,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <div className="font-medium text-sm">Phone</div>
-                      <div className="text-sm text-muted-foreground">(555) 123-4567</div>
-                      <div className="text-xs text-muted-foreground">Toll-free: (800) 555-0199</div>
+                      <div className="text-sm text-muted-foreground">{branding.supportPhone}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -140,8 +143,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <div className="font-medium text-sm">Email</div>
-                      <div className="text-sm text-muted-foreground">info@cctruckingservices.com</div>
-                      <div className="text-xs text-muted-foreground">support@cctruckingservices.com</div>
+                      <div className="text-sm text-muted-foreground">{branding.contactEmail}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -150,8 +152,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <div className="font-medium text-sm">Office</div>
-                      <div className="text-sm text-muted-foreground">1200 Main Street, Suite 400</div>
-                      <div className="text-sm text-muted-foreground">Houston, TX 77002</div>
+                      <div className="text-sm text-muted-foreground">{branding.address}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -170,7 +171,7 @@ export default function Contact() {
               <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <Truck className="w-5 h-5 text-primary" />
+                    <BrandIcon className="w-5 h-5 text-primary" />
                     <h3 className="font-semibold">Already a client?</h3>
                   </div>
                   <p className="text-sm text-muted-foreground mb-4">

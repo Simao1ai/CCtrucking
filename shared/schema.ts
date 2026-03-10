@@ -355,8 +355,35 @@ export const knowledgeArticles = pgTable("knowledge_articles", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const customFieldDefinitions = pgTable("custom_field_definitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  label: text("label").notNull(),
+  fieldType: text("field_type").notNull().default("text"),
+  entityType: text("entity_type").notNull().default("client"),
+  required: boolean("required").notNull().default(false),
+  options: text("options"),
+  placeholder: text("placeholder"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  industryPackSource: text("industry_pack_source"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const customFieldValues = pgTable("custom_field_values", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fieldDefinitionId: varchar("field_definition_id").notNull().references(() => customFieldDefinitions.id),
+  entityType: text("entity_type").notNull().default("client"),
+  entityId: varchar("entity_id").notNull(),
+  value: text("value"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertKnowledgeArticleSchema = createInsertSchema(knowledgeArticles).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCustomFieldDefinitionSchema = createInsertSchema(customFieldDefinitions).omit({ id: true, createdAt: true });
+export const insertCustomFieldValueSchema = createInsertSchema(customFieldValues).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertServiceItemSchema = createInsertSchema(serviceItems).omit({ id: true, createdAt: true });
 export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({ id: true, createdAt: true });
@@ -423,3 +450,7 @@ export type ClientNote = typeof clientNotes.$inferSelect;
 export type InsertClientNote = z.infer<typeof insertClientNoteSchema>;
 export type KnowledgeArticle = typeof knowledgeArticles.$inferSelect;
 export type InsertKnowledgeArticle = z.infer<typeof insertKnowledgeArticleSchema>;
+export type CustomFieldDefinition = typeof customFieldDefinitions.$inferSelect;
+export type InsertCustomFieldDefinition = z.infer<typeof insertCustomFieldDefinitionSchema>;
+export type CustomFieldValue = typeof customFieldValues.$inferSelect;
+export type InsertCustomFieldValue = z.infer<typeof insertCustomFieldValueSchema>;

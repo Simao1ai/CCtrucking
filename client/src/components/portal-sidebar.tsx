@@ -1,5 +1,6 @@
 import { useLocation, Link } from "wouter";
-import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home, PenLine, BookOpen, FileCheck } from "lucide-react";
+import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home, PenLine, BookOpen, FileCheck, Building2, Briefcase } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 import {
   Sidebar,
   SidebarContent,
@@ -66,6 +67,9 @@ function NavGroup({ label, items, location }: { label: string; items: typeof mai
 export function PortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const branding = useTenant();
+  const IconMap: Record<string, typeof Truck> = { Truck, Building2, Briefcase };
+  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
 
   return (
     <Sidebar>
@@ -73,10 +77,10 @@ export function PortalSidebar() {
         <Link href="/portal" data-testid="link-portal-home">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
-              <Truck className="w-5 h-5 text-primary-foreground" />
+              <BrandIcon className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight">CC Trucking</span>
+              <span className="text-sm font-semibold tracking-tight">{branding.shortName}</span>
               <span className="text-xs text-muted-foreground">Client Portal</span>
             </div>
           </div>

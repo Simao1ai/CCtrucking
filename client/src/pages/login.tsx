@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Loader2, AlertCircle, ShieldCheck, User, Calculator } from "lucide-react";
+import { Truck, Loader2, AlertCircle, ShieldCheck, User, Calculator, Building2, Briefcase } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
+import { useTenant } from "@/context/tenant-context";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const branding = useTenant();
   const [loginType, setLoginType] = useState<"admin" | "client" | "preparer">("admin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -60,7 +62,7 @@ export default function Login() {
           <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
             <Truck className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-sm">CC Trucking Services</span>
+          <span className="font-semibold text-sm">{branding.companyName}</span>
         </a>
         <ThemeToggle />
       </header>

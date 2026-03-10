@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { brandingConfig } from "./branding-config";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.office365.com",
@@ -33,14 +34,14 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<
   const amt = parseFloat(params.amount).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
   await transporter.sendMail({
-    from: `"CC Trucking Services" <${fromEmail}>`,
+    from: `"${brandingConfig.companyName}" <${fromEmail}>`,
     to: params.to,
-    subject: `Invoice ${params.invoiceNumber} — $${amt} from CC Trucking Services`,
+    subject: `Invoice ${params.invoiceNumber} — $${amt} from ${brandingConfig.companyName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-        <div style="background-color: #1e3a5f; padding: 30px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">CC Trucking Services</h1>
-          <p style="color: #cbd5e1; margin: 5px 0 0 0; font-size: 13px;">Professional Trucking Operations &amp; Compliance</p>
+        <div style="background-color: ${brandingConfig.primaryColor}; padding: 30px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">${brandingConfig.companyName}</h1>
+          <p style="color: #cbd5e1; margin: 5px 0 0 0; font-size: 13px;">${brandingConfig.tagline}</p>
         </div>
         <div style="border: 1px solid #e2e8f0; border-top: none; padding: 30px; border-radius: 0 0 8px 8px;">
           <p style="font-size: 16px;">Hello ${params.clientName},</p>
@@ -65,7 +66,7 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;" />
           <p style="font-size: 12px; color: #94a3b8; text-align: center;">
             Thank you for your business!<br />
-            CC Trucking Services
+            ${brandingConfig.companyName}
           </p>
         </div>
       </div>
@@ -119,13 +120,13 @@ export async function sendReminderEmail(params: SendReminderEmailParams): Promis
   };
 
   await transporter.sendMail({
-    from: `"CC Trucking Services" <${fromEmail}>`,
+    from: `"${brandingConfig.companyName}" <${fromEmail}>`,
     to: params.to,
     subject: subjects[params.level],
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-        <div style="background-color: #1e3a5f; padding: 30px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">CC Trucking Services</h1>
+        <div style="background-color: ${brandingConfig.primaryColor}; padding: 30px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">${brandingConfig.companyName}</h1>
           <p style="color: #cbd5e1; margin: 5px 0 0 0; font-size: 13px;">Payment Reminder</p>
         </div>
         <div style="border: 1px solid #e2e8f0; border-top: none; padding: 30px; border-radius: 0 0 8px 8px;">
@@ -154,7 +155,7 @@ export async function sendReminderEmail(params: SendReminderEmailParams): Promis
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;" />
           <p style="font-size: 12px; color: #94a3b8; text-align: center;">
             Thank you for your business!<br />
-            CC Trucking Services
+            ${brandingConfig.companyName}
           </p>
         </div>
       </div>

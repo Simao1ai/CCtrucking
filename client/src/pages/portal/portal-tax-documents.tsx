@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/context/tenant-context";
 import type { TaxDocument } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -43,15 +44,19 @@ function statusBadge(status: string) {
   }
 }
 
-function uploaderLabel(role?: string | null) {
-  if (role === "client") return "You";
-  if (role === "preparer") return "Tax Preparer";
-  if (role === "admin" || role === "owner") return "CC Trucking Staff";
-  return "Staff";
+function useUploaderLabel() {
+  const branding = useTenant();
+  return (role?: string | null) => {
+    if (role === "client") return "You";
+    if (role === "preparer") return "Tax Preparer";
+    if (role === "admin" || role === "owner") return `${branding.shortName} Staff`;
+    return "Staff";
+  };
 }
 
 export default function PortalTaxDocuments() {
   const { toast } = useToast();
+  const uploaderLabel = useUploaderLabel();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState("");
   const [taxYear, setTaxYear] = useState(String(new Date().getFullYear()));

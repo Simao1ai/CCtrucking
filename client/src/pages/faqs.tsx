@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, ArrowLeft, ArrowRight, HelpCircle } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 import {
   Accordion,
   AccordionContent,
@@ -9,9 +10,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const generalFaqs = [
+const staticGeneralFaqs = [
   {
-    question: "What services does CC Trucking Services offer?",
     answer: "We provide comprehensive compliance and administrative services for trucking companies, including DOT compliance, IFTA quarterly filings, tax preparation, business entity setup (LLC formation, EIN applications), UCR registration, MCS-150 updates, and document management.",
   },
   {
@@ -67,6 +67,13 @@ const billingFaqs = [
 ];
 
 export default function Faqs() {
+  const branding = useTenant();
+
+  const generalFaqs = staticGeneralFaqs.map((faq, i) => ({
+    question: i === 0 ? `What services does ${branding.companyName} offer?` : (faq as any).question,
+    answer: faq.answer,
+  }));
+
   return (
     <div data-testid="page-faqs">
       <div className="py-12 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-primary/10 via-background to-primary/5">

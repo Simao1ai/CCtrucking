@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PenLine, CheckCircle, Clock, FileText, AlertCircle } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 import { format } from "date-fns";
 import type { SignatureRequest } from "@shared/schema";
 
@@ -121,6 +122,7 @@ function SignaturePad({ onSave }: { onSave: (dataUrl: string) => void }) {
 
 export default function PortalSignatures() {
   const { toast } = useToast();
+  const branding = useTenant();
   const [signDoc, setSignDoc] = useState<SignatureRequest | null>(null);
   const [signerName, setSignerName] = useState("");
   const [signatureData, setSignatureData] = useState("");
@@ -161,7 +163,7 @@ export default function PortalSignatures() {
     <div className="p-6 space-y-6" data-testid="page-portal-signatures">
       <PageHeader
         title="Documents to Sign"
-        description="Review and sign documents sent by CC Trucking Services"
+        description={`Review and sign documents sent by ${branding.companyName}`}
         badge={pending.length > 0 ? <StatusBadge status="pending" label={`${pending.length} awaiting signature`} /> : undefined}
       />
 

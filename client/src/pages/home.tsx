@@ -1,7 +1,8 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Truck, Shield, FileText, Receipt, Clock, CheckCircle, ArrowRight, Phone, Mail, MapPin } from "lucide-react";
+import { Truck, Shield, FileText, Receipt, Clock, CheckCircle, ArrowRight, Phone, Mail, MapPin, Building2, Briefcase } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 
 const services = [
   {
@@ -44,6 +45,10 @@ const stats = [
 ];
 
 export default function Home() {
+  const branding = useTenant();
+  const IconMap: Record<string, typeof Truck> = { Truck, Building2, Briefcase };
+  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
+
   return (
     <div data-testid="page-home">
       <section className="relative py-20 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-primary/10 via-background to-primary/5">
@@ -51,7 +56,7 @@ export default function Home() {
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <div className="flex-1 space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                <Truck className="w-4 h-4" />
+                <BrandIcon className="w-4 h-4" />
                 Trusted by carriers nationwide
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
@@ -59,7 +64,7 @@ export default function Home() {
                 <span className="text-primary">Compliant</span> & Running
               </h1>
               <p className="text-lg text-muted-foreground max-w-xl">
-                CC Trucking Services handles your DOT compliance, IFTA filings, tax preparation, and business setup so you can focus on what matters — moving freight.
+                {branding.companyName} handles your DOT compliance, IFTA filings, tax preparation, and business setup so you can focus on what matters — moving freight.
               </p>
               <div className="flex flex-wrap gap-4">
                 <Link href="/contact">
@@ -117,7 +122,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
           <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join hundreds of carriers who trust CC Trucking Services to keep their operations compliant and their paperwork in order.
+            Join hundreds of carriers who trust {branding.companyName} to keep their operations compliant and their paperwork in order.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/contact">
@@ -136,12 +141,12 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-                  <Truck className="w-4 h-4 text-primary-foreground" />
+                  <BrandIcon className="w-4 h-4 text-primary-foreground" />
                 </div>
-                <span className="font-semibold">CC Trucking Services</span>
+                <span className="font-semibold">{branding.companyName}</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Your trusted partner in trucking compliance and business services.
+                {branding.tagline}
               </p>
             </div>
             <div>
@@ -158,21 +163,21 @@ export default function Home() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Phone className="w-4 h-4" />
-                  (555) 123-4567
+                  {branding.supportPhone}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="w-4 h-4" />
-                  info@cctruckingservices.com
+                  {branding.contactEmail}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="w-4 h-4" />
-                  Houston, TX
+                  {branding.address}
                 </div>
               </div>
             </div>
           </div>
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} CC Trucking Services. All rights reserved.
+            &copy; {new Date().getFullYear()} {branding.companyName}. All rights reserved.
           </div>
         </div>
       </footer>

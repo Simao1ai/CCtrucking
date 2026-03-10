@@ -7,13 +7,26 @@ import { Ticket, FileText, Receipt, Clock, Building2, AlertTriangle, DollarSign,
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import type { Client, ServiceTicket, Invoice, Document } from "@shared/schema";
+import type { Client, ServiceTicket, Invoice, Document, CustomFieldDefinition, CustomFieldValue } from "@shared/schema";
 
 export default function PortalDashboard() {
   const { data: account, isLoading: loadingAccount } = useQuery<Client>({ queryKey: ["/api/portal/account"] });
   const { data: tickets = [], isLoading: loadingTickets } = useQuery<ServiceTicket[]>({ queryKey: ["/api/portal/tickets"] });
   const { data: invoices = [], isLoading: loadingInvoices } = useQuery<Invoice[]>({ queryKey: ["/api/portal/invoices"] });
   const { data: documents = [], isLoading: loadingDocs } = useQuery<Document[]>({ queryKey: ["/api/portal/documents"] });
+
+  const { data: customFieldDefs = [] } = useQuery<CustomFieldDefinition[]>({
+    queryKey: ["/api/custom-field-definitions", "client"],
+    queryFn: async () => {
+      const res = await fetch("/api/custom-field-definitions?entityType=client");
+      return res.json();
+    },
+  });
+
+  const { data: customFieldValues = [] } = useQuery<CustomFieldValue[]>({
+    queryKey: ["/api/custom-fields", "client", account?.id],
+    enabled: !!account?.id,
+  });
 
   const openTickets = tickets.filter(t => t.status === "open" || t.status === "in_progress");
   const pendingInvoices = invoices.filter(i => i.status === "sent" || i.status === "overdue");
@@ -215,6 +228,19 @@ export default function PortalDashboard() {
                     </div>
                   </div>
                 )}
+                {customFieldDefs.filter(d => d.isActive && !d.industryPackSource).map(def => {
+                  const val = customFieldValues.find(v => v.fieldDefinitionId === def.id);
+                  if (!val || !val.value) return null;
+                  return (
+                    <div key={def.id} className="flex items-center gap-2.5">
+                      <Hash className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-muted-foreground">{def.label}</p>
+                        <p className="text-sm font-medium" data-testid={`text-custom-field-${def.name}`}>{val.value}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

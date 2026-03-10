@@ -8,10 +8,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Send, MessageCircle } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 import { format } from "date-fns";
 import type { ChatMessage } from "@shared/schema";
 
 export default function PortalChat() {
+  const branding = useTenant();
   const [message, setMessage] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +48,7 @@ export default function PortalChat() {
       <div className="mb-4">
         <PageHeader
           title="Messages"
-          description="Chat with your CC Trucking Services team"
+          description={`Chat with your ${branding.companyName} team`}
         />
       </div>
 

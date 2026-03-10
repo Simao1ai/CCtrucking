@@ -12,6 +12,7 @@ import {
   insertTransactionCategorySchema, insertPreparerAssignmentSchema,
   insertTicketRequiredDocumentSchema, insertRecurringTemplateSchema, insertClientRecurringScheduleSchema,
   insertStaffMessageSchema, insertKnowledgeArticleSchema,
+  insertCustomFieldDefinitionSchema, insertCustomFieldValueSchema,
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents
@@ -32,6 +33,8 @@ import { PassThrough } from "stream";
 import webpush from "web-push";
 import { generateInvoicePDF } from "./invoice-pdf";
 import { sendInvoiceEmail } from "./invoice-email";
+import { brandingConfig } from "./branding-config";
+import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 
 const uploadDir = path.join(process.cwd(), "uploads", "tax-documents");
 if (!fs.existsSync(uploadDir)) {
@@ -214,6 +217,10 @@ export async function registerRoutes(
 
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  app.get("/api/branding", (_req, res) => {
+    res.json(brandingConfig);
+  });
 
   app.get("/api/download/saas-audit", isAuthenticated, isAdmin, async (req: any, res) => {
     const path = require("path");
@@ -535,7 +542,7 @@ export async function registerRoutes(
         messages: [
           {
             role: "system",
-            content: `You are a note-taking assistant for CC Trucking Services. An employee just dictated a verbal summary after a phone call or meeting with a client. Your job is to structure their dictation into a clean, professional internal note.
+            content: `You are a note-taking assistant for ${brandingConfig.companyName}. An employee just dictated a verbal summary after a phone call or meeting with a client. Your job is to structure their dictation into a clean, professional internal note.
 
 Format the note as:
 **Call Summary** — [today's date in Month Day, Year format]
@@ -920,7 +927,7 @@ Contact name: ${client.contactName}`
     });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const msg = await storage.createChatMessage(parsed.data);
-    notifyClientUsers(param(req, "clientId"), "New Message", "You have a new message from CC Trucking Services.", "chat", "/portal/chat");
+    notifyClientUsers(param(req, "clientId"), "New Message", `You have a new message from ${brandingConfig.companyName}.`, "chat", "/portal/chat");
     res.status(201).json(msg);
   });
 
@@ -1693,7 +1700,7 @@ Contact name: ${client.contactName}`
       const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
       const outstanding = allInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
 
-      const systemPrompt = `You are an AI assistant for CC Trucking Services, a trucking-focused CRM and operations management platform. You serve two key roles:
+      const systemPrompt = `You are an AI assistant for ${brandingConfig.companyName}, a trucking-focused CRM and operations management platform. You serve two key roles:
 
 1. INTERNAL OPERATIONS ASSISTANT — You have access to live business data and can answer questions about clients, invoices, tickets, documents, and revenue.
 2. TRUCKING INDUSTRY EXPERT & RESEARCH ASSISTANT — You have deep knowledge of the trucking industry, including federal and state regulations, compliance requirements, and business operations. You can help staff research complex regulatory questions.
@@ -1728,54 +1735,10 @@ When answering questions about company processes, ALWAYS check the INTERNAL KNOW
 
 You are an expert in the following areas and should provide detailed, accurate guidance:
 
-FEDERAL AGENCIES & REGULATIONS:
-- **FMCSA** (Federal Motor Carrier Safety Administration): Operating authority (MC numbers), safety ratings, CSA scores, SMS (Safety Measurement System), carrier registration, insurance requirements (BMC-91/BMC-91X forms for $750K/$1M/$5M coverage), BOC-3 process agent filings, drug & alcohol testing (Part 382), hours of service (Part 395), ELD mandate, driver qualification files (Part 391)
-- **DOT** (Department of Transportation): DOT numbers, biennial MCS-150 updates, vehicle marking requirements, annual inspections, roadside inspection procedures, Out-of-Service criteria, FMCSA SAFER system
-- **IFTA** (International Fuel Tax Agreement): Quarterly filing deadlines (April 30, July 31, October 31, January 31), fuel tax reporting, mileage tracking, base jurisdiction licensing, decal requirements, fuel purchase records retention
-- **UCR** (Unified Carrier Registration): Annual registration requirements, fee brackets by fleet size, registration deadlines (typically before January 1)
-- **IRS Tax Requirements**: Form 2290 (HVUT — due August 31 for tax period starting July 1), quarterly estimated taxes, per diem deductions for truck drivers ($69/day for 2024 transportation industry), depreciation (Section 179 for trucks/trailers), fuel tax credits, Schedule C (owner-operators), Form 1099-NEC for independent contractors
-- **USDOT Drug & Alcohol**: Pre-employment, random, post-accident, reasonable suspicion, return-to-duty, and follow-up testing requirements, Clearinghouse registration and queries
+${truckingIndustryKnowledge}
 
-STATE-LEVEL COMPLIANCE:
-- State DOT permits (oversize/overweight), state fuel tax rates, state apportioned registration (IRP — International Registration Plan), state-specific safety inspections, intrastate authority requirements, state IFTA base jurisdiction rules
-- State business filing requirements (LLC formation, EIN, state tax ID, sales tax permits)
-- Unified State Permit Authorities: KYU (Kentucky), NM WDT (New Mexico), NY HUT (New York), OR WMT (Oregon)
-
-COMMON TRUCKING FORMS & DOCUMENTS:
-- MCS-150 (Motor Carrier Identification Report — biennial update)
-- BOC-3 (Designation of Agents for Service of Process)
-- MCS-90/BMC-91/BMC-91X (Insurance/surety bond forms)
-- Form 2290 (Heavy Highway Vehicle Use Tax)
-- UCR Registration forms
-- IFTA quarterly returns and annual license applications
-- IRP (International Registration Plan) registration
-- Bill of Lading (BOL), rate confirmations, delivery receipts
-- Driver qualification files (application, MVR, medical certificate, road test)
-
-COMPLIANCE DEADLINES (RECURRING):
-- IFTA: Quarterly (Q1: Apr 30, Q2: Jul 31, Q3: Oct 31, Q4: Jan 31)
-- MCS-150: Biennial (based on USDOT number, last digit determines month)
-- UCR: Annual (by January 1 or state-specific deadline)
-- Form 2290: Annual (by August 31 for tax year starting July 1)
-- Annual DOT inspection: Every 12 months per vehicle
-- Driver medical certificate: Every 24 months (or as specified on certificate)
-- Drug & alcohol random testing: Minimum 50% of drivers for drugs, 10% for alcohol annually
-
-IMPORTANT GOVERNMENT WEBSITES (provide these when relevant):
-- FMCSA SAFER System: https://safer.fmcsa.dot.gov
-- FMCSA Licensing & Insurance: https://li-public.fmcsa.dot.gov
-- FMCSA Drug & Alcohol Clearinghouse: https://clearinghouse.fmcsa.dot.gov
-- IRS Form 2290 (HVUT): https://www.irs.gov/forms-pubs/about-form-2290
-- IFTA Inc.: https://www.iftach.org
-- UCR Plan: https://plan.ucr.gov
-- FMCSA Company Snapshot: https://ai.fmcsa.dot.gov/SMS
-
-When asked industry questions:
-- Provide specific regulatory citations (e.g., "49 CFR Part 395" for hours of service)
-- Include relevant government website links
-- Mention applicable deadlines and penalties for non-compliance
-- Suggest related services from the CC Trucking service catalog when appropriate
-- If a question involves a specific client, cross-reference their DOT/MC numbers and compliance status
+${truckingIndustryGuidance}
+- Suggest related services from the ${brandingConfig.companyName} service catalog when appropriate
 
 === RESEARCH CAPABILITIES ===
 When staff ask you to research regulations, find forms, or look up requirements:
@@ -1859,9 +1822,9 @@ When staff ask you to research regulations, find forms, or look up requirements:
       const totalPaid = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.amount), 0);
       const totalDue = clientInvoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + parseFloat(i.amount), 0);
 
-      const systemPrompt = `You are a helpful AI assistant for CC Trucking Services. You are speaking directly with a client — ${client?.companyName || 'a valued client'}.
+      const systemPrompt = `You are a helpful AI assistant for ${brandingConfig.companyName}. You are speaking directly with a client — ${client?.companyName || 'a valued client'}.
 
-Your role is to help this client understand their services, compliance requirements, and how CC Trucking Services works. Be friendly, professional, and clear. Avoid technical jargon when possible.
+Your role is to help this client understand their services, compliance requirements, and how ${brandingConfig.companyName} works. Be friendly, professional, and clear. Avoid technical jargon when possible.
 
 === CLIENT INFORMATION ===
 Company: ${client?.companyName || 'N/A'}
@@ -1881,7 +1844,7 @@ ${clientInvoices.slice(0, 10).map(i => `- Invoice ${i.invoiceNumber} — $${i.am
 ${clientDocs.length > 0 ? clientDocs.slice(0, 15).map(d => `- ${d.name} (${d.type}) — ${d.status}`).join('\n') : 'No documents on file.'}
 
 === AVAILABLE SERVICES ===
-CC Trucking Services offers the following:
+${brandingConfig.companyName} offers the following:
 ${allServiceItemsList.map(s => `- **${s.name}** — ${s.description || s.category} ($${s.defaultPrice})`).join('\n')}
 
 === COMPANY KNOWLEDGE BASE ===
@@ -1894,7 +1857,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
    - Tickets: open (just created), in_progress (being worked on), completed (done), blocked (waiting for documents from you)
    - Invoices: draft (not yet sent), sent (payment due), paid (all set), overdue (past due — please pay)
    - Documents: pending (waiting for upload), received (we have it), approved (verified)
-3. **Compliance Guidance**: Explain IFTA, DOT, UCR, MCS-150, and other compliance requirements in simple terms.
+3. **Compliance Guidance**: Explain ${truckingPortalComplianceTopics} in simple terms.
 4. **Portal Navigation**: Help them find things in their portal:
    - [My Services](/portal/services) — view active services
    - [My Invoices](/portal/invoices) — view and pay invoices
@@ -1902,7 +1865,7 @@ ${knowledgeArticlesList.filter(a => !["HR & Training"].includes(a.category)).map
    - [Messages](/portal/chat) — contact our team directly
    - [Tax Documents](/portal/tax-documents) — upload tax docs and review returns
    - [Bookkeeping](/portal/bookkeeping) — view financial summaries
-5. **Escalation**: If the client needs immediate help or has a complex issue, suggest they use the Messages page to contact the CC Trucking team directly.
+5. **Escalation**: If the client needs immediate help or has a complex issue, suggest they use the Messages page to contact the ${brandingConfig.companyName} team directly.
 
 === FORMATTING RULES ===
 - Use **bold** for important values
@@ -3519,6 +3482,116 @@ If you cannot read a field clearly, make your best estimate and lower the confid
           total: (current + days30 + days60 + days90).toFixed(2),
         },
       });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/custom-field-definitions", isAuthenticated, async (req, res) => {
+    try {
+      const entityType = req.query.entityType as string | undefined;
+      const definitions = await storage.getCustomFieldDefinitions(entityType);
+      res.json(definitions.filter(d => d.isActive));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/custom-fields", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const entityType = req.query.entityType as string | undefined;
+      const definitions = await storage.getCustomFieldDefinitions(entityType);
+      res.json(definitions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/custom-fields", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const parsed = insertCustomFieldDefinitionSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const definition = await storage.createCustomFieldDefinition(parsed.data);
+      await audit(req, "created", "custom_field_definition", definition.id, `Created custom field "${definition.label}"`);
+      res.status(201).json(definition);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/custom-fields/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const id = param(req, "id");
+      const existing = await storage.getCustomFieldDefinition(id);
+      if (!existing) return res.status(404).json({ message: "Custom field definition not found" });
+      const updated = await storage.updateCustomFieldDefinition(id, req.body);
+      await audit(req, "updated", "custom_field_definition", id, `Updated custom field "${updated?.label}"`);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/custom-fields/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const id = param(req, "id");
+      const existing = await storage.getCustomFieldDefinition(id);
+      if (!existing) return res.status(404).json({ message: "Custom field definition not found" });
+      await storage.deleteCustomFieldDefinition(id);
+      await audit(req, "deleted", "custom_field_definition", id, `Deleted custom field "${existing.label}"`);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/custom-fields/:entityType/:entityId", isAuthenticated, async (req: any, res) => {
+    try {
+      const entityType = param(req, "entityType");
+      const entityId = param(req, "entityId");
+      const dbUser = req.dbUser;
+      if (dbUser.role === "client") {
+        if (entityType !== "client" || String(entityId) !== String(dbUser.clientId)) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      } else if (dbUser.role === "preparer") {
+        if (entityType !== "client") {
+          return res.status(403).json({ message: "Access denied" });
+        }
+        const assignments = await storage.getPreparerAssignments(dbUser.id);
+        const assignedClientIds = assignments.map((a: any) => String(a.clientId));
+        if (!assignedClientIds.includes(String(entityId))) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      const values = await storage.getCustomFieldValues(entityType, entityId);
+      res.json(values);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/custom-fields/:entityType/:entityId", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const entityType = param(req, "entityType");
+      const entityId = param(req, "entityId");
+      const { fields } = req.body;
+      if (!fields || !Array.isArray(fields)) {
+        return res.status(400).json({ message: "fields array is required" });
+      }
+      const results = [];
+      for (const field of fields) {
+        const parsed = insertCustomFieldValueSchema.safeParse({
+          fieldDefinitionId: field.fieldDefinitionId,
+          entityType,
+          entityId,
+          value: field.value,
+        });
+        if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+        const saved = await storage.setCustomFieldValue(parsed.data);
+        results.push(saved);
+      }
+      res.json(results);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

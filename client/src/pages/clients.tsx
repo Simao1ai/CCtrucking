@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertClientSchema, type Client, type InsertClient } from "@shared/schema";
+import { insertClientSchema, type Client, type InsertClient, type CustomFieldDefinition, type CustomFieldValue } from "@shared/schema";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -41,6 +41,33 @@ const US_STATES = [
 
 function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; existingClient?: Client }) {
   const { toast } = useToast();
+  const [customFieldFormValues, setCustomFieldFormValues] = useState<Record<string, string>>({});
+
+  const { data: customFieldDefs = [] } = useQuery<CustomFieldDefinition[]>({
+    queryKey: ["/api/admin/custom-fields", "client"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/custom-fields?entityType=client");
+      return res.json();
+    },
+  });
+
+  const { data: existingCustomFieldValues = [] } = useQuery<CustomFieldValue[]>({
+    queryKey: ["/api/custom-fields", "client", existingClient?.id],
+    enabled: !!existingClient?.id,
+  });
+
+  useEffect(() => {
+    if (existingCustomFieldValues.length > 0) {
+      const vals: Record<string, string> = {};
+      existingCustomFieldValues.forEach(v => {
+        vals[v.fieldDefinitionId] = v.value ?? "";
+      });
+      setCustomFieldFormValues(vals);
+    }
+  }, [existingCustomFieldValues]);
+
+  const activeNonIndustryFields = customFieldDefs.filter(d => d.isActive && !d.industryPackSource);
+
   const form = useForm<InsertClient>({
     resolver: zodResolver(insertClientSchema),
     defaultValues: {
@@ -67,10 +94,20 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
 
   const mutation = useMutation({
     mutationFn: async (data: InsertClient) => {
+      let clientId = existingClient?.id;
       if (existingClient) {
         await apiRequest("PATCH", `/api/clients/${existingClient.id}`, data);
       } else {
-        await apiRequest("POST", "/api/clients", data);
+        const res = await apiRequest("POST", "/api/clients", data);
+        const created = await res.json();
+        clientId = created.id;
+      }
+      if (clientId && activeNonIndustryFields.length > 0) {
+        const fields = activeNonIndustryFields.map(def => ({
+          fieldDefinitionId: def.id,
+          value: customFieldFormValues[def.id] ?? "",
+        }));
+        await apiRequest("POST", `/api/custom-fields/client/${clientId}`, { fields });
       }
     },
     onSuccess: () => {
@@ -245,6 +282,48 @@ function ClientForm({ onSuccess, existingClient }: { onSuccess: () => void; exis
               <FormMessage />
             </FormItem>
           )} />
+          {activeNonIndustryFields.length > 0 && (
+            <>
+              <div className="col-span-2">
+                <p className="text-sm font-semibold text-muted-foreground mt-2">Custom Fields</p>
+              </div>
+              {activeNonIndustryFields.map(def => (
+                <div key={def.id} className="space-y-1.5">
+                  <label className="text-sm font-medium">{def.label}{def.required && <span className="text-destructive ml-0.5">*</span>}</label>
+                  {def.fieldType === "select" && def.options ? (
+                    <Select
+                      value={customFieldFormValues[def.id] ?? ""}
+                      onValueChange={(val) => setCustomFieldFormValues(prev => ({ ...prev, [def.id]: val }))}
+                    >
+                      <SelectTrigger data-testid={`input-custom-${def.name}`}>
+                        <SelectValue placeholder={def.placeholder || `Select ${def.label}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {def.options.split(",").map(opt => (
+                          <SelectItem key={opt.trim()} value={opt.trim()}>{opt.trim()}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : def.fieldType === "textarea" ? (
+                    <Textarea
+                      value={customFieldFormValues[def.id] ?? ""}
+                      onChange={(e) => setCustomFieldFormValues(prev => ({ ...prev, [def.id]: e.target.value }))}
+                      placeholder={def.placeholder ?? ""}
+                      data-testid={`input-custom-${def.name}`}
+                    />
+                  ) : (
+                    <Input
+                      type={def.fieldType === "number" ? "number" : "text"}
+                      value={customFieldFormValues[def.id] ?? ""}
+                      onChange={(e) => setCustomFieldFormValues(prev => ({ ...prev, [def.id]: e.target.value }))}
+                      placeholder={def.placeholder ?? ""}
+                      data-testid={`input-custom-${def.name}`}
+                    />
+                  )}
+                </div>
+              ))}
+            </>
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="submit" disabled={mutation.isPending} data-testid="button-save-client">

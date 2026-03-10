@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useTenant } from "@/context/tenant-context";
 
 const NavigateContext = createContext<(path: string) => void>(() => {});
 
@@ -273,6 +274,7 @@ function SaveToDocumentsButton({ content }: { content: string }) {
 
 export function AiChatWidget() {
   const [, setLocation] = useLocation();
+  const branding = useTenant();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(globalMessages);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -417,7 +419,7 @@ export function AiChatWidget() {
               </div>
               <div>
                 <h3 className="font-semibold text-sm" data-testid="text-ai-widget-title">AI Assistant</h3>
-                <p className="text-xs text-muted-foreground">CC Trucking Operations</p>
+                <p className="text-xs text-muted-foreground">{branding.shortName} Operations</p>
               </div>
             </div>
             <div className="flex items-center gap-1">

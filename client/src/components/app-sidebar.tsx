@@ -22,8 +22,11 @@ import {
   BookOpen,
   RefreshCcw,
   MessagesSquare,
+  Building2,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
+import { useTenant } from "@/context/tenant-context";
 import {
   Sidebar,
   SidebarContent,
@@ -108,6 +111,9 @@ const navGroups: NavGroup[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const branding = useTenant();
+  const IconMap: Record<string, LucideIcon> = { Truck, Building2, Briefcase };
+  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
 
   return (
     <Sidebar>
@@ -115,10 +121,10 @@ export function AppSidebar() {
         <Link href="/admin" data-testid="link-admin-home">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
-              <Truck className="w-5 h-5 text-primary-foreground" />
+              <BrandIcon className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight">CC Trucking</span>
+              <span className="text-sm font-semibold tracking-tight">{branding.shortName}</span>
               <span className="text-xs text-muted-foreground">Admin Portal</span>
             </div>
           </div>
