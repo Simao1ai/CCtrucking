@@ -1,7 +1,7 @@
-# CC Trucking Services - Operations Platform (Multi-Tenant SaaS)
+# CarrierDeskHQ - Trucking Operations Platform (Multi-Tenant SaaS)
 
 ## Overview
-CC Trucking Services is a multi-tenant SaaS platform providing a comprehensive CRM and operations management solution for trucking companies. It features distinct Admin, Client, and Preparer Portals to streamline trucking operations, enhance client communication, and provide valuable business insights. The platform supports managing client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), documents, invoicing, forms, notarizations, bookkeeping, and business analytics. Strategic goal: convert to a named, independently-owned multi-tenant SaaS product leased to multiple trucking companies.
+CarrierDeskHQ is a multi-tenant SaaS platform providing a comprehensive CRM and operations management solution for trucking companies. It features distinct Admin, Client, and Preparer Portals to streamline trucking operations, enhance client communication, and provide valuable business insights. The platform supports managing client accounts, service tickets (DOT/IFTA compliance, tax filings, business setup), documents, invoicing, forms, notarizations, bookkeeping, and business analytics. The platform owner retains 100% IP ownership; the product is leased to trucking companies as tenants. CC Trucking Services is the first tenant.
 
 ## User Preferences
 I prefer iterative development, so please provide updates frequently. I value clear and concise communication. When making changes, please ask for confirmation before implementing major architectural shifts.

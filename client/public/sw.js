@@ -7,7 +7,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "CC Trucking", body: "You have a new notification", url: "/" };
+  let data = { title: "CarrierDeskHQ", body: "You have a new notification", url: "/" };
   try {
     if (event.data) {
       data = event.data.json();
@@ -30,7 +30,7 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "CC Trucking", options)
+    self.registration.showNotification(data.title || "CarrierDeskHQ", options)
   );
 });
 

@@ -52,8 +52,8 @@ export function PlatformSidebar() {
               <Shield className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight">Platform Admin</span>
-              <span className="text-xs text-muted-foreground">System Management</span>
+              <span className="text-sm font-semibold tracking-tight">CarrierDeskHQ</span>
+              <span className="text-xs text-muted-foreground">Platform Admin</span>
             </div>
           </div>
         </Link>

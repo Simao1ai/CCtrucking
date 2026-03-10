@@ -287,7 +287,7 @@ export default function PlatformDashboard() {
     <div className="p-4 lg:p-6 space-y-6 max-w-[1400px] mx-auto" data-testid="page-platform-dashboard">
       <PageHeader
         title="Platform Dashboard"
-        description="Super admin overview of all tenants and platform health"
+        description="CarrierDeskHQ platform overview — tenants, revenue, and system health"
         icon={<Server className="w-5 h-5 text-muted-foreground" />}
       />
 

@@ -1,7 +1,7 @@
 {
-  "name": "CC Trucking Services",
-  "short_name": "CC Trucking",
-  "description": "CRM and operations management for trucking companies",
+  "name": "CarrierDeskHQ",
+  "short_name": "CarrierDesk",
+  "description": "Trucking operations management platform — CRM, compliance, invoicing, and more",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

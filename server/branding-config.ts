@@ -1,13 +1,13 @@
 import type { BrandingConfig } from "@shared/branding";
 
 export const brandingConfig: BrandingConfig = {
-  companyName: "CC Trucking Services",
-  shortName: "CC Trucking",
-  tagline: "Professional Trucking Operations & Compliance",
+  companyName: "CarrierDeskHQ",
+  shortName: "CarrierDesk",
+  tagline: "Trucking Operations & Compliance Platform",
   primaryColor: "#1e3a5f",
-  contactEmail: "admin@cctrucking.com",
-  supportPhone: "(555) 123-4567",
-  website: "https://cctrucking.com",
-  address: "123 Main Street, Suite 100, Dallas, TX 75201",
+  contactEmail: "support@carrierdeskhq.com",
+  supportPhone: "",
+  website: "https://carrierdeskhq.com",
+  address: "",
   sidebarIconName: "Truck",
 };
