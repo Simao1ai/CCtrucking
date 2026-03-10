@@ -71,7 +71,7 @@ export interface IStorage {
   getStaffConversation(userId1: string, userId2: string, tenantId?: string): Promise<StaffMessage[]>;
   createStaffMessage(data: InsertStaffMessage): Promise<StaffMessage>;
   markStaffMessagesRead(recipientId: string, senderId: string, tenantId?: string): Promise<void>;
-  getUnreadStaffMessageCount(userId: string): Promise<number>;
+  getUnreadStaffMessageCount(userId: string, tenantId?: string): Promise<number>;
 
   getSignatureRequests(tenantId?: string): Promise<SignatureRequest[]>;
   getSignatureRequest(id: string, tenantId?: string): Promise<SignatureRequest | undefined>;
@@ -80,7 +80,7 @@ export interface IStorage {
   updateSignatureRequest(id: string, data: Partial<SignatureRequest>, tenantId?: string): Promise<SignatureRequest | undefined>;
 
   getNotificationsByUser(userId: string, tenantId?: string): Promise<Notification[]>;
-  getUnreadCountByUser(userId: string): Promise<number>;
+  getUnreadCountByUser(userId: string, tenantId?: string): Promise<number>;
   createNotification(data: InsertNotification): Promise<Notification>;
   markNotificationRead(id: string, userId: string, tenantId?: string): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string, tenantId?: string): Promise<void>;
@@ -151,7 +151,7 @@ export interface IStorage {
   deleteTransactionCategory(id: string, tenantId?: string): Promise<void>;
 
   getMonthlySummaries(clientId: string, tenantId?: string): Promise<MonthlySummary[]>;
-  getMonthlySummary(clientId: string, month: number, year: number): Promise<MonthlySummary | undefined>;
+  getMonthlySummary(clientId: string, month: number, year: number, tenantId?: string): Promise<MonthlySummary | undefined>;
   createMonthlySummary(data: InsertMonthlySummary): Promise<MonthlySummary>;
   updateMonthlySummary(id: string, data: Partial<InsertMonthlySummary>, tenantId?: string): Promise<MonthlySummary | undefined>;
 
@@ -200,7 +200,7 @@ export interface IStorage {
   deleteCustomFieldDefinition(id: string, tenantId?: string): Promise<void>;
 
   getCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<CustomFieldValue[]>;
-  setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue>;
+  setCustomFieldValue(data: InsertCustomFieldValue, tenantId?: string): Promise<CustomFieldValue>;
   deleteCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<void>;
 
   getAllTenants(): Promise<Tenant[]>;
@@ -398,10 +398,12 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions));
   }
 
-  async getUnreadStaffMessageCount(userId: string): Promise<number> {
+  async getUnreadStaffMessageCount(userId: string, tenantId?: string): Promise<number> {
+    const conditions = [eq(staffMessages.recipientId, userId), eq(staffMessages.read, false)];
+    if (tenantId) conditions.push(eq(staffMessages.tenantId, tenantId));
     const [result] = await db.select({ count: sql<number>`count(*)` })
       .from(staffMessages)
-      .where(and(eq(staffMessages.recipientId, userId), eq(staffMessages.read, false)));
+      .where(and(...conditions));
     return Number(result?.count || 0);
   }
 
@@ -443,8 +445,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(notifications).where(and(...conditions)).orderBy(desc(notifications.createdAt));
   }
 
-  async getUnreadCountByUser(userId: string): Promise<number> {
-    const result = await db.select({ count: sql<number>`count(*)::int` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.read, "false")));
+  async getUnreadCountByUser(userId: string, tenantId?: string): Promise<number> {
+    const conditions = [eq(notifications.userId, userId), eq(notifications.read, "false")];
+    if (tenantId) conditions.push(eq(notifications.tenantId, tenantId));
+    const result = await db.select({ count: sql<number>`count(*)::int` }).from(notifications).where(and(...conditions));
     return result[0]?.count ?? 0;
   }
 
@@ -815,10 +819,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(monthlySummaries).where(and(...conditions)).orderBy(desc(monthlySummaries.year), desc(monthlySummaries.month));
   }
 
-  async getMonthlySummary(clientId: string, month: number, year: number): Promise<MonthlySummary | undefined> {
-    const [summary] = await db.select().from(monthlySummaries).where(
-      and(eq(monthlySummaries.clientId, clientId), eq(monthlySummaries.month, month), eq(monthlySummaries.year, year))
-    );
+  async getMonthlySummary(clientId: string, month: number, year: number, tenantId?: string): Promise<MonthlySummary | undefined> {
+    const conditions = [eq(monthlySummaries.clientId, clientId), eq(monthlySummaries.month, month), eq(monthlySummaries.year, year)];
+    if (tenantId) conditions.push(eq(monthlySummaries.tenantId, tenantId));
+    const [summary] = await db.select().from(monthlySummaries).where(and(...conditions));
     return summary;
   }
 
@@ -1090,15 +1094,15 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(customFieldValues).where(and(...conditions));
   }
 
-  async setCustomFieldValue(data: InsertCustomFieldValue): Promise<CustomFieldValue> {
+  async setCustomFieldValue(data: InsertCustomFieldValue, tenantId?: string): Promise<CustomFieldValue> {
     const entityType = data.entityType ?? "client";
-    const existing = await db.select().from(customFieldValues).where(
-      and(
-        eq(customFieldValues.fieldDefinitionId, data.fieldDefinitionId),
-        eq(customFieldValues.entityType, entityType),
-        eq(customFieldValues.entityId, data.entityId)
-      )
-    );
+    const conditions = [
+      eq(customFieldValues.fieldDefinitionId, data.fieldDefinitionId),
+      eq(customFieldValues.entityType, entityType),
+      eq(customFieldValues.entityId, data.entityId)
+    ];
+    if (tenantId) conditions.push(eq(customFieldValues.tenantId, tenantId));
+    const existing = await db.select().from(customFieldValues).where(and(...conditions));
     if (existing.length > 0) {
       const [updated] = await db.update(customFieldValues)
         .set({ value: data.value, updatedAt: new Date() })

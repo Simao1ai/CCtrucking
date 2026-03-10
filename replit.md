@@ -11,7 +11,8 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Phase 1 COMPLETE**: Centralized branding, tenant context, industry packs, custom fields
 - **Phase 2 COMPLETE**: Multi-tenant architecture (see details below)
 - **Phase 3 COMPLETE**: Platform Operations Layer (see details below)
-- **Phase 4-7**: Pending (data partitioning, commercial layer, onboarding, launch prep)
+- **Phase 4 COMPLETE**: Commercial Layer (see details below)
+- **Phase 5-7**: Pending (onboarding, advanced features, launch prep)
 
 ## System Architecture
 
@@ -26,6 +27,15 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Tenant Settings UI**: `/admin/tenant-settings` with General, Branding, Modules, Users tabs (owner-only)
 - **Scheduler Isolation**: Invoice reminders and recurring compliance skip suspended/inactive tenants
 - **AI Tenant Scoping**: All AI prompts load company name, industry knowledge, and data scoped to tenant
+
+### Commercial Layer (Phase 4)
+- **Plan Configuration**: `shared/plan-config.ts` — single source of truth for plan tiers (basic/pro/enterprise), limits, and feature mapping
+- **Plan Limits**: Basic (50 clients, 5 users, 100k AI tokens), Pro (200, 20, 500k), Enterprise (unlimited=-1)
+- **Plan Feature Gates**: `requireModule` middleware in `server/middleware/module-gates.ts` checks plan tier before module access; module aliases handle `tax_preparation`→`tax_prep` mapping
+- **Limit Enforcement**: Client creation (`POST /api/clients`) and user creation (`POST /api/admin/create-user`) check plan limits; returns 403 with `PLAN_LIMIT_REACHED` code
+- **Usage API**: `GET /api/tenant/usage` returns client/user/AI counts vs limits; `GET /api/tenant/plan-features` returns available features; `GET /api/tenant/plans` returns all plan definitions
+- **Subscription UI**: `/admin/subscription` page (owner-only) with usage meters, plan comparison table, current plan badge
+- **Data Isolation**: `stripTenantId` on all PATCH/PUT routes; tenant-scoped storage methods for staff messages, custom fields
 
 ### Platform Operations Layer (Phase 3)
 - **Super Admin Dashboard**: `/platform` route with PlatformLayout, PlatformSidebar — shows tenant overview, revenue chart, AI usage, health stats

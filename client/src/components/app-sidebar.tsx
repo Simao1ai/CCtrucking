@@ -26,6 +26,7 @@ import {
   Briefcase,
   Settings2,
   Shield,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant } from "@/context/tenant-context";
@@ -105,6 +106,7 @@ const navGroups: NavGroup[] = [
       { title: "Employee Performance", url: "/admin/employee-performance", icon: Award, ownerOnly: true },
       { title: "Audit Log", url: "/admin/audit", icon: History, ownerOnly: true },
       { title: "Users", url: "/admin/users", icon: UserCog },
+      { title: "Subscription", url: "/admin/subscription", icon: CreditCard, ownerOnly: true },
       { title: "Tenant Settings", url: "/admin/tenant-settings", icon: Settings2, ownerOnly: true },
       { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
     ],

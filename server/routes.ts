@@ -36,8 +36,9 @@ import { generateInvoicePDF } from "./invoice-pdf";
 import { sendInvoiceEmail } from "./invoice-email";
 import { brandingConfig } from "./branding-config";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
-import { requireModule } from "./middleware/module-gates";
+import { requireModule, getTenantPlan } from "./middleware/module-gates";
 import { isPlatformAdmin } from "./middleware/tenant";
+import { getPlanDefinition, getPlanLimits, isWithinLimit, PLAN_DEFINITIONS, type PlanTier } from "@shared/plan-config";
 import { checkAiQuota, getAiQuotaStatus } from "./middleware/ai-quota";
 async function getTenantCompanyName(tenantId?: string): Promise<string> {
   if (tenantId) {
@@ -93,6 +94,11 @@ const taxDocUpload = multer({
 
 function param(req: Request, name: string): string {
   return req.params[name] as string;
+}
+
+function stripTenantId(body: Record<string, any>): Record<string, any> {
+  const { tenantId, ...rest } = body;
+  return rest;
 }
 
 const ADMIN_ROLES = ["admin", "owner", "tenant_admin", "tenant_owner", "platform_owner", "platform_admin"];
@@ -371,6 +377,21 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Role must be admin, owner, client, or preparer" });
       }
 
+      const tenantId = (req as any).tenantId;
+      if (tenantId) {
+        const plan = await getTenantPlan(tenantId);
+        const limits = getPlanLimits(plan);
+        const [userCountResult] = await db.select({ count: count() }).from(users).where(eq(users.tenantId, tenantId));
+        const userCount = Number(userCountResult?.count || 0);
+        if (!isWithinLimit(userCount, limits.maxUsers)) {
+          return res.status(403).json({
+            message: `User limit reached (${limits.maxUsers} users on ${plan} plan). Upgrade your plan to add more users.`,
+            code: "PLAN_LIMIT_REACHED",
+            currentPlan: plan,
+          });
+        }
+      }
+
       const existing = await authStorage.getUserByUsername(username);
       if (existing) {
         return res.status(400).json({ message: "Username already exists" });
@@ -482,6 +503,20 @@ export async function registerRoutes(
 
   app.post("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
     const tenantId = (req as any).tenantId;
+
+    if (tenantId) {
+      const plan = await getTenantPlan(tenantId);
+      const limits = getPlanLimits(plan);
+      const existingClients = await storage.getClients(tenantId);
+      if (!isWithinLimit(existingClients.length, limits.maxClients)) {
+        return res.status(403).json({
+          message: `Client limit reached (${limits.maxClients} clients on ${plan} plan). Upgrade your plan to add more clients.`,
+          code: "PLAN_LIMIT_REACHED",
+          currentPlan: plan,
+        });
+      }
+    }
+
     const parsed = insertClientSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const client = await storage.createClient(parsed.data);
@@ -490,7 +525,7 @@ export async function registerRoutes(
   });
 
   app.patch("/api/clients/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const client = await storage.updateClient(param(req, "id"), req.body);
+    const client = await storage.updateClient(param(req, "id"), stripTenantId(req.body));
     if (!client) return res.status(404).json({ message: "Client not found" });
     await audit(req, "updated", "client", client.id, `Updated client "${client.companyName}"`);
     res.json(client);
@@ -599,7 +634,7 @@ export async function registerRoutes(
       });
     }
 
-    const updated = await storage.updateTicket(ticketId, req.body);
+    const updated = await storage.updateTicket(ticketId, stripTenantId(req.body));
     if (!updated) return res.status(404).json({ message: "Ticket not found" });
     await audit(req, "updated", "ticket", updated.id, `Updated ticket "${updated.title}" — status: ${updated.status}`);
     res.json(updated);
@@ -874,7 +909,7 @@ Contact name: ${client.contactName}`
     try {
       const tenantId = (req as any).tenantId;
       if (!tenantId) return res.status(400).json({ message: "No tenant context" });
-      const updated = await storage.updateTenantBranding(tenantId, req.body);
+      const updated = await storage.updateTenantBranding(tenantId, stripTenantId(req.body));
       if (!updated) return res.status(404).json({ message: "Branding not found" });
       await audit(req, "updated", "tenant_branding", tenantId, `Updated tenant branding`);
       res.json(updated);
@@ -932,7 +967,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/documents/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const doc = await storage.updateDocument(param(req, "id"), req.body);
+    const doc = await storage.updateDocument(param(req, "id"), stripTenantId(req.body));
     if (!doc) return res.status(404).json({ message: "Document not found" });
     await audit(req, "updated", "document", doc.id, `Updated document "${doc.name}" — status: ${doc.status}`);
     res.json(doc);
@@ -994,7 +1029,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/invoices/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const invoice = await storage.updateInvoice(param(req, "id"), req.body);
+    const invoice = await storage.updateInvoice(param(req, "id"), stripTenantId(req.body));
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     await audit(req, "updated", "invoice", invoice.id, `Updated invoice #${invoice.invoiceNumber} — status: ${invoice.status}`);
     res.json(invoice);
@@ -1210,8 +1245,9 @@ Contact name: ${client.contactName}`
 
   app.get("/api/admin/staff-messages/unread", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = (req as any).tenantId;
       const dbUser = req.dbUser;
-      const count = await storage.getUnreadStaffMessageCount(dbUser.id);
+      const count = await storage.getUnreadStaffMessageCount(dbUser.id, tenantId);
       res.json({ count });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1499,7 +1535,8 @@ Contact name: ${client.contactName}`
 
   app.get("/api/notifications/unread-count", isAuthenticated, async (req: any, res) => {
     const userId = (req.session as any).userId;
-    const count = await storage.getUnreadCountByUser(userId);
+    const tenantId = (req as any).tenantId;
+    const count = await storage.getUnreadCountByUser(userId, tenantId);
     res.json({ count });
   });
 
@@ -1570,7 +1607,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const template = await storage.updateFormTemplate(param(req, "id"), req.body);
+    const template = await storage.updateFormTemplate(param(req, "id"), stripTenantId(req.body));
     if (!template) return res.status(404).json({ message: "Template not found" });
     await audit(req, "updated", "form_template", template.id, `Updated form template "${template.name}"`);
     res.json(template);
@@ -1608,7 +1645,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/filled-forms/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const form = await storage.updateFilledForm(param(req, "id"), req.body);
+    const form = await storage.updateFilledForm(param(req, "id"), stripTenantId(req.body));
     if (!form) return res.status(404).json({ message: "Form not found" });
     await audit(req, "updated", "filled_form", form.id, `Updated filled form "${form.name}" — status: ${form.status}`);
     res.json(form);
@@ -1659,7 +1696,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/notarizations/:id", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
-    const n = await storage.updateNotarization(param(req, "id"), req.body);
+    const n = await storage.updateNotarization(param(req, "id"), stripTenantId(req.body));
     if (!n) return res.status(404).json({ message: "Notarization not found" });
     await audit(req, "updated", "notarization", n.id, `Updated notarization "${n.documentName}" — status: ${n.status}`);
     res.json(n);
@@ -1703,7 +1740,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/service-items/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const item = await storage.updateServiceItem(param(req, "id"), req.body);
+    const item = await storage.updateServiceItem(param(req, "id"), stripTenantId(req.body));
     if (!item) return res.status(404).json({ message: "Service item not found" });
     await audit(req, "updated", "service_item", item.id, `Updated service item "${item.name}"`);
     res.json(item);
@@ -1736,7 +1773,7 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/invoice-line-items/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const item = await storage.updateInvoiceLineItem(param(req, "id"), req.body);
+    const item = await storage.updateInvoiceLineItem(param(req, "id"), stripTenantId(req.body));
     if (!item) return res.status(404).json({ message: "Line item not found" });
     const allItems = await storage.getInvoiceLineItems(item.invoiceId);
     const total = allItems.reduce((sum, li) => sum + parseFloat(li.amount), 0);
@@ -3731,7 +3768,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.patch("/api/tickets/required-docs/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const doc = await storage.updateTicketRequiredDoc(req.params.id, req.body);
+      const doc = await storage.updateTicketRequiredDoc(req.params.id, stripTenantId(req.body));
       if (doc) {
         await recomputeTicketBlockedStatus(doc.ticketId);
       }
@@ -3779,7 +3816,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.patch("/api/admin/recurring-templates/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
-      const template = await storage.updateRecurringTemplate(req.params.id, req.body);
+      const template = await storage.updateRecurringTemplate(req.params.id, stripTenantId(req.body));
       res.json(template);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3820,7 +3857,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.patch("/api/admin/recurring-schedules/:id", isAuthenticated, isAdmin, requireModule('compliance_scheduling'), async (req, res) => {
     try {
-      const schedule = await storage.updateClientRecurringSchedule(req.params.id, req.body);
+      const schedule = await storage.updateClientRecurringSchedule(req.params.id, stripTenantId(req.body));
       res.json(schedule);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -3943,7 +3980,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       const id = param(req, "id");
       const existing = await storage.getCustomFieldDefinition(id, tenantId);
       if (!existing) return res.status(404).json({ message: "Custom field definition not found" });
-      const updated = await storage.updateCustomFieldDefinition(id, req.body);
+      const updated = await storage.updateCustomFieldDefinition(id, stripTenantId(req.body));
       await audit(req, "updated", "custom_field_definition", id, `Updated custom field "${updated?.label}"`);
       res.json(updated);
     } catch (error: any) {
@@ -4011,7 +4048,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
           tenantId,
         });
         if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
-        const saved = await storage.setCustomFieldValue(parsed.data);
+        const saved = await storage.setCustomFieldValue(parsed.data, tenantId);
         results.push(saved);
       }
       res.json(results);
@@ -4263,6 +4300,69 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch AI quota status" });
     }
+  });
+
+  app.get("/api/tenant/plan-features", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      let tenantId = (req as any).tenantId;
+      if (!tenantId && userId) {
+        const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+        tenantId = dbUser?.tenantId;
+      }
+      if (!tenantId) {
+        return res.json({ plan: "basic", features: getPlanDefinition("basic").features, limits: getPlanLimits("basic") });
+      }
+      const plan = await getTenantPlan(tenantId);
+      const definition = getPlanDefinition(plan);
+      res.json({
+        plan,
+        name: definition.name,
+        features: definition.features,
+        limits: definition.limits,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch plan features" });
+    }
+  });
+
+  app.get("/api/tenant/usage", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      let tenantId = (req as any).tenantId;
+      if (!tenantId && userId) {
+        const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
+        tenantId = dbUser?.tenantId;
+      }
+      if (!tenantId) {
+        return res.json({ plan: "basic", clientCount: 0, clientLimit: 50, userCount: 0, userLimit: 5, aiTokensUsed: 0, aiTokenLimit: 100000 });
+      }
+
+      const plan = await getTenantPlan(tenantId);
+      const limits = getPlanLimits(plan);
+
+      const existingClients = await storage.getClients(tenantId);
+      const [userCountResult] = await db.select({ count: count() }).from(users).where(eq(users.tenantId, tenantId));
+      const aiQuota = await getAiQuotaStatus(tenantId);
+
+      res.json({
+        plan,
+        planName: getPlanDefinition(plan).name,
+        clientCount: existingClients.length,
+        clientLimit: limits.maxClients,
+        userCount: Number(userCountResult?.count || 0),
+        userLimit: limits.maxUsers,
+        aiTokensUsed: aiQuota.usage,
+        aiTokenLimit: aiQuota.quota,
+        aiPercentUsed: aiQuota.percentUsed,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch usage data" });
+    }
+  });
+
+  app.get("/api/tenant/plans", isAuthenticated, async (req, res) => {
+    res.json(PLAN_DEFINITIONS);
   });
 
   app.post("/api/platform/impersonate/:tenantId", isAuthenticated, async (req, res) => {
