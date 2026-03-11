@@ -2,6 +2,12 @@ import PDFDocument from "pdfkit";
 import type { PassThrough } from "stream";
 import { brandingConfig } from "./branding-config";
 
+interface TenantBranding {
+  companyName: string;
+  tagline: string;
+  primaryColor: string;
+}
+
 interface InvoiceData {
   invoiceNumber: string;
   status: string;
@@ -10,6 +16,7 @@ interface InvoiceData {
   paidDate?: string | Date | null;
   description?: string | null;
   amount: string;
+  tenantBranding?: TenantBranding;
   client: {
     companyName: string;
     contactName: string;
@@ -42,7 +49,8 @@ function formatCurrency(value: string | number): string {
 export function generateInvoicePDF(data: InvoiceData): PDFKit.PDFDocument {
   const doc = new PDFDocument({ size: "LETTER", margin: 50 });
 
-  const primaryColor = brandingConfig.primaryColor;
+  const branding = data.tenantBranding || brandingConfig;
+  const primaryColor = branding.primaryColor || brandingConfig.primaryColor;
   const accentColor = "#2563eb";
   const lightBg = "#f8fafc";
   const borderColor = "#e2e8f0";
@@ -52,9 +60,9 @@ export function generateInvoicePDF(data: InvoiceData): PDFKit.PDFDocument {
   doc.rect(0, 0, doc.page.width, 120).fill(primaryColor);
 
   doc.fontSize(28).fillColor("#ffffff").font("Helvetica-Bold")
-    .text(brandingConfig.companyName.toUpperCase(), 50, 35);
+    .text(branding.companyName.toUpperCase(), 50, 35);
   doc.fontSize(10).fillColor("#cbd5e1").font("Helvetica")
-    .text(brandingConfig.tagline, 50, 70);
+    .text(branding.tagline, 50, 70);
 
   doc.fontSize(18).fillColor("#ffffff").font("Helvetica-Bold")
     .text("INVOICE", doc.page.width - 200, 40, { width: 150, align: "right" });
@@ -170,7 +178,7 @@ export function generateInvoicePDF(data: InvoiceData): PDFKit.PDFDocument {
   doc.moveTo(50, footerY).lineTo(doc.page.width - 50, footerY).strokeColor(borderColor).lineWidth(0.5).stroke();
   doc.fontSize(8).fillColor(mutedColor).font("Helvetica")
     .text("Thank you for your business!", 50, footerY + 12, { align: "center", width: doc.page.width - 100 });
-  doc.text(`${brandingConfig.companyName} | ${brandingConfig.tagline}`, 50, footerY + 24, { align: "center", width: doc.page.width - 100 });
+  doc.text(`${branding.companyName} | ${branding.tagline}`, 50, footerY + 24, { align: "center", width: doc.page.width - 100 });
   doc.text("Payment is due upon receipt unless otherwise specified.", 50, footerY + 36, { align: "center", width: doc.page.width - 100 });
 
   doc.end();

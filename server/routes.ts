@@ -1152,6 +1152,7 @@ Contact name: ${client.contactName}`
       const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
       const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
+      const tenantBrandingData = tenantId ? await storage.getTenantBrandingByTenantId(tenantId) : undefined;
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -1161,6 +1162,11 @@ Contact name: ${client.contactName}`
         paidDate: invoice.paidDate,
         description: invoice.description,
         amount: String(invoice.amount),
+        tenantBranding: tenantBrandingData ? {
+          companyName: tenantBrandingData.companyName,
+          tagline: tenantBrandingData.tagline || brandingConfig.tagline,
+          primaryColor: tenantBrandingData.primaryColor || brandingConfig.primaryColor,
+        } : undefined,
         client: {
           companyName: client.companyName,
           contactName: client.contactName,
@@ -1195,6 +1201,7 @@ Contact name: ${client.contactName}`
       const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
       const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
+      const tenantBrandingData = tenantId ? await storage.getTenantBrandingByTenantId(tenantId) : undefined;
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -1204,6 +1211,11 @@ Contact name: ${client.contactName}`
         paidDate: invoice.paidDate,
         description: invoice.description,
         amount: String(invoice.amount),
+        tenantBranding: tenantBrandingData ? {
+          companyName: tenantBrandingData.companyName,
+          tagline: tenantBrandingData.tagline || brandingConfig.tagline,
+          primaryColor: tenantBrandingData.primaryColor || brandingConfig.primaryColor,
+        } : undefined,
         client: {
           companyName: client.companyName,
           contactName: client.contactName,
@@ -1269,6 +1281,7 @@ Contact name: ${client.contactName}`
       const client = await storage.getClient(invoice.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
       const lineItems = await storage.getInvoiceLineItems(invoice.id, tenantId);
+      const tenantBrandingData = tenantId ? await storage.getTenantBrandingByTenantId(tenantId) : undefined;
 
       const pdfDoc = generateInvoicePDF({
         invoiceNumber: invoice.invoiceNumber,
@@ -1278,6 +1291,11 @@ Contact name: ${client.contactName}`
         paidDate: invoice.paidDate,
         description: invoice.description,
         amount: String(invoice.amount),
+        tenantBranding: tenantBrandingData ? {
+          companyName: tenantBrandingData.companyName,
+          tagline: tenantBrandingData.tagline || brandingConfig.tagline,
+          primaryColor: tenantBrandingData.primaryColor || brandingConfig.primaryColor,
+        } : undefined,
         client: {
           companyName: client.companyName,
           contactName: client.contactName,

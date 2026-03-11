@@ -32,6 +32,7 @@ interface LineItemEntry {
 }
 
 const invoiceFormSchema = insertInvoiceSchema.extend({
+  clientId: z.string().min(1, "Please select a client"),
   amount: z.string().min(1, "Amount is required"),
   dueDate: z.string().optional().nullable(),
   paidDate: z.string().optional().nullable(),
