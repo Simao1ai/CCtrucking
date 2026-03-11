@@ -59,7 +59,9 @@ export default function Login({ slug }: { slug?: string }) {
       queryClient.setQueryData(["/api/auth/user"], user);
       queryClient.invalidateQueries({ queryKey: ["/api/branding"] });
 
-      if (user.role === "admin" || user.role === "owner" || user.role === "platform_owner" || user.role === "platform_admin" || user.role === "tenant_owner" || user.role === "tenant_admin") {
+      if (user.role === "platform_owner" || user.role === "platform_admin") {
+        setLocation("/platform");
+      } else if (user.role === "admin" || user.role === "owner" || user.role === "tenant_owner" || user.role === "tenant_admin") {
         setLocation("/admin");
       } else if (user.role === "preparer") {
         setLocation("/preparer");

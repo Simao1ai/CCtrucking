@@ -277,7 +277,7 @@ export async function registerRoutes(
       const userId = (req.session as any)?.userId;
       if (userId) {
         const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
-        if (dbUser?.tenantId) {
+        if (dbUser?.tenantId && dbUser.role !== "platform_owner" && dbUser.role !== "platform_admin") {
           const branding = await storage.getTenantBrandingByTenantId(dbUser.tenantId);
           if (branding) {
             return res.json({
