@@ -65,6 +65,31 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+const logoUploadDir = path.join(process.cwd(), "uploads", "logos");
+if (!fs.existsSync(logoUploadDir)) {
+  fs.mkdirSync(logoUploadDir, { recursive: true });
+}
+
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, logoUploadDir),
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = path.extname(file.originalname);
+      cb(null, `${uniqueSuffix}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /\.(png|jpg|jpeg|svg|webp|gif)$/i;
+    if (allowed.test(path.extname(file.originalname))) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files (PNG, JPG, SVG, WebP, GIF) are allowed"));
+    }
+  },
+});
+
 const taxDocUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadDir),
@@ -270,6 +295,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -1014,6 +1041,53 @@ Contact name: ${client.contactName}`
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Failed to update branding" });
+    }
+  });
+
+  app.post("/api/admin/tenant/branding/logo", isAuthenticated, isOwner, (req, res) => {
+    logoUpload.single("logo")(req, res, async (err) => {
+      try {
+        if (err) {
+          return res.status(400).json({ message: err.message });
+        }
+        if (!req.file) {
+          return res.status(400).json({ message: "No file uploaded" });
+        }
+        const tenantId = (req as any).tenantId;
+        if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+
+        const logoUrl = `/uploads/logos/${req.file.filename}`;
+        const updated = await storage.updateTenantBranding(tenantId, { logoUrl });
+        if (!updated) return res.status(404).json({ message: "Branding not found" });
+
+        await audit(req, "updated", "tenant_branding", tenantId, `Uploaded tenant logo`);
+        res.json({ logoUrl, branding: updated });
+      } catch (error: any) {
+        res.status(500).json({ message: error.message || "Failed to upload logo" });
+      }
+    });
+  });
+
+  app.delete("/api/admin/tenant/branding/logo", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) return res.status(400).json({ message: "No tenant context" });
+
+      const branding = await storage.getTenantBrandingByTenantId(tenantId);
+      if (branding?.logoUrl && branding.logoUrl.startsWith("/uploads/")) {
+        const filePath = path.join(process.cwd(), branding.logoUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      const updated = await storage.updateTenantBranding(tenantId, { logoUrl: "" });
+      if (!updated) return res.status(404).json({ message: "Branding not found" });
+
+      await audit(req, "updated", "tenant_branding", tenantId, `Removed tenant logo`);
+      res.json({ branding: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to remove logo" });
     }
   });
 
