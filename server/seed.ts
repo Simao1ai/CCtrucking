@@ -133,6 +133,17 @@ async function migrateOrphanedDataToCCTrucking() {
   }
 }
 
+async function markOnboardingComplete() {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, "cc-trucking-tenant-001"));
+  if (!tenant || tenant.onboardingCompleted) return;
+
+  const existingClients = await db.select().from(clients).where(eq(clients.tenantId, "cc-trucking-tenant-001"));
+  if (existingClients.length > 0) {
+    await db.update(tenants).set({ onboardingCompleted: true }).where(eq(tenants.id, "cc-trucking-tenant-001"));
+    console.log("CC Trucking onboarding marked as complete.");
+  }
+}
+
 async function ensurePlatformOwner() {
   const [existing] = await db.select().from(users).where(eq(users.username, "platformadmin"));
   if (existing) return;
@@ -163,6 +174,7 @@ export async function seedDatabase() {
   await ensureCCTruckingTenant();
   await ensureUserTenantAssignment();
   await migrateOrphanedDataToCCTrucking();
+  await markOnboardingComplete();
   await ensurePlatformOwner();
   await migrateLegacyAdminRole();
   await seedServiceItems();
