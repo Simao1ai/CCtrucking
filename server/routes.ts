@@ -1075,15 +1075,20 @@ Contact name: ${client.contactName}`
   app.get("/api/invoices/next-number", isAuthenticated, isAdmin, async (req, res) => {
     const tenantId = (req as any).tenantId;
     const allInvoices = await storage.getInvoices(tenantId);
-    let maxNum = 0;
+    const year = new Date().getFullYear();
+    let maxSeq = 0;
     for (const inv of allInvoices) {
-      const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
+      const matchYear = inv.invoiceNumber.match(/^INV-\d{4}-(\d+)$/i);
+      const matchSimple = inv.invoiceNumber.match(/^INV-(\d+)$/i);
+      if (matchYear) {
+        const seq = parseInt(matchYear[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      } else if (matchSimple) {
+        const seq = parseInt(matchSimple[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
       }
     }
-    const nextNumber = `INV-${String(maxNum + 1).padStart(4, "0")}`;
+    const nextNumber = `INV-${year}-${String(maxSeq + 1).padStart(3, "0")}`;
     res.json({ nextNumber, currentCount: allInvoices.length });
   });
 
@@ -1105,15 +1110,20 @@ Contact name: ${client.contactName}`
     let body = { ...req.body, tenantId };
     if (!body.invoiceNumber || body.invoiceNumber.trim() === "") {
       const allInvoices = await storage.getInvoices(tenantId);
-      let maxNum = 0;
+      const year = new Date().getFullYear();
+      let maxSeq = 0;
       for (const inv of allInvoices) {
-        const match = inv.invoiceNumber.match(/^INV-(\d+)$/i);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (num > maxNum) maxNum = num;
+        const matchYear = inv.invoiceNumber.match(/^INV-\d{4}-(\d+)$/i);
+        const matchSimple = inv.invoiceNumber.match(/^INV-(\d+)$/i);
+        if (matchYear) {
+          const seq = parseInt(matchYear[1], 10);
+          if (seq > maxSeq) maxSeq = seq;
+        } else if (matchSimple) {
+          const seq = parseInt(matchSimple[1], 10);
+          if (seq > maxSeq) maxSeq = seq;
         }
       }
-      body.invoiceNumber = `INV-${String(maxNum + 1).padStart(4, "0")}`;
+      body.invoiceNumber = `INV-${year}-${String(maxSeq + 1).padStart(3, "0")}`;
     }
     if (!body.ticketId || body.ticketId === "") body.ticketId = null;
     if (!body.description) body.description = null;
