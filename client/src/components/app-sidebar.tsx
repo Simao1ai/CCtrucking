@@ -201,9 +201,11 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild>
                   <button
                     onClick={() => {
-                      fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => {
-                        window.location.href = "/login";
-                      });
+                      fetch("/api/auth/logout", { method: "POST", credentials: "include" })
+                        .then(r => r.json())
+                        .then(data => {
+                          window.location.href = data.tenantSlug ? `/login/${data.tenantSlug}` : "/login";
+                        });
                     }}
                     data-testid="nav-logout"
                   >

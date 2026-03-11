@@ -30,13 +30,27 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
+    let tenantSlug: string | null = null;
+    try {
+      const userId = (req.session as any)?.userId;
+      if (userId) {
+        const user = await authStorage.getUser(userId);
+        if (user?.tenantId && user.role !== "platform_owner" && user.role !== "platform_admin") {
+          const { db } = await import("../../db");
+          const { tenants } = await import("@shared/schema");
+          const { eq } = await import("drizzle-orm");
+          const [tenant] = await db.select({ slug: tenants.slug }).from(tenants).where(eq(tenants.id, user.tenantId));
+          if (tenant?.slug) tenantSlug = tenant.slug;
+        }
+      }
+    } catch {}
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Logout failed" });
       }
       res.clearCookie("connect.sid");
-      res.json({ message: "Logged out" });
+      res.json({ message: "Logged out", tenantSlug });
     });
   });
 
