@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings } from "@shared/schema";
 import { sql, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { truckingServiceItems, truckingTransactionCategories, truckingRecurringTemplates, truckingSampleClients, truckingCustomFieldDefinitions } from "./industry-packs/trucking-seed-data";
@@ -50,6 +50,55 @@ async function seedTransactionCategories() {
   console.log("Transaction categories seeded.");
 }
 
+async function ensureCCTruckingTenant() {
+  const [existing] = await db.select().from(tenants).where(eq(tenants.id, "cc-trucking-tenant-001"));
+  if (existing) return;
+
+  await db.insert(tenants).values({
+    id: "cc-trucking-tenant-001",
+    name: "CC Trucking Services",
+    slug: "cctrucking",
+    plan: "enterprise",
+    status: "active",
+    contactEmail: "admin@cctrucking.com",
+    industry: "trucking",
+  });
+
+  await db.insert(tenantBranding).values({
+    tenantId: "cc-trucking-tenant-001",
+    companyName: "CC Trucking Services",
+    tagline: "Professional Trucking Operations & Compliance",
+    primaryColor: "#1e3a5f",
+  });
+
+  const moduleKeys = [
+    "modules.bookkeeping", "modules.tax_preparation", "modules.notarizations",
+    "modules.compliance_scheduling", "modules.employee_performance", "modules.knowledge_base",
+    "modules.ai_assistant", "modules.client_portal",
+  ];
+  for (const key of moduleKeys) {
+    await db.insert(tenantSettings).values({
+      tenantId: "cc-trucking-tenant-001",
+      key,
+      value: "true",
+      type: "boolean",
+    });
+  }
+
+  console.log("CC Trucking tenant seeded with branding and modules.");
+}
+
+async function ensureUserTenantAssignment() {
+  const ccTruckingUsers = ["admin", "staff"];
+  for (const username of ccTruckingUsers) {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    if (user && !user.tenantId) {
+      await db.update(users).set({ tenantId: "cc-trucking-tenant-001" }).where(eq(users.id, user.id));
+      console.log(`Assigned ${username} to CC Trucking tenant.`);
+    }
+  }
+}
+
 async function ensurePlatformOwner() {
   const [existing] = await db.select().from(users).where(eq(users.username, "platformadmin"));
   if (existing) return;
@@ -77,6 +126,8 @@ async function migrateLegacyAdminRole() {
 
 export async function seedDatabase() {
   await seedUsers();
+  await ensureCCTruckingTenant();
+  await ensureUserTenantAssignment();
   await ensurePlatformOwner();
   await migrateLegacyAdminRole();
   await seedServiceItems();
