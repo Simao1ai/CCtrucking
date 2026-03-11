@@ -169,7 +169,41 @@ async function migrateLegacyAdminRole() {
   }
 }
 
+async function addUserSecurityColumns() {
+  try {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until timestamp`);
+  } catch (e) {
+    // columns may already exist
+  }
+}
+
+async function addApiKeysTable() {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id varchar REFERENCES tenants(id),
+        name text NOT NULL,
+        key_hash text NOT NULL,
+        key_prefix varchar(12) NOT NULL,
+        permissions jsonb DEFAULT '["read","write"]'::jsonb,
+        last_used_at timestamp,
+        expires_at timestamp,
+        revoked boolean NOT NULL DEFAULT false,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`);
+  } catch (e) {
+    // table may already exist
+  }
+}
+
 export async function seedDatabase() {
+  await addUserSecurityColumns();
+  await addApiKeysTable();
   await seedUsers();
   await ensureCCTruckingTenant();
   await ensureUserTenantAssignment();

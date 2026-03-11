@@ -54,6 +54,8 @@ import AdminRecurring from "@/pages/admin-recurring";
 import AdminKnowledgeBase from "@/pages/admin-knowledge-base";
 import AdminTenantSettings from "@/pages/admin-tenant-settings";
 import AdminSubscription from "@/pages/admin-subscription";
+import AdminApiKeys from "@/pages/admin-api-keys";
+import AdminApiDocs from "@/pages/admin-api-docs";
 import PortalSignatures from "@/pages/portal/portal-signatures";
 import PortalTaxDocuments from "@/pages/portal/portal-tax-documents";
 import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
@@ -340,6 +342,12 @@ function App() {
           </Route>
           <Route path="/admin/subscription">
             <AdminLayout><AdminSubscription /></AdminLayout>
+          </Route>
+          <Route path="/admin/api-keys">
+            <AdminLayout><AdminApiKeys /></AdminLayout>
+          </Route>
+          <Route path="/admin/api-docs">
+            <AdminLayout><AdminApiDocs /></AdminLayout>
           </Route>
 
           <Route path="/portal">

@@ -3,6 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
+import { sanitizeObject } from "./utils/sanitize";
 import {
   insertClientSchema, insertServiceTicketSchema, insertDocumentSchema,
   insertInvoiceSchema, insertChatMessageSchema, insertSignatureRequestSchema,
@@ -98,7 +99,8 @@ function param(req: Request, name: string): string {
 
 function stripTenantId(body: Record<string, any>): Record<string, any> {
   const { tenantId, ...rest } = body;
-  return rest;
+  const textFields = ["title", "description", "content", "message", "notes", "name", "documentName", "documentDescription"];
+  return sanitizeObject(rest, textFields);
 }
 
 const ADMIN_ROLES = ["admin", "owner", "tenant_admin", "tenant_owner", "platform_owner", "platform_admin"];
@@ -272,6 +274,15 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  const clientsV1Router = (await import("./api-v1/clients")).default;
+  const invoicesV1Router = (await import("./api-v1/invoices")).default;
+  const ticketsV1Router = (await import("./api-v1/tickets")).default;
+  const documentsV1Router = (await import("./api-v1/documents")).default;
+  app.use("/api/v1/clients", clientsV1Router);
+  app.use("/api/v1/invoices", invoicesV1Router);
+  app.use("/api/v1/tickets", ticketsV1Router);
+  app.use("/api/v1/documents", documentsV1Router);
+
   app.get("/api/branding", async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
@@ -377,6 +388,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Role must be admin, owner, client, or preparer" });
       }
 
+      const { validatePasswordStrength } = await import("./replit_integrations/auth/routes");
+      const pwCheck = validatePasswordStrength(password);
+      if (!pwCheck.valid) {
+        return res.status(400).json({ message: pwCheck.message, code: "WEAK_PASSWORD" });
+      }
+
       const tenantId = (req as any).tenantId;
       if (tenantId) {
         const plan = await getTenantPlan(tenantId);
@@ -471,6 +488,85 @@ export async function registerRoutes(
     res.json(safeUsers);
   });
 
+  app.get("/api/admin/api-keys", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { apiKeys: apiKeysTable } = await import("@shared/schema");
+      const keys = await db.select({
+        id: apiKeysTable.id,
+        name: apiKeysTable.name,
+        keyPrefix: apiKeysTable.keyPrefix,
+        permissions: apiKeysTable.permissions,
+        lastUsedAt: apiKeysTable.lastUsedAt,
+        expiresAt: apiKeysTable.expiresAt,
+        revoked: apiKeysTable.revoked,
+        createdAt: apiKeysTable.createdAt,
+      }).from(apiKeysTable).where(eq(apiKeysTable.tenantId, tenantId));
+      res.json(keys);
+    } catch (error) {
+      console.error("API keys list error:", error);
+      res.status(500).json({ message: "Failed to fetch API keys" });
+    }
+  });
+
+  app.post("/api/admin/api-keys", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "API keys can only be created within a tenant context" });
+      }
+      const { name, permissions, expiresAt } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "API key name is required" });
+      }
+
+      const { generateApiKey } = await import("./middleware/api-key");
+      const { raw, hash, prefix } = generateApiKey();
+      const { apiKeys: apiKeysTable } = await import("@shared/schema");
+
+      const [key] = await db.insert(apiKeysTable).values({
+        tenantId,
+        name: name.trim(),
+        keyHash: hash,
+        keyPrefix: prefix,
+        permissions: permissions || ["read", "write"],
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        revoked: false,
+      }).returning();
+
+      await audit(req, "created", "api_key", key.id, `Created API key "${name}"`);
+
+      res.status(201).json({
+        id: key.id,
+        name: key.name,
+        keyPrefix: key.keyPrefix,
+        rawKey: raw,
+        permissions: key.permissions,
+        expiresAt: key.expiresAt,
+        createdAt: key.createdAt,
+      });
+    } catch (error) {
+      console.error("API key create error:", error);
+      res.status(500).json({ message: "Failed to create API key" });
+    }
+  });
+
+  app.patch("/api/admin/api-keys/:id/revoke", isAuthenticated, isOwner, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { apiKeys: apiKeysTable } = await import("@shared/schema");
+      const [key] = await db.select().from(apiKeysTable).where(and(eq(apiKeysTable.id, param(req, "id")), eq(apiKeysTable.tenantId, tenantId)));
+      if (!key) return res.status(404).json({ message: "API key not found" });
+
+      const [updated] = await db.update(apiKeysTable).set({ revoked: true }).where(eq(apiKeysTable.id, key.id)).returning();
+      await audit(req, "revoked", "api_key", key.id, `Revoked API key "${key.name}"`);
+      res.json({ message: "API key revoked", id: updated.id });
+    } catch (error) {
+      console.error("API key revoke error:", error);
+      res.status(500).json({ message: "Failed to revoke API key" });
+    }
+  });
+
   app.get("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
     const tenantId = (req as any).tenantId;
     const clientList = await storage.getClients(tenantId);
@@ -552,7 +648,8 @@ export async function registerRoutes(
 
   app.post("/api/tickets", isAuthenticated, isAdmin, async (req, res) => {
     const tenantId = (req as any).tenantId;
-    const parsed = insertServiceTicketSchema.safeParse({ ...req.body, tenantId });
+    const sanitizedBody = sanitizeObject(req.body, ["title", "description"]);
+    const parsed = insertServiceTicketSchema.safeParse({ ...sanitizedBody, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
     await audit(req, "created", "ticket", ticket.id, `Created ticket "${ticket.title}" (${ticket.serviceType})`);

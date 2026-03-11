@@ -2,6 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 
 const app = express();
 const httpServer = createServer(app);
@@ -11,6 +14,66 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+app.set("trust proxy", 1);
+
+const isDev = process.env.NODE_ENV !== "production";
+
+app.use(
+  helmet({
+    contentSecurityPolicy: isDev
+      ? false
+      : {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:", "https:"],
+            connectSrc: ["'self'", "https://api.openai.com"],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+          },
+        },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-site" },
+  })
+);
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: true, message: "Too many requests, please try again later.", code: "RATE_LIMIT_EXCEEDED" },
+  skip: (req) => !req.path.startsWith("/api"),
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: true, message: "Too many login attempts, please try again later.", code: "AUTH_RATE_LIMIT" },
+});
+
+const platformLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: true, message: "Too many requests, please try again later.", code: "RATE_LIMIT_EXCEEDED" },
+});
+
+app.use("/api/", apiLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/platform/", platformLimiter);
+
+app.use((req, _res, next) => {
+  (req as any).requestId = crypto.randomUUID();
+  next();
+});
 
 app.use(
   express.json({
@@ -48,9 +111,16 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      const requestId = (req as any).requestId;
+      let logLine = `[${requestId?.slice(0, 8)}] ${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        const sensitiveRoutes = ["/api/admin/api-keys", "/api/auth/login"];
+        const isSensitive = sensitiveRoutes.some(r => path.startsWith(r));
+        if (!isSensitive) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        } else {
+          logLine += ` :: [redacted]`;
+        }
       }
 
       log(logLine);
@@ -60,27 +130,38 @@ app.use((req, res, next) => {
   next();
 });
 
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+});
+
 (async () => {
   const { seedDatabase } = await import("./seed");
   await seedDatabase();
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+    const requestId = (req as any).requestId;
 
-    console.error("Internal Server Error:", err);
+    console.error(`[${requestId?.slice(0, 8)}] Error:`, err);
 
     if (res.headersSent) {
       return next(err);
     }
 
-    return res.status(status).json({ message });
+    return res.status(status).json({
+      error: true,
+      message: isDev ? message : (status >= 500 ? "Internal Server Error" : message),
+      code: err.code || undefined,
+      requestId,
+    });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -88,10 +169,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {

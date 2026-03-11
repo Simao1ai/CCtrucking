@@ -27,6 +27,7 @@ import {
   Settings2,
   Shield,
   CreditCard,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant } from "@/context/tenant-context";
@@ -107,6 +108,7 @@ const navGroups: NavGroup[] = [
       { title: "Audit Log", url: "/admin/audit", icon: History, ownerOnly: true },
       { title: "Users", url: "/admin/users", icon: UserCog },
       { title: "Subscription", url: "/admin/subscription", icon: CreditCard, ownerOnly: true },
+      { title: "API Keys", url: "/admin/api-keys", icon: KeyRound, ownerOnly: true },
       { title: "Tenant Settings", url: "/admin/tenant-settings", icon: Settings2, ownerOnly: true },
       { title: "Google Sheets", url: "/admin/sheets", icon: FileSpreadsheet },
     ],
