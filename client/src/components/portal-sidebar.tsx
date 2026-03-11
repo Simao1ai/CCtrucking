@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import logoPath from "@assets/ChatGPT_Image_Mar_10,_2026_at_11_30_21_PM_1773199847239.png";
+import { BrandLogo } from "@/components/brand-logo";
 
 const mainNavItems = [
   { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
@@ -77,7 +77,7 @@ export function PortalSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/portal" data-testid="link-portal-home">
           <div className="flex items-center gap-2">
-            <img src={logoPath} alt={branding.shortName} className="h-8 w-auto drop-shadow-[0_0_1px_rgba(255,255,255,0.8)] brightness-[1.8]" data-testid="img-sidebar-logo" />
+            <BrandLogo size="sm" variant="light" />
           </div>
         </Link>
       </SidebarHeader>

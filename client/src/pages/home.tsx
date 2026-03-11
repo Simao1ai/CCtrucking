@@ -6,7 +6,7 @@ import {
   Phone, Mail, MapPin, Users, BarChart3, Zap, Lock, Globe,
   ClipboardCheck, Calculator, BookOpen, HeadphonesIcon
 } from "lucide-react";
-import logoPath from "@assets/ChatGPT_Image_Mar_10,_2026_at_11_30_21_PM_1773199847239.png";
+import { BrandLogo } from "@/components/brand-logo";
 
 const features = [
   {
@@ -80,13 +80,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex flex-col lg:flex-row items-center gap-14">
             <div className="flex-1 space-y-7">
-              <div className="mb-4">
-                <img src={logoPath} alt="CarrierDeskHQ" className="h-14 md:h-16 w-auto" data-testid="img-hero-logo" />
-              </div>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-amber-300 text-sm font-medium backdrop-blur-sm border border-white/10">
-                <Truck className="w-4 h-4" />
-                The Back Office for Trucking Professionals
-              </div>
+              <BrandLogo size="lg" variant="light" showTagline data-testid="img-hero-logo" />
               <h1 className="text-4xl md:text-5xl lg:text-[3.4rem] font-bold tracking-tight leading-[1.1]">
                 Run Your Trucking Consulting Business{" "}
                 <span className="text-amber-400">From One Platform</span>
@@ -239,7 +233,7 @@ export default function Home() {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-1">
               <div className="mb-4">
-                <img src={logoPath} alt="CarrierDeskHQ" className="h-10 w-auto" data-testid="img-footer-logo" />
+                <BrandLogo size="sm" variant="dark" />
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 The all-in-one operations platform for trucking consultants and carrier service companies.

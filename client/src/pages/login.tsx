@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
 import { useTenant } from "@/context/tenant-context";
 import type { BrandingConfig } from "@shared/branding";
-import logoPath from "@assets/ChatGPT_Image_Mar_10,_2026_at_11_30_21_PM_1773199847239.png";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function Login({ slug }: { slug?: string }) {
   const [, setLocation] = useLocation();
@@ -78,11 +78,11 @@ export default function Login({ slug }: { slug?: string }) {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <a href={slug ? `/login/${slug}` : "/"} className="flex items-center gap-2" data-testid="link-logo">
+        <a href={slug ? `/login/${slug}` : "/"} data-testid="link-logo">
           {branding.logoUrl ? (
             <img src={branding.logoUrl} alt={branding.companyName} className="h-8 w-auto" data-testid="img-login-logo" />
           ) : (
-            <img src={logoPath} alt="CarrierDeskHQ" className="h-8 w-auto" data-testid="img-login-logo" />
+            <BrandLogo size="sm" variant="dark" />
           )}
         </a>
         <ThemeToggle />
@@ -190,9 +190,9 @@ export default function Login({ slug }: { slug?: string }) {
             </form>
           </CardContent>
         </Card>
-        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/50" data-testid="powered-by">
+        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/60" data-testid="powered-by">
           <span>Powered by</span>
-          <img src={logoPath} alt="CarrierDeskHQ" className="h-3.5 w-auto opacity-40" />
+          <BrandLogo size="sm" className="opacity-50 scale-75 origin-left" />
         </div>
       </div>
     </div>
