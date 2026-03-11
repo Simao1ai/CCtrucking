@@ -190,6 +190,7 @@ function ClientsTab({
                       <Select
                         value={sub?.preparerId ?? ""}
                         onValueChange={val => assignPreparerMutation.mutate({ preparerId: val, clientId: client.id })}
+                        disabled={assignPreparerMutation.isPending}
                       >
                         <SelectTrigger className="w-[140px] h-8 text-xs" data-testid={`select-preparer-${client.id}`}>
                           <SelectValue placeholder="Assign preparer" />
@@ -412,6 +413,7 @@ function ClientDetailTab({
           <Select
             value={subscription?.[0]?.preparerId ?? ""}
             onValueChange={val => assignPreparerMutation.mutate(val)}
+            disabled={assignPreparerMutation.isPending}
           >
             <SelectTrigger className="w-[180px] h-8 text-xs" data-testid="select-detail-preparer">
               <SelectValue placeholder="Assign preparer..." />

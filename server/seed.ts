@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings, preparerAssignments } from "@shared/schema";
 import { sql, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { truckingServiceItems, truckingTransactionCategories, truckingRecurringTemplates, truckingSampleClients, truckingCustomFieldDefinitions } from "./industry-packs/trucking-seed-data";
@@ -458,4 +458,22 @@ async function migrateClientDataToCustomFields() {
     }
   }
   console.log("Client DOT/MC/EIN data migrated to custom field values.");
+
+  const allAssignments = await db.select().from(preparerAssignments);
+  const seen = new Set<string>();
+  const duplicateIds: string[] = [];
+  for (const a of allAssignments) {
+    const key = `${a.preparerId}::${a.clientId}::${a.tenantId}`;
+    if (seen.has(key)) {
+      duplicateIds.push(a.id);
+    } else {
+      seen.add(key);
+    }
+  }
+  if (duplicateIds.length > 0) {
+    for (const id of duplicateIds) {
+      await db.delete(preparerAssignments).where(eq(preparerAssignments.id, id));
+    }
+    console.log(`Cleaned up ${duplicateIds.length} duplicate preparer assignments.`);
+  }
 }

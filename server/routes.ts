@@ -3238,6 +3238,17 @@ ${doc.documentContent || doc.notes || 'No content provided'}`;
       if (!prepUser || prepUser.role !== "preparer") return res.status(400).json({ message: "Invalid preparer user" });
       const client = await storage.getClient(clientId, tenantId);
       if (!client) return res.status(400).json({ message: "Client not found" });
+
+      const existingAssignments = await storage.getPreparerAssignmentsByClient(clientId, tenantId);
+      const duplicate = existingAssignments.find(a => a.preparerId === preparerId);
+      if (duplicate) {
+        const sub = await storage.getBookkeepingSubscriptionByClient(clientId, tenantId);
+        if (sub && sub.preparerId !== preparerId) {
+          await storage.updateBookkeepingSubscription(sub.id, { preparerId });
+        }
+        return res.json(duplicate);
+      }
+
       const dbUser = (req as any).dbUser;
       const assignment = await storage.createPreparerAssignment({
         preparerId,
@@ -3634,11 +3645,11 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     const dbUser = (req as any).dbUser;
     const tenantId = (req as any).tenantId;
     const assignments = await storage.getPreparerAssignments(dbUser.id, tenantId);
-    const clientIds = assignments.map(a => a.clientId);
-    if (clientIds.length === 0) return res.json([]);
+    const uniqueClientIds = [...new Set(assignments.map(a => a.clientId))];
+    if (uniqueClientIds.length === 0) return res.json([]);
 
     const clientList = [];
-    for (const cid of clientIds) {
+    for (const cid of uniqueClientIds) {
       const client = await storage.getClient(cid, tenantId);
       if (client) {
         const sub = await storage.getBookkeepingSubscriptionByClient(cid, tenantId);

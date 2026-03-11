@@ -386,6 +386,7 @@ export default function AdminClientDetail() {
                     <Select
                       value={bookkeepingSub.preparerId ?? ""}
                       onValueChange={val => assignPreparerMutation.mutate(val)}
+                      disabled={assignPreparerMutation.isPending}
                     >
                       <SelectTrigger className="h-8 text-xs" data-testid="select-preparer-assignment">
                         <SelectValue placeholder="Select preparer..." />
