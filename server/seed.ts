@@ -99,6 +99,40 @@ async function ensureUserTenantAssignment() {
   }
 }
 
+async function migrateOrphanedDataToCCTrucking() {
+  const tenantId = "cc-trucking-tenant-001";
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant) return;
+
+  const tablesToMigrate = [
+    { table: clients, name: "clients" },
+    { table: serviceTickets, name: "service_tickets" },
+    { table: documents, name: "documents" },
+    { table: invoices, name: "invoices" },
+    { table: serviceItems, name: "service_items" },
+    { table: recurringTemplates, name: "recurring_templates" },
+    { table: customFieldDefinitions, name: "custom_field_definitions" },
+  ];
+
+  for (const { table, name } of tablesToMigrate) {
+    const result = await db.update(table)
+      .set({ tenantId } as any)
+      .where(sql`tenant_id IS NULL`);
+    const count = (result as any)?.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`Assigned ${count} orphaned ${name} records to CC Trucking.`);
+    }
+  }
+
+  const userResult = await db.update(users)
+    .set({ tenantId })
+    .where(sql`tenant_id IS NULL AND role NOT IN ('platform_owner', 'platform_admin')`);
+  const userCount = (userResult as any)?.rowCount ?? 0;
+  if (userCount > 0) {
+    console.log(`Assigned ${userCount} orphaned users to CC Trucking.`);
+  }
+}
+
 async function ensurePlatformOwner() {
   const [existing] = await db.select().from(users).where(eq(users.username, "platformadmin"));
   if (existing) return;
@@ -128,6 +162,7 @@ export async function seedDatabase() {
   await seedUsers();
   await ensureCCTruckingTenant();
   await ensureUserTenantAssignment();
+  await migrateOrphanedDataToCCTrucking();
   await ensurePlatformOwner();
   await migrateLegacyAdminRole();
   await seedServiceItems();
