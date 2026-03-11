@@ -21,10 +21,10 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Tenant Tables**: `tenants`, `tenant_branding`, `tenant_settings` — stores org config, branding, module toggles
 - **Tenant Isolation**: `tenant_id` column added to ALL 28+ entity tables; all storage methods (105+) filter by tenantId
 - **Current Tenant**: CC Trucking Services (id: `cc-trucking-tenant-001`, slug: `cctrucking`)
-- **Role System**: 6 roles — `platform_owner`, `platform_admin`, `tenant_owner`, `tenant_admin` (new), plus legacy `owner`, `admin`, `client`, `preparer`
+- **Role System**: 6 roles — `platform_owner`, `platform_admin`, `tenant_owner`, `tenant_admin`, plus legacy `owner`, `admin`, `client`, `preparer`
 - **Middleware**: `server/middleware/tenant.ts` (resolveTenant, requireTenant, isPlatformOwner/Admin, isTenantOwner/Admin), `server/middleware/module-gates.ts` (requireModule)
 - **Module Feature Gates**: Bookkeeping, tax prep, notarizations, compliance scheduling, employee performance — togglable per tenant
-- **Branding from DB**: `GET /api/branding` loads from `tenant_branding` table, falls back to static config
+- **Branding from DB**: `GET /api/branding` loads from `tenant_branding` table; platform_owner/platform_admin always see CarrierDeskHQ branding; tenant users see their tenant branding; supports `?slug=` param for pre-login branding
 - **Tenant Settings UI**: `/admin/tenant-settings` with General, Branding, Modules, Users tabs (owner-only)
 - **Scheduler Isolation**: Invoice reminders and recurring compliance skip suspended/inactive tenants
 - **AI Tenant Scoping**: All AI prompts load company name, industry knowledge, and data scoped to tenant
@@ -39,7 +39,7 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **Data Isolation**: `stripTenantId` on all PATCH/PUT routes; tenant-scoped storage methods for staff messages, custom fields
 
 ### Onboarding & Provisioning (Phase 5)
-- **Tenant Creation Wizard**: Multi-step wizard on `/platform` — Company Info (name, slug, email, industry), Plan Selection, Owner Account creation, Review & Create; POST `/api/platform/tenants` seeds branding, modules per plan, and initial owner user
+- **Tenant Creation Wizard**: Multi-step wizard on `/platform/tenants` — Company Info (name, slug, email, industry), Plan Selection, Owner Account creation, Review & Create; POST `/api/platform/tenants` seeds branding, modules per plan, and initial owner user (role: `tenant_owner`)
 - **Onboarding Checklist**: `GET /api/tenant/onboarding` auto-detects 5 setup steps (branding, first client, team member, ticket, invoice); shown on admin dashboard until completed
 - **Client CSV Import**: `POST /api/admin/clients/import` with client-side CSV parsing, column mapping, validation preview, plan limit checks; import results with error reporting
 - **Client CSV Export**: `GET /api/admin/clients/export/csv` downloads all clients as CSV
@@ -47,16 +47,32 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **DB Changes**: `onboarding_completed` boolean and `onboarding_progress` jsonb columns on `tenants` table
 
 ### Platform Operations Layer (Phase 3)
-- **Super Admin Dashboard**: `/platform` route with PlatformLayout, PlatformSidebar — shows tenant overview, revenue chart, AI usage, health stats
+- **Super Admin Dashboard**: `/platform` route with PlatformLayout, PlatformSidebar — overview with summary cards (tenants, users, revenue) and quick links to sub-pages
+- **Platform Dashboard Pages**: Split into dedicated sub-pages:
+  - `/platform` — Overview dashboard with summary cards and quick navigation
+  - `/platform/tenants` — Full tenant management (create, edit, impersonate) with `PlatformTenants` component
+  - `/platform/analytics` — Revenue charts, per-tenant breakdown, status overview with `PlatformAnalytics` component
+  - `/platform/ai-usage` — AI token consumption by feature/tenant, daily trends with `PlatformAIUsage` component
+  - `/platform/health` — System uptime, audit logs, database stats with `PlatformHealth` component
 - **Platform API Routes**: `GET/POST/PATCH /api/platform/tenants`, `GET /api/platform/analytics`, `GET /api/platform/health`, `GET /api/platform/ai-usage`
 - **AI Usage Tracking**: `ai_usage_logs` table tracks all OpenAI calls with tenantId, model, tokens, feature name; logged automatically in all AI routes
 - **AI Quota Enforcement**: `server/middleware/ai-quota.ts` — `checkAiQuota` middleware on all AI routes; plan-based defaults (basic=100k, pro=500k, enterprise=unlimited); `GET /api/tenant/ai-quota-status` endpoint
-- **Support Impersonation**: Platform admins can impersonate any tenant via `POST /api/platform/impersonate/:tenantId`; session preserves original user; impersonation banner shows in admin UI; all actions audit-logged
-- **Platform Navigation**: Platform roles see "Platform Admin" link in admin sidebar; `/platform/*` routes only accessible to `platform_owner`/`platform_admin`
-- **Platform Owner**: platformadmin/platform123 (`platform_owner` role, no tenantId) — CarrierDeskHQ super admin
-- **CC Trucking Users**: admin/admin123 (`tenant_owner`), staff/staff123 (`admin`), client1/client123 (`client`) — all under CC Trucking tenant
-- **Platform Dashboard Pages**: Split into dedicated sub-pages — `/platform` (overview), `/platform/tenants`, `/platform/analytics`, `/platform/ai-usage`, `/platform/health`
-- **Slug-Based Login**: `/login/:slug` shows tenant-branded login (e.g., `/login/cctrucking` shows CC Trucking branding)
+- **Support Impersonation**: Platform admins can impersonate any tenant via `POST /api/platform/impersonate/:tenantId`; session switches to tenant owner user; impersonation banner shows in admin UI; all actions audit-logged; `POST /api/platform/stop-impersonation` to return
+
+### User Accounts & Authentication
+- **Platform Owner**: `platformadmin` / `platform123` (`platform_owner` role, no tenantId) — CarrierDeskHQ super admin; logs in at `/login` → redirects to `/platform`
+- **CC Trucking Users**: `admin` / `admin123` (`tenant_owner`), `staff` / `staff123` (`admin`), `client1` / `client123` (`client`) — all under CC Trucking tenant (id: `cc-trucking-tenant-001`)
+- **Login Routing**: `platform_owner`/`platform_admin` → `/platform`; `tenant_owner`/`tenant_admin`/`owner`/`admin` → `/admin`; `preparer` → `/preparer`; `client` → `/portal`
+- **Slug-Based Login**: `/login/:slug` shows tenant-branded login (e.g., `/login/cctrucking` shows CC Trucking branding with primary color); plain `/login` shows CarrierDeskHQ default branding
+- **Tenant-Aware Logout**: `POST /api/auth/logout` returns `{ tenantSlug }` so frontend redirects tenant users back to `/login/:slug` instead of generic `/login`; platform users redirect to `/login`
+- **Branding Cache Invalidation**: Login invalidates `/api/branding` query cache to ensure correct tenant branding loads after authentication
+- **Seed Migrations** (`server/seed.ts`):
+  - `ensureCCTruckingTenant()` — creates CC Trucking tenant, branding, and module settings if missing
+  - `ensureUserTenantAssignment()` — assigns admin/staff users to CC Trucking tenant
+  - `migrateOrphanedDataToCCTrucking()` — assigns any records with NULL tenant_id to CC Trucking
+  - `ensurePlatformOwner()` — creates platformadmin user if missing
+  - `migrateLegacyAdminRole()` — downgrades admin from platform_owner to tenant_owner
+  - `markOnboardingComplete()` — auto-marks CC Trucking onboarding as done if data exists
 
 ### UI/UX Decisions
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter for routing.
