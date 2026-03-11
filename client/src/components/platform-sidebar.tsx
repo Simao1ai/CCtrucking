@@ -48,7 +48,7 @@ export function PlatformSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/platform" data-testid="link-platform-home">
           <div className="flex items-center gap-2">
-            <img src={logoPath} alt="CarrierDeskHQ" className="h-8 w-auto" data-testid="img-sidebar-logo" />
+            <img src={logoPath} alt="CarrierDeskHQ" className="h-8 w-auto brightness-0 invert" data-testid="img-sidebar-logo" />
           </div>
         </Link>
       </SidebarHeader>
