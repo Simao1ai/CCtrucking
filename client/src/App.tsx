@@ -89,22 +89,24 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={sidebarStyle}>
-      <ImpersonationBanner />
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-1">
-              <NotificationBell basePath="/admin" />
-              <ThemeToggle />
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
+      <div className="flex flex-col h-screen w-full">
+        <ImpersonationBanner />
+        <div className="flex flex-1 min-h-0">
+          <AppSidebar />
+          <div className="flex flex-col flex-1 min-w-0">
+            <header className="flex items-center justify-between gap-2 p-2 border-b shrink-0">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-1">
+                <NotificationBell basePath="/admin" />
+                <ThemeToggle />
+              </div>
+            </header>
+            <main className="flex-1 overflow-auto">
+              {children}
+            </main>
+          </div>
+          <AiChatWidget />
         </div>
-        <AiChatWidget />
       </div>
     </SidebarProvider>
   );
