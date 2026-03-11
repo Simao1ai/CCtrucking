@@ -16,6 +16,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import PlatformDashboard from "@/pages/platform-dashboard";
+import PlatformTenants from "@/pages/platform-tenants";
+import PlatformAIUsage from "@/pages/platform-ai-usage";
+import PlatformAnalytics from "@/pages/platform-analytics";
 import Home from "@/pages/home";
 import Faqs from "@/pages/faqs";
 import Contact from "@/pages/contact";
@@ -56,6 +59,7 @@ import PortalTaxDocuments from "@/pages/portal/portal-tax-documents";
 import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
 import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
 import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
+import PlatformHealth from "@/pages/platform-health";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -364,16 +368,16 @@ function App() {
           </Route>
 
           <Route path="/platform/tenants">
-            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+            <PlatformLayout><PlatformTenants /></PlatformLayout>
           </Route>
           <Route path="/platform/analytics">
-            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+            <PlatformLayout><PlatformAnalytics /></PlatformLayout>
           </Route>
           <Route path="/platform/ai-usage">
-            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+            <PlatformLayout><PlatformAIUsage /></PlatformLayout>
           </Route>
           <Route path="/platform/health">
-            <PlatformLayout><PlatformDashboard /></PlatformLayout>
+            <PlatformLayout><PlatformHealth /></PlatformLayout>
           </Route>
           <Route path="/platform">
             <PlatformLayout><PlatformDashboard /></PlatformLayout>

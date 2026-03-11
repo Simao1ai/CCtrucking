@@ -53,7 +53,10 @@ I prefer iterative development, so please provide updates frequently. I value cl
 - **AI Quota Enforcement**: `server/middleware/ai-quota.ts` — `checkAiQuota` middleware on all AI routes; plan-based defaults (basic=100k, pro=500k, enterprise=unlimited); `GET /api/tenant/ai-quota-status` endpoint
 - **Support Impersonation**: Platform admins can impersonate any tenant via `POST /api/platform/impersonate/:tenantId`; session preserves original user; impersonation banner shows in admin UI; all actions audit-logged
 - **Platform Navigation**: Platform roles see "Platform Admin" link in admin sidebar; `/platform/*` routes only accessible to `platform_owner`/`platform_admin`
-- **Admin User**: admin/admin123 upgraded to `platform_owner` role (was `owner`)
+- **Platform Owner**: platformadmin/platform123 (`platform_owner` role, no tenantId) — CarrierDeskHQ super admin
+- **CC Trucking Users**: admin/admin123 (`tenant_owner`), staff/staff123 (`admin`), client1/client123 (`client`) — all under CC Trucking tenant
+- **Platform Dashboard Pages**: Split into dedicated sub-pages — `/platform` (overview), `/platform/tenants`, `/platform/analytics`, `/platform/ai-usage`, `/platform/health`
+- **Slug-Based Login**: `/login/:slug` shows tenant-branded login (e.g., `/login/cctrucking` shows CC Trucking branding)
 
 ### UI/UX Decisions
 - **Frontend**: React + TypeScript, Vite, TanStack Query, Wouter for routing.

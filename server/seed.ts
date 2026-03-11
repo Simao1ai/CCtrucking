@@ -8,17 +8,27 @@ async function seedUsers() {
   const existingUsers = await db.select().from(users);
   if (existingUsers.length > 0) return;
 
+  const platformHash = await bcrypt.hash("platform123", 10);
   const adminHash = await bcrypt.hash("admin123", 10);
   const staffHash = await bcrypt.hash("staff123", 10);
 
   await db.insert(users).values([
+    {
+      id: "platform-owner-001",
+      username: "platformadmin",
+      password: platformHash,
+      email: "admin@carrierdeskhq.com",
+      firstName: "Platform",
+      lastName: "Owner",
+      role: "platform_owner",
+    },
     {
       username: "admin",
       password: adminHash,
       email: "admin@cctrucking.com",
       firstName: "CC",
       lastName: "Admin",
-      role: "owner",
+      role: "tenant_owner",
     },
     {
       username: "staff",

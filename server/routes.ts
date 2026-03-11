@@ -4156,7 +4156,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
           firstName: ownerFirstName || null,
           lastName: ownerLastName || null,
           email: ownerEmail || null,
-          role: "owner",
+          role: "tenant_owner",
           clientId: null,
           tenantId: tenant.id,
         });

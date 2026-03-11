@@ -5,7 +5,6 @@ import {
   BarChart3,
   Brain,
   Activity,
-  ArrowLeft,
   LogOut,
   Shield,
   type LucideIcon,
@@ -88,14 +87,6 @@ export function PlatformSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/admin" data-testid="nav-back-to-admin">
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Admin</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <button
