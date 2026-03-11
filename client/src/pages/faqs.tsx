@@ -1,8 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, ArrowLeft, ArrowRight, HelpCircle } from "lucide-react";
-import { useTenant } from "@/context/tenant-context";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, ArrowRight, HelpCircle, Truck } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -10,96 +9,109 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const staticGeneralFaqs = [
+const generalFaqs = [
   {
-    answer: "We provide comprehensive compliance and administrative services for trucking companies, including DOT compliance, IFTA quarterly filings, tax preparation, business entity setup (LLC formation, EIN applications), UCR registration, MCS-150 updates, and document management.",
+    question: "What is CarrierDeskHQ?",
+    answer: "CarrierDeskHQ is an all-in-one operations platform built specifically for trucking consultants, compliance firms, and carrier service companies. It lets you manage your clients, track compliance deadlines, send invoices, store documents, handle bookkeeping, and give your clients their own branded portal — all from a single dashboard.",
   },
   {
-    question: "Who do you work with?",
-    answer: "We serve owner-operators, small to mid-sized trucking companies, and freight carriers across the United States. Whether you have one truck or a fleet of 50, we can help keep your operations compliant.",
+    question: "Who is CarrierDeskHQ designed for?",
+    answer: "CarrierDeskHQ is built for anyone who serves the trucking industry: independent consultants managing carrier compliance, DOT/IFTA filing firms, freight service companies, tax preparers specializing in trucking, and carrier service businesses. If you manage trucking clients and their paperwork, this platform is for you.",
+  },
+  {
+    question: "How is this different from a generic CRM?",
+    answer: "Generic CRMs don't understand trucking. CarrierDeskHQ is purpose-built with DOT number tracking, IFTA filing management, compliance deadline calendars, UCR/MCS-150 workflows, trucking-specific document categories, and industry terminology throughout. You won't need to hack together workarounds or maintain side spreadsheets.",
+  },
+  {
+    question: "Can my clients access the platform?",
+    answer: "Yes. Every account includes a dedicated Client Portal where your carrier clients can log in to view their service tickets, download documents, check invoice status, upload files, and communicate with your team. The portal is branded with your company's name and logo.",
   },
   {
     question: "How do I get started?",
-    answer: "Simply reach out through our contact page or give us a call. We'll schedule a consultation to understand your needs and set up your account. Most clients are onboarded within 1-2 business days.",
-  },
-  {
-    question: "What are your business hours?",
-    answer: "Our office is open Monday through Friday, 8:00 AM to 6:00 PM CST. For urgent compliance matters, we offer 24/7 support through our emergency line.",
+    answer: "Request a demo through our contact page and we'll walk you through the platform. Once you're ready, we'll set up your account, configure your branding, and help you import your existing client list. Most businesses are fully onboarded within a day.",
   },
 ];
 
-const complianceFaqs = [
+const featureFaqs = [
   {
-    question: "What is a DOT number and do I need one?",
-    answer: "A DOT (Department of Transportation) number is a unique identifier assigned to commercial motor carriers. You need one if you operate a vehicle that transports passengers or hauls cargo in interstate commerce, or if the vehicle weighs over 10,001 pounds, transports hazardous materials, or carries 9+ passengers for compensation.",
+    question: "What compliance workflows does CarrierDeskHQ support?",
+    answer: "The platform supports DOT compliance tracking, IFTA quarterly filing management, UCR annual registration, MCS-150 biennial updates, BOC-3 filings, and general permit management. You can create service tickets for any compliance task, assign them to staff, track deadlines, and notify clients of progress.",
   },
   {
-    question: "What is IFTA and when are filings due?",
-    answer: "IFTA (International Fuel Tax Agreement) is a tax agreement between US states and Canadian provinces to simplify fuel tax reporting. Quarterly filings are due: Q1 by April 30, Q2 by July 31, Q3 by October 31, and Q4 by January 31. We handle all the calculations and filing for you.",
+    question: "Does it handle invoicing and payments?",
+    answer: "Yes. You can create detailed invoices per client, track payment status, send automated reminders, and export invoices to PDF. Invoices are tied to service tickets so you always know what work was billed.",
   },
   {
-    question: "What is the MCS-150 and how often must it be updated?",
-    answer: "The MCS-150 (Motor Carrier Identification Report) must be updated biennially (every two years) based on your USDOT number. It contains information about your operations, including fleet size, driver count, and types of cargo. Failing to update can result in deactivation of your DOT number.",
+    question: "What about bookkeeping and tax prep?",
+    answer: "CarrierDeskHQ includes a full bookkeeping module where you can upload bank statements, categorize transactions (with AI assistance), generate monthly financial summaries, and prepare tax documents. You can assign preparers to specific clients and track the entire workflow.",
   },
   {
-    question: "What is UCR registration?",
-    answer: "UCR (Unified Carrier Registration) is an annual registration required for motor carriers, brokers, freight forwarders, and leasing companies operating in interstate or international commerce. Fees are based on fleet size and must be renewed each year.",
+    question: "Can I manage my team on the platform?",
+    answer: "Absolutely. You can add staff members with different roles and permissions. Track employee performance, assign service tickets, and manage workloads. The platform includes role-based access control so each team member only sees what they need.",
   },
   {
-    question: "What happens if I miss a compliance deadline?",
-    answer: "Missing compliance deadlines can result in fines, penalties, and even suspension of your operating authority. DOT violations can range from $1,000 to $16,000+ per offense. That's why we proactively track all your deadlines and send reminders well in advance.",
+    question: "Is there an API for integrations?",
+    answer: "Yes. CarrierDeskHQ includes a full REST API for programmatic access to clients, invoices, tickets, and documents. You can generate API keys from your admin dashboard and integrate with your existing tools.",
   },
 ];
 
-const billingFaqs = [
+const pricingFaqs = [
   {
     question: "How does pricing work?",
-    answer: "We offer transparent, service-based pricing. Each service (IFTA filing, DOT compliance review, tax preparation, etc.) has a fixed fee. We also offer bundled packages for clients who need multiple services. Contact us for a personalized quote.",
+    answer: "CarrierDeskHQ offers tiered subscription plans — Basic, Pro, and Enterprise — based on the number of clients and users you need to manage. Each plan includes access to all core features. Contact us for a personalized quote based on your business size.",
   },
   {
-    question: "What payment methods do you accept?",
-    answer: "We accept checks, bank transfers (ACH), and all major credit cards. Invoices are sent electronically and payment is due within 30 days unless otherwise arranged.",
+    question: "Is there a free trial?",
+    answer: "We offer a guided demo and a trial period so you can explore the platform with your real data before committing. Contact our team to get started.",
   },
   {
-    question: "Do you offer payment plans?",
-    answer: "Yes, for larger services like business setup or annual compliance packages, we can arrange payment plans. Please discuss this with your account manager during onboarding.",
+    question: "Can I upgrade or downgrade my plan?",
+    answer: "Yes. You can change your plan at any time as your business grows or your needs change. Plan changes take effect immediately, and billing is prorated.",
+  },
+];
+
+const securityFaqs = [
+  {
+    question: "Is my data secure?",
+    answer: "Yes. CarrierDeskHQ uses industry-standard encryption, secure session management, and role-based access control. All data is isolated per account — your clients' data is never visible to other businesses on the platform. We also maintain full audit logs of all system activity.",
+  },
+  {
+    question: "Can I use my own branding?",
+    answer: "Yes. Each account supports custom branding including your company name, logo, colors, and a branded login page at your own URL slug. Your clients will see your brand throughout the portal, not ours.",
+  },
+  {
+    question: "Do you offer white-label options?",
+    answer: "The platform is designed to be white-labeled from day one. Your clients interact with your brand. CarrierDeskHQ operates behind the scenes as the technology provider.",
   },
 ];
 
 export default function Faqs() {
-  const branding = useTenant();
-
-  const generalFaqs = staticGeneralFaqs.map((faq, i) => ({
-    question: i === 0 ? `What services does ${branding.companyName} offer?` : (faq as any).question,
-    answer: faq.answer,
-  }));
-
   return (
     <div data-testid="page-faqs">
-      <div className="py-12 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-primary/10 via-background to-primary/5">
+      <div className="py-14 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-[hsl(220,35%,13%)] via-[hsl(220,30%,18%)] to-[hsl(220,25%,22%)] text-white">
         <div className="max-w-4xl mx-auto">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back-home">
+            <Button variant="ghost" size="sm" className="mb-4 text-white/70 hover:text-white hover:bg-white/10" data-testid="button-back-home">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Home
             </Button>
           </Link>
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/10 text-amber-400">
               <HelpCircle className="w-5 h-5" />
             </div>
             <h1 className="text-3xl md:text-4xl font-bold">Frequently Asked Questions</h1>
           </div>
-          <p className="text-muted-foreground max-w-2xl">
-            Find answers to common questions about our services, compliance requirements, and billing.
+          <p className="text-white/70 max-w-2xl">
+            Everything you need to know about CarrierDeskHQ and how it can help your trucking consulting business.
           </p>
         </div>
       </div>
 
-      <div className="py-12 px-6 md:px-12 lg:px-24">
+      <div className="py-14 px-6 md:px-12 lg:px-24">
         <div className="max-w-4xl mx-auto space-y-10">
           <div>
-            <h2 className="text-xl font-semibold mb-4" data-testid="section-general">General Questions</h2>
+            <h2 className="text-xl font-semibold mb-4" data-testid="section-general">General</h2>
             <Card>
               <CardContent className="pt-6">
                 <Accordion type="single" collapsible className="w-full">
@@ -117,13 +129,13 @@ export default function Faqs() {
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-4" data-testid="section-compliance">Compliance & Regulations</h2>
+            <h2 className="text-xl font-semibold mb-4" data-testid="section-features">Features & Capabilities</h2>
             <Card>
               <CardContent className="pt-6">
                 <Accordion type="single" collapsible className="w-full">
-                  {complianceFaqs.map((faq, index) => (
-                    <AccordionItem key={index} value={`compliance-${index}`}>
-                      <AccordionTrigger data-testid={`faq-compliance-${index}`}>{faq.question}</AccordionTrigger>
+                  {featureFaqs.map((faq, index) => (
+                    <AccordionItem key={index} value={`feature-${index}`}>
+                      <AccordionTrigger data-testid={`faq-feature-${index}`}>{faq.question}</AccordionTrigger>
                       <AccordionContent>
                         <p className="text-muted-foreground">{faq.answer}</p>
                       </AccordionContent>
@@ -135,13 +147,31 @@ export default function Faqs() {
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-4" data-testid="section-billing">Billing & Payments</h2>
+            <h2 className="text-xl font-semibold mb-4" data-testid="section-pricing">Plans & Pricing</h2>
             <Card>
               <CardContent className="pt-6">
                 <Accordion type="single" collapsible className="w-full">
-                  {billingFaqs.map((faq, index) => (
-                    <AccordionItem key={index} value={`billing-${index}`}>
-                      <AccordionTrigger data-testid={`faq-billing-${index}`}>{faq.question}</AccordionTrigger>
+                  {pricingFaqs.map((faq, index) => (
+                    <AccordionItem key={index} value={`pricing-${index}`}>
+                      <AccordionTrigger data-testid={`faq-pricing-${index}`}>{faq.question}</AccordionTrigger>
+                      <AccordionContent>
+                        <p className="text-muted-foreground">{faq.answer}</p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-4" data-testid="section-security">Security & Branding</h2>
+            <Card>
+              <CardContent className="pt-6">
+                <Accordion type="single" collapsible className="w-full">
+                  {securityFaqs.map((faq, index) => (
+                    <AccordionItem key={index} value={`security-${index}`}>
+                      <AccordionTrigger data-testid={`faq-security-${index}`}>{faq.question}</AccordionTrigger>
                       <AccordionContent>
                         <p className="text-muted-foreground">{faq.answer}</p>
                       </AccordionContent>
@@ -154,13 +184,13 @@ export default function Faqs() {
 
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="pt-6 text-center">
-              <h3 className="text-lg font-semibold mb-2">Still have questions?</h3>
+              <h3 className="text-lg font-semibold mb-2">Have more questions?</h3>
               <p className="text-muted-foreground mb-4">
-                Our team is here to help. Reach out and we'll get back to you within 24 hours.
+                Our team is happy to walk you through the platform and answer anything specific to your business.
               </p>
               <Link href="/contact">
                 <Button data-testid="button-contact-from-faq">
-                  Contact Us
+                  Request a Demo
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
