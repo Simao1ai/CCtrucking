@@ -29,7 +29,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(400).json({ error: true, message: "Username and password are required" });
       }
 
-      const user = await authStorage.getUserByUsername(username);
+      const user = await authStorage.getUserByUsername(username.trim().toLowerCase());
       if (!user || !user.password) {
         return res.status(401).json({ error: true, message: "Invalid username or password" });
       }

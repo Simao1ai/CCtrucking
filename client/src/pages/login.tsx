@@ -88,8 +88,8 @@ export default function Login({ slug }: { slug?: string }) {
         <ThemeToggle />
       </header>
 
-      <div className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-sm" data-testid="card-login">
+      <div className="flex-1 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-[360px]" data-testid="card-login">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-2">
               {loginType === "admin" ? (
@@ -190,9 +190,9 @@ export default function Login({ slug }: { slug?: string }) {
             </form>
           </CardContent>
         </Card>
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground" data-testid="powered-by">
+        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/50" data-testid="powered-by">
           <span>Powered by</span>
-          <img src={logoPath} alt="CarrierDeskHQ" className="h-4 w-auto opacity-60" />
+          <img src={logoPath} alt="CarrierDeskHQ" className="h-3.5 w-auto opacity-40" />
         </div>
       </div>
     </div>
