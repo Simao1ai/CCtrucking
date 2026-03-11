@@ -33,7 +33,7 @@ export function PreparerSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/preparer" data-testid="link-preparer-home">
           <div className="flex items-center gap-2">
-            <img src={logoPath} alt={branding.shortName} className="h-8 w-auto brightness-0 invert" data-testid="img-sidebar-logo" />
+            <img src={logoPath} alt={branding.shortName} className="h-8 w-auto drop-shadow-[0_0_1px_rgba(255,255,255,0.8)] brightness-[1.8]" data-testid="img-sidebar-logo" />
           </div>
         </Link>
       </SidebarHeader>
