@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import logoPath from "@assets/ChatGPT_Image_Mar_10,_2026_at_11_30_21_PM_1773199847239.png";
 
 interface NavItem {
   title: string;
@@ -47,13 +48,7 @@ export function PlatformSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/platform" data-testid="link-platform-home">
           <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
-              <Shield className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight">CarrierDeskHQ</span>
-              <span className="text-xs text-muted-foreground">Platform Admin</span>
-            </div>
+            <img src={logoPath} alt="CarrierDeskHQ" className="h-8 w-auto" data-testid="img-sidebar-logo" />
           </div>
         </Link>
       </SidebarHeader>

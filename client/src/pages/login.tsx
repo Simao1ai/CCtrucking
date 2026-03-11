@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
 import { useTenant } from "@/context/tenant-context";
 import type { BrandingConfig } from "@shared/branding";
+import logoPath from "@assets/ChatGPT_Image_Mar_10,_2026_at_11_30_21_PM_1773199847239.png";
 
 export default function Login({ slug }: { slug?: string }) {
   const [, setLocation] = useLocation();
@@ -78,10 +79,7 @@ export default function Login({ slug }: { slug?: string }) {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <a href={slug ? `/login/${slug}` : "/"} className="flex items-center gap-2" data-testid="link-logo">
-          <div className="flex items-center justify-center w-8 h-8 rounded-md" style={{ backgroundColor: branding.primaryColor || undefined }} >
-            <Truck className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-sm" data-testid="text-company-name">{branding.companyName}</span>
+          <img src={logoPath} alt={branding.companyName} className="h-8 w-auto" data-testid="img-login-logo" />
         </a>
         <ThemeToggle />
       </header>
