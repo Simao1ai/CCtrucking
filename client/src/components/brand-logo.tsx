@@ -1,10 +1,13 @@
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, type LucideIcon } from "lucide-react";
 
 interface BrandLogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   variant?: "light" | "dark" | "auto";
   showTagline?: boolean;
   className?: string;
+  name?: string;
+  icon?: LucideIcon;
+  logoUrl?: string;
 }
 
 const sizeConfig = {
@@ -14,8 +17,10 @@ const sizeConfig = {
   xl: { icon: "w-10 h-10", text: "text-3xl", hq: "text-3xl", tagline: "text-sm", iconBox: "w-12 h-12", gap: "gap-3" },
 };
 
-export function BrandLogo({ size = "md", variant = "auto", showTagline = false, className = "" }: BrandLogoProps) {
+export function BrandLogo({ size = "md", variant = "auto", showTagline = false, className = "", name, icon: CustomIcon, logoUrl }: BrandLogoProps) {
   const s = sizeConfig[size];
+  const isCustom = !!name;
+  const IconComponent = CustomIcon || ClipboardCheck;
 
   const textColor = variant === "light"
     ? "text-white"
@@ -36,21 +41,35 @@ export function BrandLogo({ size = "md", variant = "auto", showTagline = false, 
     ? "text-white/60"
     : "text-muted-foreground";
 
+  if (logoUrl) {
+    return (
+      <div className={`flex items-center ${s.gap} ${className}`} data-testid="brand-logo">
+        <img src={logoUrl} alt={name || "Logo"} className={`${s.iconBox} object-contain`} />
+      </div>
+    );
+  }
+
   return (
     <div className={`flex items-center ${s.gap} ${className}`} data-testid="brand-logo">
       <div className={`flex items-center justify-center ${s.iconBox} rounded-lg ${iconBg}`}>
-        <ClipboardCheck className={`${s.icon} ${iconColor}`} />
+        <IconComponent className={`${s.icon} ${iconColor}`} />
       </div>
       <div className="flex flex-col">
-        <div className="flex items-baseline">
-          <span className={`${s.text} font-bold tracking-tight ${textColor}`}>
-            CarrierDesk
+        {isCustom ? (
+          <span className={`${s.text} font-bold tracking-tight ${textColor} leading-tight`}>
+            {name}
           </span>
-          <span className={`${s.hq} font-extrabold tracking-tight ${hqColor}`}>
-            HQ
-          </span>
-        </div>
-        {showTagline && (
+        ) : (
+          <div className="flex items-baseline">
+            <span className={`${s.text} font-bold tracking-tight ${textColor}`}>
+              CarrierDesk
+            </span>
+            <span className={`${s.hq} font-extrabold tracking-tight ${hqColor}`}>
+              HQ
+            </span>
+          </div>
+        )}
+        {showTagline && !isCustom && (
           <span className={`${s.tagline} ${taglineColor} font-medium tracking-wide`}>
             The Back Office for Trucking Professionals
           </span>

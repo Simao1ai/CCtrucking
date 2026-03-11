@@ -1,6 +1,6 @@
 import { useLocation, Link } from "wouter";
 import { Truck, LayoutDashboard, Plus, FileText, Receipt, MessageCircle, LogOut, Home, PenLine, BookOpen, FileCheck, Building2, Briefcase } from "lucide-react";
-import { useTenant } from "@/context/tenant-context";
+import { useTenant, useTenantIcon } from "@/context/tenant-context";
 import {
   Sidebar,
   SidebarContent,
@@ -69,15 +69,18 @@ function NavGroup({ label, items, location, onNavClick }: { label: string; items
 export function PortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const branding = useTenant();
+  const tenantIcon = useTenantIcon();
   const { setOpenMobile } = useSidebar();
   const closeMobile = () => setOpenMobile(false);
+  const isTenant = branding.companyName !== "CarrierDeskHQ";
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/portal" data-testid="link-portal-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
-            <BrandLogo size="sm" variant="light" />
+            <BrandLogo size="sm" variant="light" name={isTenant ? branding.companyName : undefined} icon={isTenant ? tenantIcon : undefined} logoUrl={branding.logoUrl || undefined} />
           </div>
         </Link>
       </SidebarHeader>

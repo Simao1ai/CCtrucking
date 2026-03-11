@@ -79,8 +79,8 @@ export default function Login({ slug }: { slug?: string }) {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <a href={slug ? `/login/${slug}` : "/"} data-testid="link-logo">
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.companyName} className="h-8 w-auto" data-testid="img-login-logo" />
+          {isTenantLogin ? (
+            <BrandLogo size="sm" variant="dark" name={branding.companyName} logoUrl={branding.logoUrl || undefined} />
           ) : (
             <BrandLogo size="sm" variant="dark" />
           )}

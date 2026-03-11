@@ -29,7 +29,7 @@ import {
   KeyRound,
   type LucideIcon,
 } from "lucide-react";
-import { useTenant } from "@/context/tenant-context";
+import { useTenant, useTenantIcon } from "@/context/tenant-context";
 import {
   Sidebar,
   SidebarContent,
@@ -119,15 +119,18 @@ const navGroups: NavGroup[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const branding = useTenant();
+  const tenantIcon = useTenantIcon();
   const { setOpenMobile } = useSidebar();
   const closeMobile = () => setOpenMobile(false);
+  const isTenant = branding.companyName !== "CarrierDeskHQ";
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/admin" data-testid="link-admin-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
-            <BrandLogo size="sm" variant="light" />
+            <BrandLogo size="sm" variant="light" name={isTenant ? branding.companyName : undefined} icon={isTenant ? tenantIcon : undefined} logoUrl={branding.logoUrl || undefined} />
           </div>
         </Link>
       </SidebarHeader>
