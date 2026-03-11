@@ -8,4 +8,5 @@ export interface BrandingConfig {
   website: string;
   address: string;
   sidebarIconName: string;
+  logoUrl: string;
 }

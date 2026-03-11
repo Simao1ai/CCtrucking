@@ -10,4 +10,5 @@ export const brandingConfig: BrandingConfig = {
   website: "https://carrierdeskhq.com",
   address: "",
   sidebarIconName: "Truck",
+  logoUrl: "",
 };

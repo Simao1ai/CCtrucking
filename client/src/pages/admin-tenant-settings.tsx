@@ -285,8 +285,15 @@ function BrandingTab() {
                 data-testid="input-brand-logo"
                 value={form.logoUrl}
                 onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-                placeholder="https://..."
+                placeholder="https://your-logo-url.com/logo.png"
               />
+              <p className="text-xs text-muted-foreground">Your logo will appear on the sign-in page. Use a direct link to a PNG or SVG image with a transparent background.</p>
+              {form.logoUrl && (
+                <div className="mt-2 p-3 border rounded-md bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+                  <img src={form.logoUrl} alt="Logo preview" className="h-10 w-auto" data-testid="img-logo-preview" />
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="brand-sidebar-icon">Sidebar Icon</Label>

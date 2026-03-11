@@ -19,6 +19,7 @@ const defaultBranding: BrandingConfig = {
   website: "https://carrierdeskhq.com",
   address: "",
   sidebarIconName: "Truck",
+  logoUrl: "",
 };
 
 const TenantContext = createContext<BrandingConfig>(defaultBranding);

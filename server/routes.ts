@@ -301,6 +301,7 @@ export async function registerRoutes(
               website: branding.websiteUrl || brandingConfig.website,
               address: branding.address || brandingConfig.address,
               sidebarIconName: branding.sidebarIcon || brandingConfig.sidebarIconName,
+              logoUrl: branding.logoUrl || brandingConfig.logoUrl,
             });
           }
         }
@@ -322,6 +323,7 @@ export async function registerRoutes(
               website: branding.websiteUrl || brandingConfig.website,
               address: branding.address || brandingConfig.address,
               sidebarIconName: branding.sidebarIcon || brandingConfig.sidebarIconName,
+              logoUrl: branding.logoUrl || brandingConfig.logoUrl,
             });
           }
         }
