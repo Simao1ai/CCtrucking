@@ -261,6 +261,9 @@ function App() {
           <Route path="/login">
             <Login />
           </Route>
+          <Route path="/login/:slug">
+            {(params) => <Login slug={params.slug} />}
+          </Route>
 
           <Route path="/admin">
             <AdminLayout><Dashboard /></AdminLayout>

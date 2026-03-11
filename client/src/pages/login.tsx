@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,25 @@ import { Truck, Loader2, AlertCircle, ShieldCheck, User, Calculator, Building2, 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { queryClient } from "@/lib/queryClient";
 import { useTenant } from "@/context/tenant-context";
+import type { BrandingConfig } from "@shared/branding";
 
-export default function Login() {
+export default function Login({ slug }: { slug?: string }) {
   const [, setLocation] = useLocation();
-  const branding = useTenant();
+  const defaultBranding = useTenant();
+
+  const { data: slugBranding } = useQuery<BrandingConfig>({
+    queryKey: ["/api/branding", { slug }],
+    queryFn: async () => {
+      const res = await fetch(`/api/branding?slug=${encodeURIComponent(slug!)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Tenant not found");
+      return res.json();
+    },
+    enabled: !!slug,
+    retry: false,
+  });
+
+  const branding = slug ? (slugBranding ?? defaultBranding) : defaultBranding;
+  const isTenantLogin = !!slug && !!slugBranding;
   const [loginType, setLoginType] = useState<"admin" | "client" | "preparer">("admin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -59,11 +75,11 @@ export default function Login() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-          <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-            <Truck className="w-4 h-4 text-primary-foreground" />
+        <a href={slug ? `/login/${slug}` : "/"} className="flex items-center gap-2" data-testid="link-logo">
+          <div className="flex items-center justify-center w-8 h-8 rounded-md" style={{ backgroundColor: branding.primaryColor || undefined }} >
+            <Truck className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold text-sm">{branding.companyName}</span>
+          <span className="font-semibold text-sm" data-testid="text-company-name">{branding.companyName}</span>
         </a>
         <ThemeToggle />
       </header>
