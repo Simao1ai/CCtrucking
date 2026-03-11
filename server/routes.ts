@@ -35,6 +35,7 @@ import { PassThrough } from "stream";
 import webpush from "web-push";
 import { generateInvoicePDF } from "./invoice-pdf";
 import { sendInvoiceEmail, sendSignatureEmail, sendNotarizationEmail } from "./tenant-email";
+import { createNotarizeTransaction, getNotarizeTransactionStatus, testNotarizeConnection, mapProofStatusToInternal } from "./notarize-service";
 import { brandingConfig } from "./branding-config";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule, getTenantPlan } from "./middleware/module-gates";
@@ -1979,6 +1980,193 @@ Contact name: ${client.contactName}`
 
     await audit(req, "updated", "notarization", n.id, `Updated notarization "${n.documentName}" — status: ${n.status}`);
     res.json(n);
+  });
+
+  app.post("/api/admin/notarizations/online", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { clientId, documentName, documentDescription, signerEmail, signerFirstName, signerLastName, notes } = req.body;
+
+      if (!clientId || !documentName || !signerEmail || !signerFirstName || !signerLastName) {
+        return res.status(400).json({ message: "Client, document name, signer email, and signer name are required." });
+      }
+
+      const transaction = await createNotarizeTransaction(tenantId, {
+        transactionName: documentName,
+        signerEmail,
+        signerFirstName,
+        signerLastName,
+        message: `Please complete the notarization for "${documentName}".`,
+      });
+
+      const n = await storage.createNotarization({
+        clientId,
+        documentName,
+        documentDescription: documentDescription || null,
+        notaryName: "Notarize.com (Remote)",
+        notaryCommission: null,
+        notarizationDate: null,
+        expirationDate: null,
+        status: "sent",
+        notes: notes || null,
+        performedBy: (req as any).dbUser?.id || null,
+        tenantId,
+        provider: "notarize",
+        externalTransactionId: transaction.id,
+        externalStatus: transaction.status || "sent",
+        signerEmail,
+        signerFirstName,
+        signerLastName,
+        signerLink: transaction.signer_link || null,
+        completedDocumentUrl: null,
+      });
+
+      try {
+        const client = await storage.getClient(clientId, tenantId);
+        if (client?.email) {
+          await sendNotarizationEmail({
+            to: client.email,
+            clientName: client.contactName || client.companyName,
+            documentName,
+            notaryName: "Notarize.com (Remote Online Notary)",
+            status: "sent",
+            tenantId,
+          });
+        }
+      } catch (emailErr) {
+        console.error("[Email] Failed to send notarization notification:", emailErr);
+      }
+
+      await audit(req, "created", "notarization", n.id, `Created online notarization "${documentName}" via Notarize.com (txn: ${transaction.id})`);
+      res.status(201).json(n);
+    } catch (error: any) {
+      console.error("[Notarize] Failed to create transaction:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/notarizations/:id/refresh-status", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const n = await storage.getNotarization(param(req, "id"), tenantId);
+      if (!n) return res.status(404).json({ message: "Notarization not found" });
+      if (n.provider !== "notarize" || !n.externalTransactionId) {
+        return res.status(400).json({ message: "This is not a Notarize.com transaction" });
+      }
+
+      const transaction = await getNotarizeTransactionStatus(tenantId, n.externalTransactionId);
+      const newStatus = mapProofStatusToInternal(transaction.status);
+
+      const completedDocUrl = transaction.documents?.find(d => d.document_url)?.document_url || null;
+
+      const updated = await storage.updateNotarization(n.id, {
+        externalStatus: transaction.status,
+        status: newStatus,
+        signerLink: transaction.signer_link || n.signerLink,
+        completedDocumentUrl: completedDocUrl || n.completedDocumentUrl,
+      }, tenantId);
+
+      if (newStatus !== n.status) {
+        try {
+          const client = await storage.getClient(n.clientId, tenantId);
+          if (client?.email) {
+            await sendNotarizationEmail({
+              to: client.email,
+              clientName: client.contactName || client.companyName,
+              documentName: n.documentName,
+              notaryName: "Notarize.com (Remote Online Notary)",
+              status: newStatus,
+              tenantId,
+            });
+          }
+        } catch (emailErr) {
+          console.error("[Email] Failed to send notarization update:", emailErr);
+        }
+      }
+
+      await audit(req, "refreshed", "notarization", n.id, `Refreshed Notarize.com status: ${transaction.status} → ${newStatus}`);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("[Notarize] Failed to refresh status:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/notary-settings", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const providerSetting = await storage.getTenantSetting(tenantId, "notary_provider");
+    const apiKeySetting = await storage.getTenantSetting(tenantId, "notarize_api_key");
+    res.json({
+      provider: providerSetting?.value || "in_house",
+      hasApiKey: !!apiKeySetting?.value,
+      apiKeyMasked: apiKeySetting?.value ? `${"•".repeat(8)}${apiKeySetting.value.slice(-4)}` : null,
+    });
+  });
+
+  app.post("/api/admin/notary-settings", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const dbUser = (req as any).dbUser;
+    const { provider, apiKey } = req.body;
+
+    if (provider) {
+      await storage.upsertTenantSetting(tenantId, "notary_provider", provider, "string", dbUser?.id);
+    }
+    if (apiKey !== undefined && apiKey !== null) {
+      if (apiKey === "") {
+        await storage.deleteTenantSetting(tenantId, "notarize_api_key");
+      } else {
+        await storage.upsertTenantSetting(tenantId, "notarize_api_key", apiKey, "secret", dbUser?.id);
+      }
+    }
+
+    await audit(req, "updated", "notary_settings", tenantId, `Updated notary settings — provider: ${provider || "unchanged"}`);
+    res.json({ success: true });
+  });
+
+  app.post("/api/admin/notary-settings/test", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { apiKey } = req.body;
+      if (!apiKey) {
+        const tenantId = (req as any).tenantId;
+        const setting = await storage.getTenantSetting(tenantId, "notarize_api_key");
+        if (!setting?.value) return res.status(400).json({ success: false, message: "No API key configured" });
+        const result = await testNotarizeConnection(setting.value);
+        return res.json(result);
+      }
+      const result = await testNotarizeConnection(apiKey);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  });
+
+  app.post("/api/webhooks/notarize", async (req, res) => {
+    try {
+      const { event, data } = req.body;
+      if (event === "transaction_status_update" && data?.transaction_id) {
+        const { db: dbInstance } = await import("./db");
+        const { notarizations: notarizationsTable } = await import("@shared/schema");
+        const { eq } = await import("drizzle-orm");
+
+        const [record] = await dbInstance.select().from(notarizationsTable)
+          .where(eq(notarizationsTable.externalTransactionId, data.transaction_id));
+
+        if (record) {
+          const newStatus = mapProofStatusToInternal(data.status);
+          await dbInstance.update(notarizationsTable)
+            .set({
+              externalStatus: data.status,
+              status: newStatus,
+            })
+            .where(eq(notarizationsTable.id, record.id));
+          console.log(`[Webhook] Notarize.com status update: ${record.id} → ${newStatus} (${data.status})`);
+        }
+      }
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error("[Webhook] Notarize.com error:", error);
+      res.status(200).json({ received: true });
+    }
   });
 
   app.get("/api/admin/audit-logs", isAuthenticated, isAdmin, async (req, res) => {

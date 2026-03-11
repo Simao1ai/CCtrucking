@@ -193,6 +193,14 @@ export const notarizations = pgTable("notarizations", {
   performedBy: varchar("performed_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   tenantId: varchar('tenant_id').references(() => tenants.id),
+  provider: text("provider").notNull().default("in_house"),
+  externalTransactionId: text("external_transaction_id"),
+  externalStatus: text("external_status"),
+  signerEmail: text("signer_email"),
+  signerFirstName: text("signer_first_name"),
+  signerLastName: text("signer_last_name"),
+  signerLink: text("signer_link"),
+  completedDocumentUrl: text("completed_document_url"),
 });
 
 export const auditLogs = pgTable("audit_logs", {

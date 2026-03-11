@@ -44,3 +44,11 @@ The backend uses Express.js with a RESTful API, backed by PostgreSQL and Drizzle
 All outbound emails (invoices, reminders, signature requests, notarization updates) are sent via the platform's SMTP connection but branded per-tenant. The `server/tenant-email.ts` module sets the tenant's company name as the "From Name" and the tenant's support email as the "Reply-To" header. Email sending is wrapped in try/catch so failures don't block the parent operation. Email types: invoice delivery (with PDF attachment), payment reminders (3 escalation levels), signature request notifications, and notarization status updates.
 
 SMTP configuration is managed via the Platform Admin > Email page (`/platform/email`), stored in the `platform_email_config` database table. The system supports Office365, Gmail, Amazon SES, and custom SMTP providers. Settings fall back to `SMTP_EMAIL` / `SMTP_PASSWORD` environment secrets if no database config exists. The transporter is cached and rebuilt only when settings change. The admin can test the connection and send a verification email from the settings page.
+
+### Dual Notarization System
+The notarization module supports two provider modes per tenant, configured via Admin > Notarizations > Settings:
+- **In-House Notary**: Manual tracking of on-site notarizations with notary name, commission number, dates, and status updates.
+- **Notarize.com (Remote Online)**: Integration with Notarize.com (Proof API at `api.proof.com/business/v1`). Creates remote notarization transactions where the signer receives an email link to complete the notarization via live video with a commissioned notary. Status syncs via manual refresh or webhook (`/api/webhooks/notarize`).
+- **Both**: Tenants can use either method depending on the situation.
+
+The `notarizations` table includes `provider` (in_house/notarize), `external_transaction_id`, `external_status`, `signer_email/first_name/last_name`, `signer_link`, and `completed_document_url` fields. API key for Notarize.com is stored in tenant settings as `notarize_api_key`. The integration service is at `server/notarize-service.ts`.
