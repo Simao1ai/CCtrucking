@@ -50,8 +50,35 @@ async function seedTransactionCategories() {
   console.log("Transaction categories seeded.");
 }
 
+async function ensurePlatformOwner() {
+  const [existing] = await db.select().from(users).where(eq(users.username, "platformadmin"));
+  if (existing) return;
+
+  const platformHash = await bcrypt.hash("platform123", 10);
+  await db.insert(users).values({
+    id: "platform-owner-001",
+    username: "platformadmin",
+    password: platformHash,
+    email: "admin@carrierdeskhq.com",
+    firstName: "Platform",
+    lastName: "Owner",
+    role: "platform_owner",
+  });
+  console.log("Platform owner user created.");
+}
+
+async function migrateLegacyAdminRole() {
+  const [adminUser] = await db.select().from(users).where(eq(users.username, "admin"));
+  if (adminUser && adminUser.role === "platform_owner") {
+    await db.update(users).set({ role: "tenant_owner" }).where(eq(users.id, adminUser.id));
+    console.log("Admin user migrated from platform_owner to tenant_owner.");
+  }
+}
+
 export async function seedDatabase() {
   await seedUsers();
+  await ensurePlatformOwner();
+  await migrateLegacyAdminRole();
   await seedServiceItems();
   await seedRecurringTemplates();
   await seedTransactionCategories();
