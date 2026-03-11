@@ -97,14 +97,6 @@ export function PortalSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/" data-testid="portal-nav-website">
-                    <Home className="w-4 h-4" />
-                    <span>Back to Website</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
                   <button
                     onClick={() => {
                       fetch("/api/auth/logout", { method: "POST", credentials: "include" })

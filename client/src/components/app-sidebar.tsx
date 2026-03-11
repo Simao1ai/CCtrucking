@@ -7,7 +7,6 @@ import {
   FileText,
   Receipt,
   LogOut,
-  Home,
   MessageCircle,
   UserCog,
   FileSpreadsheet,
@@ -191,14 +190,6 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/" data-testid="nav-website">
-                    <Home className="w-4 h-4" />
-                    <span>Back to Website</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <button
