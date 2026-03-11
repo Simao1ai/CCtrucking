@@ -30,7 +30,7 @@ export default function Login({ slug }: { slug?: string }) {
 
   const branding = slug ? (slugBranding ?? defaultBranding) : defaultBranding;
   const isTenantLogin = !!slug && !!slugBranding;
-  const [loginType, setLoginType] = useState<"admin" | "client" | "preparer">("admin");
+  const [loginType, setLoginType] = useState<"platform" | "admin" | "client" | "preparer">(isTenantLogin ? "admin" : "admin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -92,7 +92,9 @@ export default function Login({ slug }: { slug?: string }) {
         <Card className="w-full max-w-[360px]" data-testid="card-login">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-2">
-              {loginType === "admin" ? (
+              {loginType === "platform" ? (
+                <Building2 className="w-6 h-6 text-primary" />
+              ) : loginType === "admin" ? (
                 <ShieldCheck className="w-6 h-6 text-primary" />
               ) : loginType === "preparer" ? (
                 <Calculator className="w-6 h-6 text-primary" />
@@ -102,7 +104,9 @@ export default function Login({ slug }: { slug?: string }) {
             </div>
             <CardTitle className="text-xl">Sign In</CardTitle>
             <CardDescription>
-              {loginType === "admin"
+              {loginType === "platform"
+                ? "Sign in to the platform admin console"
+                : loginType === "admin"
                 ? "Sign in to manage operations and clients"
                 : loginType === "preparer"
                 ? "Sign in to access assigned client bookkeeping"
@@ -121,7 +125,7 @@ export default function Login({ slug }: { slug?: string }) {
                 <Label htmlFor="login-type">Login As</Label>
                 <Select
                   value={loginType}
-                  onValueChange={(val: "admin" | "client" | "preparer") => {
+                  onValueChange={(val: "platform" | "admin" | "client" | "preparer") => {
                     setLoginType(val);
                     setError("");
                   }}
@@ -130,6 +134,14 @@ export default function Login({ slug }: { slug?: string }) {
                     <SelectValue placeholder="Select login type" />
                   </SelectTrigger>
                   <SelectContent>
+                    {!isTenantLogin && (
+                      <SelectItem value="platform" data-testid="option-platform">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          <span>Platform Admin</span>
+                        </div>
+                      </SelectItem>
+                    )}
                     <SelectItem value="admin" data-testid="option-admin">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4" />
@@ -184,7 +196,7 @@ export default function Login({ slug }: { slug?: string }) {
                     Signing in...
                   </>
                 ) : (
-                  loginType === "admin" ? "Sign In as Admin" : loginType === "preparer" ? "Sign In as Tax Preparer" : "Sign In to Portal"
+                  loginType === "platform" ? "Sign In as Platform Admin" : loginType === "admin" ? "Sign In as Admin" : loginType === "preparer" ? "Sign In as Tax Preparer" : "Sign In to Portal"
                 )}
               </Button>
             </form>

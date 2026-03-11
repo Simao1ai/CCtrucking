@@ -3,7 +3,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { TenantProvider, useTenant, useTenantIcon } from "@/context/tenant-context";
+import { TenantProvider, useTenant } from "@/context/tenant-context";
+import { BrandLogo } from "@/components/brand-logo";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PortalSidebar } from "@/components/portal-sidebar";
@@ -221,16 +222,12 @@ function PlatformLayout({ children }: { children: React.ReactNode }) {
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
   const branding = useTenant();
-  const BrandIcon = useTenantIcon();
 
   return (
     <div className="min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-          <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-            <BrandIcon className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-sm">{branding.companyName}</span>
+        <a href="/" data-testid="link-logo">
+          <BrandLogo size="sm" variant="dark" />
         </a>
         <nav className="flex items-center gap-1">
           <a href="/" className="text-sm px-3 py-2 rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-home">Home</a>
