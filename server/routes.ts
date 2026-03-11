@@ -4543,6 +4543,105 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
+  app.get("/api/platform/email-config", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const config = await storage.getPlatformEmailConfig();
+      if (!config) {
+        const hasEnvCredentials = !!(process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD);
+        return res.json({
+          configured: false,
+          hasEnvCredentials,
+          config: null,
+        });
+      }
+      const safeConfig = {
+        ...config,
+        smtpPass: config.smtpPass ? "••••••••" : null,
+      };
+      return res.json({
+        configured: true,
+        hasEnvCredentials: !!(process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD),
+        config: safeConfig,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/email-config", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const { provider, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass, fromName, enabled } = req.body;
+
+      const updateData: any = {};
+      if (provider !== undefined) updateData.provider = provider;
+      if (smtpHost !== undefined) updateData.smtpHost = smtpHost;
+      if (smtpPort !== undefined) updateData.smtpPort = parseInt(smtpPort);
+      if (smtpSecure !== undefined) updateData.smtpSecure = smtpSecure;
+      if (smtpUser !== undefined) updateData.smtpUser = smtpUser;
+      if (smtpPass !== undefined && smtpPass !== "••••••••") updateData.smtpPass = smtpPass;
+      if (fromName !== undefined) updateData.fromName = fromName;
+      if (enabled !== undefined) updateData.enabled = enabled;
+
+      const config = await storage.upsertPlatformEmailConfig(updateData);
+      const safeConfig = { ...config, smtpPass: config.smtpPass ? "••••••••" : null };
+      res.json({ config: safeConfig });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/email-config/test", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const config = await storage.getPlatformEmailConfig();
+      const smtpUser = config?.smtpUser || process.env.SMTP_EMAIL;
+      const smtpPass = config?.smtpPass || process.env.SMTP_PASSWORD;
+      const smtpHost = config?.smtpHost || "smtp.office365.com";
+      const smtpPort = config?.smtpPort || 587;
+      const smtpSecure = config?.smtpSecure || false;
+
+      if (!smtpUser || !smtpPass) {
+        return res.status(400).json({ success: false, message: "SMTP credentials not configured. Please enter your SMTP username and password." });
+      }
+
+      const nodemailer = await import("nodemailer");
+      const testTransporter = nodemailer.default.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: { user: smtpUser, pass: smtpPass },
+        requireTLS: !smtpSecure,
+      });
+
+      await testTransporter.verify();
+
+      const testEmail = req.body.testEmail || smtpUser;
+      await testTransporter.sendMail({
+        from: `"${config?.fromName || 'CarrierDeskHQ'}" <${smtpUser}>`,
+        to: testEmail,
+        subject: "CarrierDeskHQ - Email Configuration Test",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px;">
+            <h2 style="color: #1e3a5f;">Email Configuration Successful</h2>
+            <p>Your CarrierDeskHQ platform email service is configured and working correctly.</p>
+            <p style="color: #64748b; font-size: 13px;">This is a test email sent from the Platform Admin settings.</p>
+          </div>
+        `,
+      });
+
+      if (config) {
+        await storage.updatePlatformEmailTestResult(config.id, "success");
+      }
+
+      res.json({ success: true, message: `Test email sent successfully to ${testEmail}` });
+    } catch (error: any) {
+      const config = await storage.getPlatformEmailConfig();
+      if (config) {
+        await storage.updatePlatformEmailTestResult(config.id, `failed: ${error.message}`);
+      }
+      res.status(400).json({ success: false, message: `Connection failed: ${error.message}` });
+    }
+  });
+
   app.get("/api/platform/ai-usage", isAuthenticated, isPlatformAdmin, async (req, res) => {
     try {
       const filterTenantId = req.query.tenantId as string | undefined;

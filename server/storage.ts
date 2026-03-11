@@ -7,8 +7,10 @@ import {
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes, knowledgeArticles,
   customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings,
+  platformEmailConfig,
   type Tenant, type InsertTenant, type TenantBranding, type InsertTenantBranding,
   type TenantSettings, type InsertTenantSettings,
+  type PlatformEmailConfig, type InsertPlatformEmailConfig,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -215,6 +217,10 @@ export interface IStorage {
   getTenantSetting(tenantId: string, key: string): Promise<TenantSettings | undefined>;
   upsertTenantSetting(tenantId: string, key: string, value: string, type?: string, updatedBy?: string): Promise<TenantSettings>;
   deleteTenantSetting(tenantId: string, key: string): Promise<void>;
+
+  getPlatformEmailConfig(): Promise<PlatformEmailConfig | undefined>;
+  upsertPlatformEmailConfig(data: Partial<InsertPlatformEmailConfig>): Promise<PlatformEmailConfig>;
+  updatePlatformEmailTestResult(id: string, result: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1198,6 +1204,30 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tenantSettings).where(
       and(eq(tenantSettings.tenantId, tenantId), eq(tenantSettings.key, key))
     );
+  }
+
+  async getPlatformEmailConfig(): Promise<PlatformEmailConfig | undefined> {
+    const [config] = await db.select().from(platformEmailConfig).limit(1);
+    return config;
+  }
+
+  async upsertPlatformEmailConfig(data: Partial<InsertPlatformEmailConfig>): Promise<PlatformEmailConfig> {
+    const existing = await this.getPlatformEmailConfig();
+    if (existing) {
+      const [updated] = await db.update(platformEmailConfig)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(platformEmailConfig.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(platformEmailConfig).values(data as InsertPlatformEmailConfig).returning();
+    return created;
+  }
+
+  async updatePlatformEmailTestResult(id: string, result: string): Promise<void> {
+    await db.update(platformEmailConfig)
+      .set({ lastTestedAt: new Date(), lastTestResult: result, updatedAt: new Date() })
+      .where(eq(platformEmailConfig.id, id));
   }
 }
 

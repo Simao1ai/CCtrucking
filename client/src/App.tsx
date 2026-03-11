@@ -63,6 +63,7 @@ import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
 import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
 import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
 import PlatformHealth from "@/pages/platform-health";
+import PlatformEmail from "@/pages/platform-email";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -382,6 +383,9 @@ function App() {
           </Route>
           <Route path="/platform/ai-usage">
             <PlatformLayout><PlatformAIUsage /></PlatformLayout>
+          </Route>
+          <Route path="/platform/email">
+            <PlatformLayout><PlatformEmail /></PlatformLayout>
           </Route>
           <Route path="/platform/health">
             <PlatformLayout><PlatformHealth /></PlatformLayout>

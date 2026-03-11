@@ -7,6 +7,7 @@ import {
   Activity,
   LogOut,
   Shield,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { title: "Tenants", url: "/platform/tenants", icon: Building2 },
   { title: "Analytics", url: "/platform/analytics", icon: BarChart3 },
   { title: "AI Usage", url: "/platform/ai-usage", icon: Brain },
+  { title: "Email", url: "/platform/email", icon: Mail },
   { title: "Health", url: "/platform/health", icon: Activity },
 ];
 

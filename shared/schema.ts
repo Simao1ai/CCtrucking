@@ -568,3 +568,30 @@ export type AiUsageLog = typeof aiUsageLogs.$inferSelect;
 export type InsertAiUsageLog = z.infer<typeof insertAiUsageLogSchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+
+export const platformEmailConfig = pgTable("platform_email_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: text("provider").notNull().default("office365"),
+  smtpHost: text("smtp_host").notNull().default("smtp.office365.com"),
+  smtpPort: integer("smtp_port").notNull().default(587),
+  smtpSecure: boolean("smtp_secure").notNull().default(false),
+  smtpUser: text("smtp_user"),
+  smtpPass: text("smtp_pass"),
+  fromName: text("from_name").default("CarrierDeskHQ"),
+  enabled: boolean("enabled").notNull().default(false),
+  lastTestedAt: timestamp("last_tested_at"),
+  lastTestResult: text("last_test_result"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPlatformEmailConfigSchema = createInsertSchema(platformEmailConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastTestedAt: true,
+  lastTestResult: true,
+});
+
+export type PlatformEmailConfig = typeof platformEmailConfig.$inferSelect;
+export type InsertPlatformEmailConfig = z.infer<typeof insertPlatformEmailConfigSchema>;

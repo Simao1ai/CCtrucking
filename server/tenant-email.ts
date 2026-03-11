@@ -29,16 +29,35 @@ async function getTenantBranding(tenantId?: string): Promise<TenantBranding> {
   };
 }
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.office365.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD,
-  },
-  requireTLS: true,
-});
+let _cachedTransporter: nodemailer.Transporter | null = null;
+let _cachedConfigHash: string | null = null;
+
+async function getTransporter(): Promise<nodemailer.Transporter> {
+  const config = await storage.getPlatformEmailConfig();
+
+  const smtpUser = config?.smtpUser || process.env.SMTP_EMAIL;
+  const smtpPass = config?.smtpPass || process.env.SMTP_PASSWORD;
+  const smtpHost = config?.smtpHost || "smtp.office365.com";
+  const smtpPort = config?.smtpPort || 587;
+  const smtpSecure = config?.smtpSecure || false;
+
+  const configHash = `${smtpHost}:${smtpPort}:${smtpUser}:${smtpSecure}`;
+
+  if (_cachedTransporter && _cachedConfigHash === configHash) {
+    return _cachedTransporter;
+  }
+
+  _cachedTransporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: { user: smtpUser, pass: smtpPass },
+    requireTLS: !smtpSecure,
+  });
+  _cachedConfigHash = configHash;
+
+  return _cachedTransporter;
+}
 
 function emailWrapper(branding: TenantBranding, subtitle: string, bodyHtml: string): string {
   return `
@@ -66,15 +85,19 @@ async function sendEmail(opts: {
   branding: TenantBranding;
   attachments?: { filename: string; content: Buffer; contentType: string }[];
 }): Promise<void> {
-  const fromEmail = process.env.SMTP_EMAIL;
-  if (!fromEmail || !process.env.SMTP_PASSWORD) {
-    throw new Error("Email credentials not configured. Set SMTP_EMAIL and SMTP_PASSWORD.");
+  const config = await storage.getPlatformEmailConfig();
+  const fromEmail = config?.smtpUser || process.env.SMTP_EMAIL;
+
+  if (!fromEmail) {
+    throw new Error("Email not configured. Go to Platform Admin > Email to set up your email service.");
   }
 
+  const transporter = await getTransporter();
   const replyTo = opts.branding.supportEmail || undefined;
+  const fromName = opts.branding.companyName || config?.fromName || "CarrierDeskHQ";
 
   await transporter.sendMail({
-    from: `"${opts.branding.companyName}" <${fromEmail}>`,
+    from: `"${fromName}" <${fromEmail}>`,
     replyTo: replyTo || undefined,
     to: opts.to,
     subject: opts.subject,
