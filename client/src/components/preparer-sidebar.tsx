@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,10 +29,13 @@ export function PreparerSidebar() {
   const IconMap: Record<string, typeof Truck> = { Truck, Building2, Briefcase };
   const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
 
+  const { setOpenMobile } = useSidebar();
+  const closeMobile = () => setOpenMobile(false);
+
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/preparer" data-testid="link-preparer-home">
+        <Link href="/preparer" data-testid="link-preparer-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
             <BrandLogo size="sm" variant="light" />
           </div>
@@ -49,7 +53,7 @@ export function PreparerSidebar() {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild data-active={isActive}>
-                      <Link href={item.url} data-testid={`preparer-nav-${item.title.toLowerCase()}`}>
+                      <Link href={item.url} onClick={closeMobile} data-testid={`preparer-nav-${item.title.toLowerCase()}`}>
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </Link>

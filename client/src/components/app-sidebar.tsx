@@ -42,6 +42,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -118,14 +119,13 @@ const navGroups: NavGroup[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const branding = useTenant();
-  const IconMap: Record<string, LucideIcon> = { Truck, Building2, Briefcase };
-  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
+  const { setOpenMobile } = useSidebar();
+  const closeMobile = () => setOpenMobile(false);
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/admin" data-testid="link-admin-home">
+        <Link href="/admin" data-testid="link-admin-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
             <BrandLogo size="sm" variant="light" />
           </div>
@@ -156,6 +156,7 @@ export function AppSidebar() {
                           <SidebarMenuButton asChild data-active={isActive}>
                             <Link
                               href={item.url}
+                              onClick={closeMobile}
                               data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                             >
                               <item.icon className="w-4 h-4" />
@@ -178,7 +179,7 @@ export function AppSidebar() {
               {user?.role && ["platform_owner", "platform_admin"].includes(user.role) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <Link href="/platform" data-testid="nav-platform-admin">
+                    <Link href="/platform" onClick={closeMobile} data-testid="nav-platform-admin">
                       <Shield className="w-4 h-4" />
                       <span>Platform Admin</span>
                     </Link>

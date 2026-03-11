@@ -13,6 +13,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,7 +39,7 @@ const communicationNavItems = [
   { title: "Messages", url: "/portal/chat", icon: MessageCircle },
 ];
 
-function NavGroup({ label, items, location }: { label: string; items: typeof mainNavItems; location: string }) {
+function NavGroup({ label, items, location, onNavClick }: { label: string; items: typeof mainNavItems; location: string; onNavClick: () => void }) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -51,7 +52,7 @@ function NavGroup({ label, items, location }: { label: string; items: typeof mai
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton asChild data-active={isActive}>
-                  <Link href={item.url} data-testid={`portal-nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <Link href={item.url} onClick={onNavClick} data-testid={`portal-nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                     <item.icon className="w-4 h-4" />
                     <span>{item.title}</span>
                   </Link>
@@ -68,24 +69,23 @@ function NavGroup({ label, items, location }: { label: string; items: typeof mai
 export function PortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const branding = useTenant();
-  const IconMap: Record<string, typeof Truck> = { Truck, Building2, Briefcase };
-  const BrandIcon = IconMap[branding.sidebarIconName] || Truck;
+  const { setOpenMobile } = useSidebar();
+  const closeMobile = () => setOpenMobile(false);
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/portal" data-testid="link-portal-home">
+        <Link href="/portal" data-testid="link-portal-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
             <BrandLogo size="sm" variant="light" />
           </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <NavGroup label="Overview" items={mainNavItems} location={location} />
-        <NavGroup label="Documents" items={docsNavItems} location={location} />
-        <NavGroup label="Financial" items={financialNavItems} location={location} />
-        <NavGroup label="Communication" items={communicationNavItems} location={location} />
+        <NavGroup label="Overview" items={mainNavItems} location={location} onNavClick={closeMobile} />
+        <NavGroup label="Documents" items={docsNavItems} location={location} onNavClick={closeMobile} />
+        <NavGroup label="Financial" items={financialNavItems} location={location} onNavClick={closeMobile} />
+        <NavGroup label="Communication" items={communicationNavItems} location={location} onNavClick={closeMobile} />
         <SidebarSeparator />
         <SidebarGroup>
           <SidebarGroupContent>

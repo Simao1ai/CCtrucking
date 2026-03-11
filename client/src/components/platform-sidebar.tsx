@@ -20,6 +20,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -42,11 +43,13 @@ const navItems: NavItem[] = [
 export function PlatformSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { setOpenMobile } = useSidebar();
+  const closeMobile = () => setOpenMobile(false);
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/platform" data-testid="link-platform-home">
+        <Link href="/platform" data-testid="link-platform-home" onClick={closeMobile}>
           <div className="flex items-center gap-2">
             <BrandLogo size="sm" variant="light" />
           </div>
@@ -66,6 +69,7 @@ export function PlatformSidebar() {
                     <SidebarMenuButton asChild data-active={isActive}>
                       <Link
                         href={item.url}
+                        onClick={closeMobile}
                         data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                       >
                         <item.icon className="w-4 h-4" />
