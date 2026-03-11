@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { invoices, clients, tenants } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { sendReminderEmail } from "./invoice-email";
+import { sendReminderEmail } from "./tenant-email";
 
 export async function checkAndSendReminders() {
   try {
@@ -53,6 +53,7 @@ export async function checkAndSendReminders() {
           amount: String(invoice.amount),
           dueDate: String(invoice.dueDate),
           level,
+          tenantId: invoice.tenantId || undefined,
         });
 
         await db

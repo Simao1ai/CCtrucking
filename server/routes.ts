@@ -34,7 +34,7 @@ import fs from "fs";
 import { PassThrough } from "stream";
 import webpush from "web-push";
 import { generateInvoicePDF } from "./invoice-pdf";
-import { sendInvoiceEmail } from "./invoice-email";
+import { sendInvoiceEmail, sendSignatureEmail, sendNotarizationEmail } from "./tenant-email";
 import { brandingConfig } from "./branding-config";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule, getTenantPlan } from "./middleware/module-gates";
@@ -1331,6 +1331,7 @@ Contact name: ${client.contactName}`
         amount: String(invoice.amount),
         dueDate: invoice.dueDate ? String(invoice.dueDate) : null,
         pdfBuffer,
+        tenantId,
       });
 
       if (invoice.status === "draft") {
@@ -1616,6 +1617,21 @@ Contact name: ${client.contactName}`
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       const sigReq = await storage.createSignatureRequest(parsed.data);
       notifyClientUsers(sigReq.clientId, "Document to Sign", `"${sigReq.documentName}" needs your signature.`, "signature", "/portal/signatures", tenantId);
+
+      try {
+        const client = await storage.getClient(sigReq.clientId, tenantId);
+        if (client?.email) {
+          await sendSignatureEmail({
+            to: client.email,
+            clientName: client.contactName || client.companyName,
+            documentName: sigReq.documentName,
+            tenantId,
+          });
+        }
+      } catch (emailErr) {
+        console.error("[Email] Failed to send signature notification:", emailErr);
+      }
+
       res.status(201).json(sigReq);
     } catch (error) {
       console.error("Create signature request error:", error);
@@ -1637,7 +1653,7 @@ Contact name: ${client.contactName}`
       if (!sigReq) return res.status(404).json({ message: "Not found" });
       if (sigReq.status === "signed") return res.status(400).json({ message: "Document already signed" });
 
-      const client = await storage.getClient(sigReq.clientId);
+      const client = await storage.getClient(sigReq.clientId, tenantId);
       if (!client) return res.status(404).json({ message: "Client not found" });
 
       const { method } = req.body;
@@ -1645,16 +1661,23 @@ Contact name: ${client.contactName}`
       let reminderMethod = validMethods.includes(method) ? method : "email";
       let reminderSent = false;
 
-      if (reminderMethod === "email" && client.email) {
-        console.log(`[REMINDER] Email sent to ${client.email} for document "${sigReq.documentName}"`);
+      if ((reminderMethod === "email" || reminderMethod === "both") && client.email) {
+        try {
+          await sendSignatureEmail({
+            to: client.email,
+            clientName: client.contactName || client.companyName,
+            documentName: sigReq.documentName,
+            tenantId,
+          });
+          console.log(`[REMINDER] Email sent to ${client.email} for document "${sigReq.documentName}"`);
+          reminderSent = true;
+        } catch (emailErr) {
+          console.error("[Email] Failed to send signature reminder:", emailErr);
+        }
+      }
+      if ((reminderMethod === "sms" || reminderMethod === "both") && client.phone) {
+        console.log(`[REMINDER] SMS placeholder for ${client.phone} — document "${sigReq.documentName}"`);
         reminderSent = true;
-      } else if (reminderMethod === "sms" && client.phone) {
-        console.log(`[REMINDER] SMS sent to ${client.phone} for document "${sigReq.documentName}"`);
-        reminderSent = true;
-      } else if (reminderMethod === "both") {
-        if (client.email) console.log(`[REMINDER] Email sent to ${client.email} for document "${sigReq.documentName}"`);
-        if (client.phone) console.log(`[REMINDER] SMS sent to ${client.phone} for document "${sigReq.documentName}"`);
-        reminderSent = !!(client.email || client.phone);
       }
 
       if (reminderSent) {
@@ -1870,6 +1893,21 @@ Contact name: ${client.contactName}`
     });
     await storage.updateFilledForm(form.id, { status: "sent_for_signature", signatureRequestId: sigReq.id });
     await notifyClientUsers(form.clientId, "Document Ready for Signature", `"${form.name}" is ready for your signature.`, "signature", "/portal/signatures", tenantId);
+
+    try {
+      const client = await storage.getClient(form.clientId, tenantId);
+      if (client?.email) {
+        await sendSignatureEmail({
+          to: client.email,
+          clientName: client.contactName || client.companyName,
+          documentName: form.name,
+          tenantId,
+        });
+      }
+    } catch (emailErr) {
+      console.error("[Email] Failed to send signature notification:", emailErr);
+    }
+
     await audit(req, "sent_for_signature", "filled_form", form.id, `Sent "${form.name}" for signature (sig request ${sigReq.id})`);
     res.json({ signatureRequest: sigReq });
   });
@@ -1892,13 +1930,53 @@ Contact name: ${client.contactName}`
     const parsed = insertNotarizationSchema.safeParse({ ...req.body, tenantId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const n = await storage.createNotarization(parsed.data);
+
+    try {
+      const client = await storage.getClient(n.clientId, tenantId);
+      if (client?.email) {
+        await sendNotarizationEmail({
+          to: client.email,
+          clientName: client.contactName || client.companyName,
+          documentName: n.documentName,
+          notaryName: n.notaryName,
+          status: n.status,
+          notarizationDate: n.notarizationDate ? String(n.notarizationDate) : null,
+          tenantId,
+        });
+      }
+    } catch (emailErr) {
+      console.error("[Email] Failed to send notarization notification:", emailErr);
+    }
+
     await audit(req, "created", "notarization", n.id, `Created notarization "${n.documentName}" for client ${n.clientId}, notary: ${n.notaryName}`);
     res.status(201).json(n);
   });
 
   app.patch("/api/admin/notarizations/:id", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
-    const n = await storage.updateNotarization(param(req, "id"), stripTenantId(req.body));
+    const tenantId = (req as any).tenantId;
+    const n = await storage.updateNotarization(param(req, "id"), stripTenantId(req.body), tenantId);
     if (!n) return res.status(404).json({ message: "Notarization not found" });
+
+    const statusChanged = req.body.status && ["scheduled", "completed", "cancelled"].includes(req.body.status);
+    if (statusChanged) {
+      try {
+        const client = await storage.getClient(n.clientId, tenantId);
+        if (client?.email) {
+          await sendNotarizationEmail({
+            to: client.email,
+            clientName: client.contactName || client.companyName,
+            documentName: n.documentName,
+            notaryName: n.notaryName,
+            status: n.status,
+            notarizationDate: n.notarizationDate ? String(n.notarizationDate) : null,
+            tenantId,
+          });
+        }
+      } catch (emailErr) {
+        console.error("[Email] Failed to send notarization update email:", emailErr);
+      }
+    }
+
     await audit(req, "updated", "notarization", n.id, `Updated notarization "${n.documentName}" — status: ${n.status}`);
     res.json(n);
   });

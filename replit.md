@@ -39,3 +39,6 @@ The backend uses Express.js with a RESTful API, backed by PostgreSQL and Drizzle
 - **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization.
 - **Google Cloud (googleapis)**: Integrated for Google Sheets functionality.
 - **Stripe**: Scaffolded for future subscription billing integration.
+
+### Tenant-Aware Email System
+All outbound emails (invoices, reminders, signature requests, notarization updates) are sent via the platform's Office365 SMTP credentials but branded per-tenant. The `server/tenant-email.ts` module sets the tenant's company name as the "From Name" and the tenant's support email as the "Reply-To" header. Email sending is wrapped in try/catch so failures don't block the parent operation. Email types: invoice delivery (with PDF attachment), payment reminders (3 escalation levels), signature request notifications, and notarization status updates.
