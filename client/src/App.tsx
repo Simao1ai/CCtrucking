@@ -132,21 +132,24 @@ function PortalLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={sidebarStyle}>
-      <div className="flex h-screen w-full">
-        <PortalSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <SidebarTrigger data-testid="button-portal-sidebar-toggle" />
-            <div className="flex items-center gap-1">
-              <NotificationBell basePath="/portal" />
-              <ThemeToggle />
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
+      <div className="flex flex-col h-screen w-full">
+        <ImpersonationBanner />
+        <div className="flex flex-1 min-h-0">
+          <PortalSidebar />
+          <div className="flex flex-col flex-1 min-w-0">
+            <header className="flex items-center justify-between gap-2 p-2 border-b">
+              <SidebarTrigger data-testid="button-portal-sidebar-toggle" />
+              <div className="flex items-center gap-1">
+                <NotificationBell basePath="/portal" />
+                <ThemeToggle />
+              </div>
+            </header>
+            <main className="flex-1 overflow-auto">
+              {children}
+            </main>
+          </div>
+          <PortalAiChatWidget />
         </div>
-        <PortalAiChatWidget />
       </div>
     </SidebarProvider>
   );
@@ -171,19 +174,22 @@ function PreparerLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={sidebarStyle}>
-      <div className="flex h-screen w-full">
-        <PreparerSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <SidebarTrigger data-testid="button-preparer-sidebar-toggle" />
-            <div className="flex items-center gap-1">
-              <NotificationBell basePath="/preparer" />
-              <ThemeToggle />
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
+      <div className="flex flex-col h-screen w-full">
+        <ImpersonationBanner />
+        <div className="flex flex-1 min-h-0">
+          <PreparerSidebar />
+          <div className="flex flex-col flex-1 min-w-0">
+            <header className="flex items-center justify-between gap-2 p-2 border-b">
+              <SidebarTrigger data-testid="button-preparer-sidebar-toggle" />
+              <div className="flex items-center gap-1">
+                <NotificationBell basePath="/preparer" />
+                <ThemeToggle />
+              </div>
+            </header>
+            <main className="flex-1 overflow-auto">
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     </SidebarProvider>

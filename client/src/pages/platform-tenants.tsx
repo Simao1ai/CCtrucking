@@ -70,6 +70,33 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+interface TenantUser {
+  id: string;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role: string;
+  createdAt: string;
+}
+
+interface TenantDetail {
+  tenant: PlatformTenant;
+  users: TenantUser[];
+  clientCount: number;
+  branding: any;
+  settings: any[];
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  tenant_owner: "Owner",
+  owner: "Owner",
+  tenant_admin: "Admin",
+  admin: "Admin",
+  client: "Client",
+  preparer: "Preparer",
+};
+
 function TenantDetailDialog({
   tenant,
   open,
@@ -90,6 +117,11 @@ function TenantDetailDialog({
     },
   });
 
+  const { data: tenantDetail, isLoading: detailLoading } = useQuery<TenantDetail>({
+    queryKey: ["/api/platform/tenants", tenant?.id],
+    enabled: !!tenant?.id && open,
+  });
+
   const mutation = useMutation({
     mutationFn: async (data: TenantFormValues) => {
       await apiRequest("PATCH", `/api/platform/tenants/${tenant?.id}`, data);
@@ -105,17 +137,38 @@ function TenantDetailDialog({
     },
   });
 
+  const impersonateUserMutation = useMutation({
+    mutationFn: async ({ tenantId, userId }: { tenantId: string; userId: string }) => {
+      await apiRequest("POST", `/api/platform/impersonate/${tenantId}`, { userId });
+    },
+    onSuccess: () => {
+      toast({ title: "Impersonating user", description: "Session switched." });
+      window.location.reload();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const tenantUsers = tenantDetail?.users || [];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="dialog-tenant-detail">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-tenant-detail">
         <DialogHeader>
-          <DialogTitle data-testid="text-dialog-title">Edit Tenant</DialogTitle>
+          <DialogTitle data-testid="text-dialog-title">Manage Tenant</DialogTitle>
         </DialogHeader>
         {tenant && (
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs text-muted-foreground">Slug</Label>
-              <p className="text-sm font-medium" data-testid="text-tenant-slug">{tenant.slug}</p>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Slug</Label>
+                <p className="text-sm font-medium" data-testid="text-tenant-slug">{tenant.slug}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Users / Clients</Label>
+                <p className="text-sm font-medium">{tenantUsers.length} users, {tenantDetail?.clientCount ?? tenant.clientCount ?? 0} clients</p>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tenant-name">Name</Label>
@@ -128,38 +181,40 @@ function TenantDetailDialog({
                 <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tenant-plan">Plan</Label>
-              <Select
-                value={form.watch("plan")}
-                onValueChange={(v) => form.setValue("plan", v as TenantFormValues["plan"])}
-              >
-                <SelectTrigger data-testid="select-tenant-plan">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tenant-status">Status</Label>
-              <Select
-                value={form.watch("status")}
-                onValueChange={(v) => form.setValue("status", v as TenantFormValues["status"])}
-              >
-                <SelectTrigger data-testid="select-tenant-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="tenant-plan">Plan</Label>
+                <Select
+                  value={form.watch("plan")}
+                  onValueChange={(v) => form.setValue("plan", v as TenantFormValues["plan"])}
+                >
+                  <SelectTrigger data-testid="select-tenant-plan">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="basic">Basic</SelectItem>
+                    <SelectItem value="pro">Pro</SelectItem>
+                    <SelectItem value="enterprise">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tenant-status">Status</Label>
+                <Select
+                  value={form.watch("status")}
+                  onValueChange={(v) => form.setValue("status", v as TenantFormValues["status"])}
+                >
+                  <SelectTrigger data-testid="select-tenant-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tenant-email">Contact Email</Label>
@@ -170,6 +225,64 @@ function TenantDetailDialog({
               />
               {form.formState.errors.contactEmail && (
                 <p className="text-xs text-destructive">{form.formState.errors.contactEmail.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Users in this Tenant</Label>
+              {detailLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : tenantUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No users found in this tenant.</p>
+              ) : (
+                <div className="rounded-md border overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tenantUsers.map((u) => (
+                        <TableRow key={u.id} data-testid={`row-tenant-user-${u.id}`}>
+                          <TableCell>
+                            <div>
+                              <span className="font-medium text-sm" data-testid={`text-user-name-${u.id}`}>
+                                {u.firstName || u.lastName
+                                  ? `${u.firstName || ""} ${u.lastName || ""}`.trim()
+                                  : u.username}
+                              </span>
+                              <span className="text-xs text-muted-foreground ml-2">@{u.username}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" data-testid={`badge-user-role-${u.id}`}>
+                              {ROLE_LABELS[u.role] || u.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{u.email || "—"}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-testid={`button-impersonate-user-${u.id}`}
+                              onClick={() => impersonateUserMutation.mutate({ tenantId: tenant.id, userId: u.id })}
+                              disabled={impersonateUserMutation.isPending}
+                            >
+                              <UserCog className="w-3.5 h-3.5 mr-1" />
+                              Impersonate
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </div>
           </div>

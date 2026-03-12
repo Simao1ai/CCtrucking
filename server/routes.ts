@@ -5332,23 +5332,33 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       if (!tenant) return res.status(404).json({ message: "Tenant not found" });
 
       let targetUser = null;
+      const specificUserId = req.body?.userId;
 
-      if (tenant.ownerUserId) {
-        const [ownerUser] = await db.select().from(users).where(eq(users.id, tenant.ownerUserId));
-        if (ownerUser) targetUser = ownerUser;
+      if (specificUserId) {
+        const [specificUser] = await db.select().from(users).where(eq(users.id, specificUserId));
+        if (specificUser && specificUser.tenantId === targetTenantId) {
+          targetUser = specificUser;
+        } else {
+          return res.status(400).json({ message: "User not found in target tenant" });
+        }
+      } else {
+        if (tenant.ownerUserId) {
+          const [ownerUser] = await db.select().from(users).where(eq(users.id, tenant.ownerUserId));
+          if (ownerUser) targetUser = ownerUser;
+        }
+
+        if (!targetUser) {
+          const tenantUsers = await db.select().from(users).where(eq(users.tenantId, targetTenantId));
+          targetUser = tenantUsers.find(u => u.role === "owner") ||
+                       tenantUsers.find(u => u.role === "tenant_owner") ||
+                       tenantUsers.find(u => u.role === "admin") ||
+                       tenantUsers.find(u => u.role === "tenant_admin") ||
+                       null;
+        }
       }
 
       if (!targetUser) {
-        const tenantUsers = await db.select().from(users).where(eq(users.tenantId, targetTenantId));
-        targetUser = tenantUsers.find(u => u.role === "owner") ||
-                     tenantUsers.find(u => u.role === "tenant_owner") ||
-                     tenantUsers.find(u => u.role === "admin") ||
-                     tenantUsers.find(u => u.role === "tenant_admin") ||
-                     null;
-      }
-
-      if (!targetUser) {
-        return res.status(404).json({ message: "No owner or admin user found in target tenant" });
+        return res.status(404).json({ message: "No user found in target tenant" });
       }
 
       (req.session as any).impersonation = {
