@@ -23,7 +23,7 @@ import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
-import { users } from "@shared/schema";
+import { users, insertPlatformSettingsSchema, insertSecuritySettingsSchema, insertPlatformAnnouncementSchema } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, desc, gte, and, like, count, sum, lte } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -4885,6 +4885,227 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         perTenant,
         dailyTrend,
       });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Platform Settings ====================
+  app.get("/api/platform/settings", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getPlatformSettings();
+      res.json(settings || null);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/settings", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const parsed = insertPlatformSettingsSchema.partial().parse(req.body);
+      const settings = await storage.upsertPlatformSettings(parsed);
+      await storage.createAuditLog({
+        userId: (req as any).dbUser?.id,
+        userName: (req as any).dbUser?.username,
+        action: "update",
+        entityType: "platform_settings",
+        entityId: settings.id,
+        details: "Updated platform settings",
+      });
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Security Settings ====================
+  app.get("/api/platform/security", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getSecuritySettings();
+      res.json(settings || null);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/security", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const parsed = insertSecuritySettingsSchema.partial().parse(req.body);
+      const settings = await storage.upsertSecuritySettings(parsed);
+      await storage.createAuditLog({
+        userId: (req as any).dbUser?.id,
+        userName: (req as any).dbUser?.username,
+        action: "update",
+        entityType: "security_settings",
+        entityId: settings.id,
+        details: "Updated security settings",
+      });
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Audit Log ====================
+  app.get("/api/platform/audit-logs", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const filters = {
+        tenantId: req.query.tenantId as string | undefined,
+        userId: req.query.userId as string | undefined,
+        action: req.query.action as string | undefined,
+        entityType: req.query.entityType as string | undefined,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 50,
+        offset: req.query.offset ? parseInt(req.query.offset as string) : 0,
+      };
+      const result = await storage.getAuditLogsFiltered(filters);
+      const allTenants = await storage.getAllTenants();
+      res.json({ ...result, tenants: allTenants.map(t => ({ id: t.id, name: t.name })) });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Announcements ====================
+  app.get("/api/platform/announcements", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const announcements = await storage.getPlatformAnnouncements();
+      res.json(announcements);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/platform/announcements", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const parsed = insertPlatformAnnouncementSchema.omit({ createdBy: true }).parse(req.body);
+      const announcement = await storage.createPlatformAnnouncement({
+        ...parsed,
+        createdBy: (req as any).dbUser?.id,
+      });
+      await storage.createAuditLog({
+        userId: (req as any).dbUser?.id,
+        userName: (req as any).dbUser?.username,
+        action: "create",
+        entityType: "announcement",
+        entityId: announcement.id,
+        details: `Created announcement: ${announcement.title}`,
+      });
+      res.status(201).json(announcement);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/platform/announcements/:id", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const parsed = insertPlatformAnnouncementSchema.partial().parse(req.body);
+      const announcement = await storage.updatePlatformAnnouncement(req.params.id, parsed);
+      if (!announcement) return res.status(404).json({ message: "Announcement not found" });
+      res.json(announcement);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/platform/announcements/:id", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      await storage.deletePlatformAnnouncement(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Backup & Export ====================
+  app.get("/api/platform/export/:type", isAuthenticated, isPlatformAdmin, async (req, res) => {
+    try {
+      const exportType = req.params.type;
+      let csvContent = "";
+      let filename = "";
+
+      const csvEscape = (val: any): string => {
+        const str = String(val ?? "");
+        const sanitized = str.replace(/^[=+\-@\t\r]/g, "'$&");
+        return `"${sanitized.replace(/"/g, '""')}"`;
+      };
+      const csvRow = (...vals: any[]) => vals.map(csvEscape).join(",") + "\n";
+
+      if (exportType === "tenants") {
+        const allTenants = await storage.getAllTenants();
+        csvContent = "ID,Name,Slug,Status,Plan,Contact Email,Industry,Created At\n";
+        allTenants.forEach(t => {
+          csvContent += csvRow(t.id, t.name, t.slug, t.status, t.plan, t.contactEmail, t.industry, t.createdAt);
+        });
+        filename = `tenants_export_${new Date().toISOString().split('T')[0]}.csv`;
+      } else if (exportType === "users") {
+        const allUsers = await db.select().from(users);
+        csvContent = "ID,Username,Email,First Name,Last Name,Role,Tenant ID,Created At\n";
+        allUsers.forEach((u: any) => {
+          csvContent += csvRow(u.id, u.username, u.email, u.firstName, u.lastName, u.role, u.tenantId, u.createdAt);
+        });
+        filename = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+      } else if (exportType === "audit-logs") {
+        const result = await storage.getAuditLogsFiltered({ limit: 10000 });
+        csvContent = "ID,User,Action,Entity Type,Entity ID,Details,Tenant ID,Created At\n";
+        result.logs.forEach(l => {
+          csvContent += csvRow(l.id, l.userName, l.action, l.entityType, l.entityId, l.details, l.tenantId, l.createdAt);
+        });
+        filename = `audit_logs_export_${new Date().toISOString().split('T')[0]}.csv`;
+      } else if (exportType === "revenue") {
+        const allTenants = await storage.getAllTenants();
+        const invoiceData: any[] = [];
+        for (const t of allTenants) {
+          const invoices = await storage.getInvoices(t.id);
+          invoices.forEach(inv => {
+            invoiceData.push({ tenant: t.name, ...inv });
+          });
+        }
+        csvContent = "Tenant,Invoice Number,Client ID,Status,Amount,Due Date,Created At\n";
+        invoiceData.forEach(inv => {
+          csvContent += csvRow(inv.tenant, inv.invoiceNumber, inv.clientId, inv.status, inv.total || inv.amount || "0", inv.dueDate, inv.createdAt);
+        });
+        filename = `revenue_export_${new Date().toISOString().split('T')[0]}.csv`;
+      } else {
+        return res.status(400).json({ message: "Invalid export type" });
+      }
+
+      await storage.createAuditLog({
+        userId: (req as any).dbUser?.id,
+        userName: (req as any).dbUser?.username,
+        action: "export",
+        entityType: "data_export",
+        entityId: exportType,
+        details: `Exported ${exportType} data as CSV`,
+      });
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csvContent);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==================== Active Announcements (for tenant users) ====================
+  app.get("/api/announcements/active", isAuthenticated, async (req, res) => {
+    try {
+      const all = await storage.getPlatformAnnouncements();
+      const now = new Date();
+      const userRole = (req as any).dbUser?.role || "";
+      const isAdmin = ["platform_owner", "platform_admin", "tenant_owner", "tenant_admin", "admin", "owner"].includes(userRole);
+      const isClient = userRole === "client";
+
+      const active = all.filter(a => {
+        if (!a.isActive) return false;
+        if (a.startsAt && new Date(a.startsAt) > now) return false;
+        if (a.expiresAt && new Date(a.expiresAt) < now) return false;
+        if (a.targetAudience === "admins" && !isAdmin) return false;
+        if (a.targetAudience === "clients" && !isClient) return false;
+        return true;
+      });
+      res.json(active);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

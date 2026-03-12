@@ -64,6 +64,11 @@ import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
 import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
 import PlatformHealth from "@/pages/platform-health";
 import PlatformEmail from "@/pages/platform-email";
+import PlatformSettingsPage from "@/pages/platform-settings";
+import PlatformSecurityPage from "@/pages/platform-security";
+import PlatformAuditLogPage from "@/pages/platform-audit-log";
+import PlatformAnnouncementsPage from "@/pages/platform-announcements";
+import PlatformBackupPage from "@/pages/platform-backup";
 
 const sidebarStyle = {
   "--sidebar-width": "16rem",
@@ -384,8 +389,23 @@ function App() {
           <Route path="/platform/ai-usage">
             <PlatformLayout><PlatformAIUsage /></PlatformLayout>
           </Route>
+          <Route path="/platform/settings">
+            <PlatformLayout><PlatformSettingsPage /></PlatformLayout>
+          </Route>
+          <Route path="/platform/security">
+            <PlatformLayout><PlatformSecurityPage /></PlatformLayout>
+          </Route>
           <Route path="/platform/email">
             <PlatformLayout><PlatformEmail /></PlatformLayout>
+          </Route>
+          <Route path="/platform/audit-log">
+            <PlatformLayout><PlatformAuditLogPage /></PlatformLayout>
+          </Route>
+          <Route path="/platform/announcements">
+            <PlatformLayout><PlatformAnnouncementsPage /></PlatformLayout>
+          </Route>
+          <Route path="/platform/backup">
+            <PlatformLayout><PlatformBackupPage /></PlatformLayout>
           </Route>
           <Route path="/platform/health">
             <PlatformLayout><PlatformHealth /></PlatformLayout>

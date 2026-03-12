@@ -52,3 +52,17 @@ The notarization module supports two provider modes per tenant, configured via A
 - **Both**: Tenants can use either method depending on the situation.
 
 The `notarizations` table includes `provider` (in_house/notarize), `external_transaction_id`, `external_status`, `signer_email/first_name/last_name`, `signer_link`, and `completed_document_url` fields. API key for Notarize.com is stored in tenant settings as `notarize_api_key`. The integration service is at `server/notarize-service.ts`.
+
+### Platform Operations Layer (Extended)
+The Platform Admin area (`/platform`) includes:
+- **Dashboard** (`/platform`): Overview stats (tenants, users, revenue)
+- **Tenants** (`/platform/tenants`): Multi-step tenant creation wizard, edit/manage tenants
+- **Analytics** (`/platform/analytics`): Revenue charts, per-tenant breakdown, status distribution
+- **AI Usage** (`/platform/ai-usage`): Token consumption monitoring per feature and tenant
+- **Settings** (`/platform/settings`): Platform identity (name, tagline, logo, favicon), contact info, regional defaults (timezone, date format), legal URLs (terms/privacy), maintenance mode toggle. DB table: `platform_settings`
+- **Security** (`/platform/security`): Password policies (length, complexity requirements), session timeout, max login attempts/lockout, IP allowlist, 2FA toggle. DB table: `security_settings`. Note: policies are stored but enforcement in auth middleware is pending implementation.
+- **Email** (`/platform/email`): SMTP provider config (Office365, Gmail, Neo, SES, custom)
+- **Audit Log** (`/platform/audit-log`): Full searchable audit trail with filters (tenant, entity type, action, date range), pagination, color-coded action badges
+- **Announcements** (`/platform/announcements`): Broadcast messages to tenants with type (info/warning/critical/success), priority, target audience filtering (all/admins/clients), scheduled start/expiry dates, active toggle. DB table: `platform_announcements`. Active announcements served to tenant users via `/api/announcements/active` with role-based audience filtering.
+- **Backup & Export** (`/platform/backup`): CSV exports for tenants, users, audit logs, and revenue/invoices with formula-injection-safe escaping. Database overview with table counts.
+- **Health** (`/platform/health`): System uptime, audit log stats, DB row counts

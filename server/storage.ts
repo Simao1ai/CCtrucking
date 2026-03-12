@@ -7,10 +7,13 @@ import {
   bookkeepingSubscriptions, bankTransactions, transactionCategories, monthlySummaries, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, staffMessages, clientNotes, knowledgeArticles,
   customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings,
-  platformEmailConfig,
+  platformEmailConfig, platformSettings, securitySettings, platformAnnouncements,
   type Tenant, type InsertTenant, type TenantBranding, type InsertTenantBranding,
   type TenantSettings, type InsertTenantSettings,
   type PlatformEmailConfig, type InsertPlatformEmailConfig,
+  type PlatformSettings, type InsertPlatformSettings,
+  type SecuritySettings, type InsertSecuritySettings,
+  type PlatformAnnouncement, type InsertPlatformAnnouncement,
   type Client, type InsertClient,
   type ServiceTicket, type InsertServiceTicket,
   type Document, type InsertDocument,
@@ -221,6 +224,20 @@ export interface IStorage {
   getPlatformEmailConfig(): Promise<PlatformEmailConfig | undefined>;
   upsertPlatformEmailConfig(data: Partial<InsertPlatformEmailConfig>): Promise<PlatformEmailConfig>;
   updatePlatformEmailTestResult(id: string, result: string): Promise<void>;
+
+  getPlatformSettings(): Promise<PlatformSettings | undefined>;
+  upsertPlatformSettings(data: Partial<InsertPlatformSettings>): Promise<PlatformSettings>;
+
+  getSecuritySettings(): Promise<SecuritySettings | undefined>;
+  upsertSecuritySettings(data: Partial<InsertSecuritySettings>): Promise<SecuritySettings>;
+
+  getPlatformAnnouncements(): Promise<PlatformAnnouncement[]>;
+  getPlatformAnnouncement(id: string): Promise<PlatformAnnouncement | undefined>;
+  createPlatformAnnouncement(data: InsertPlatformAnnouncement): Promise<PlatformAnnouncement>;
+  updatePlatformAnnouncement(id: string, data: Partial<InsertPlatformAnnouncement>): Promise<PlatformAnnouncement | undefined>;
+  deletePlatformAnnouncement(id: string): Promise<void>;
+
+  getAuditLogsFiltered(filters: { tenantId?: string; userId?: string; action?: string; entityType?: string; startDate?: Date; endDate?: Date; limit?: number; offset?: number }): Promise<{ logs: AuditLog[]; total: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1228,6 +1245,89 @@ export class DatabaseStorage implements IStorage {
     await db.update(platformEmailConfig)
       .set({ lastTestedAt: new Date(), lastTestResult: result, updatedAt: new Date() })
       .where(eq(platformEmailConfig.id, id));
+  }
+
+  async getPlatformSettings(): Promise<PlatformSettings | undefined> {
+    const rows = await db.select().from(platformSettings).limit(1);
+    return rows[0];
+  }
+
+  async upsertPlatformSettings(data: Partial<InsertPlatformSettings>): Promise<PlatformSettings> {
+    const existing = await this.getPlatformSettings();
+    if (existing) {
+      const [updated] = await db.update(platformSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(platformSettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(platformSettings).values(data as InsertPlatformSettings).returning();
+    return created;
+  }
+
+  async getSecuritySettings(): Promise<SecuritySettings | undefined> {
+    const rows = await db.select().from(securitySettings).limit(1);
+    return rows[0];
+  }
+
+  async upsertSecuritySettings(data: Partial<InsertSecuritySettings>): Promise<SecuritySettings> {
+    const existing = await this.getSecuritySettings();
+    if (existing) {
+      const [updated] = await db.update(securitySettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(securitySettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(securitySettings).values(data as InsertSecuritySettings).returning();
+    return created;
+  }
+
+  async getPlatformAnnouncements(): Promise<PlatformAnnouncement[]> {
+    return await db.select().from(platformAnnouncements).orderBy(desc(platformAnnouncements.createdAt));
+  }
+
+  async getPlatformAnnouncement(id: string): Promise<PlatformAnnouncement | undefined> {
+    const rows = await db.select().from(platformAnnouncements).where(eq(platformAnnouncements.id, id));
+    return rows[0];
+  }
+
+  async createPlatformAnnouncement(data: InsertPlatformAnnouncement): Promise<PlatformAnnouncement> {
+    const [created] = await db.insert(platformAnnouncements).values(data).returning();
+    return created;
+  }
+
+  async updatePlatformAnnouncement(id: string, data: Partial<InsertPlatformAnnouncement>): Promise<PlatformAnnouncement | undefined> {
+    const [updated] = await db.update(platformAnnouncements)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(platformAnnouncements.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePlatformAnnouncement(id: string): Promise<void> {
+    await db.delete(platformAnnouncements).where(eq(platformAnnouncements.id, id));
+  }
+
+  async getAuditLogsFiltered(filters: { tenantId?: string; userId?: string; action?: string; entityType?: string; startDate?: Date; endDate?: Date; limit?: number; offset?: number }): Promise<{ logs: AuditLog[]; total: number }> {
+    const conditions = [];
+    if (filters.tenantId) conditions.push(eq(auditLogs.tenantId, filters.tenantId));
+    if (filters.userId) conditions.push(eq(auditLogs.userId, filters.userId));
+    if (filters.action) conditions.push(sql`${auditLogs.action} ILIKE ${'%' + filters.action + '%'}`);
+    if (filters.entityType) conditions.push(eq(auditLogs.entityType, filters.entityType));
+    if (filters.startDate) conditions.push(sql`${auditLogs.createdAt} >= ${filters.startDate}`);
+    if (filters.endDate) conditions.push(sql`${auditLogs.createdAt} <= ${filters.endDate}`);
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalResult] = await db.select({ count: count() }).from(auditLogs).where(where);
+    const logs = await db.select().from(auditLogs)
+      .where(where)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(filters.limit || 50)
+      .offset(filters.offset || 0);
+
+    return { logs, total: totalResult.count };
   }
 }
 

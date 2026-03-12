@@ -603,3 +603,71 @@ export const insertPlatformEmailConfigSchema = createInsertSchema(platformEmailC
 
 export type PlatformEmailConfig = typeof platformEmailConfig.$inferSelect;
 export type InsertPlatformEmailConfig = z.infer<typeof insertPlatformEmailConfigSchema>;
+
+export const platformSettings = pgTable("platform_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platformName: text("platform_name").notNull().default("CarrierDeskHQ"),
+  platformTagline: text("platform_tagline").default("Professional Trucking Operations & Compliance"),
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  supportEmail: text("support_email"),
+  supportPhone: text("support_phone"),
+  websiteUrl: text("website_url"),
+  defaultTimezone: text("default_timezone").notNull().default("America/New_York"),
+  defaultDateFormat: text("default_date_format").notNull().default("MM/DD/YYYY"),
+  maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  maintenanceMessage: text("maintenance_message"),
+  termsUrl: text("terms_url"),
+  privacyUrl: text("privacy_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPlatformSettingsSchema = createInsertSchema(platformSettings).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type PlatformSettings = typeof platformSettings.$inferSelect;
+export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
+
+export const securitySettings = pgTable("security_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  minPasswordLength: integer("min_password_length").notNull().default(8),
+  requireUppercase: boolean("require_uppercase").notNull().default(true),
+  requireNumbers: boolean("require_numbers").notNull().default(true),
+  requireSpecialChars: boolean("require_special_chars").notNull().default(false),
+  sessionTimeoutMinutes: integer("session_timeout_minutes").notNull().default(480),
+  maxLoginAttempts: integer("max_login_attempts").notNull().default(5),
+  lockoutDurationMinutes: integer("lockout_duration_minutes").notNull().default(30),
+  enforceIpAllowlist: boolean("enforce_ip_allowlist").notNull().default(false),
+  ipAllowlist: text("ip_allowlist").array().default([]),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSecuritySettingsSchema = createInsertSchema(securitySettings).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type SecuritySettings = typeof securitySettings.$inferSelect;
+export type InsertSecuritySettings = z.infer<typeof insertSecuritySettingsSchema>;
+
+export const platformAnnouncements = pgTable("platform_announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull().default("info"),
+  priority: text("priority").notNull().default("normal"),
+  isActive: boolean("is_active").notNull().default(true),
+  startsAt: timestamp("starts_at"),
+  expiresAt: timestamp("expires_at"),
+  targetAudience: text("target_audience").notNull().default("all"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPlatformAnnouncementSchema = createInsertSchema(platformAnnouncements).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type PlatformAnnouncement = typeof platformAnnouncements.$inferSelect;
+export type InsertPlatformAnnouncement = z.infer<typeof insertPlatformAnnouncementSchema>;
