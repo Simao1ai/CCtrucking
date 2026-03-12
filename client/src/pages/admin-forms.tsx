@@ -16,10 +16,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { FormTemplate, FilledForm, Client } from "@shared/schema";
+import type { FormTemplate, FilledForm, Client, ServiceFormMapping } from "@shared/schema";
 import {
   Plus, FileText, ClipboardList, Search, Send, CheckCircle, Clock,
-  Pencil, Eye, Trash2, Printer, Save, GripVertical, X, FolderOpen
+  Pencil, Eye, Trash2, Printer, Save, GripVertical, X, FolderOpen, Zap, ArrowRight, Settings
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -72,6 +72,183 @@ function getAutoFillValue(key: string, client: Client): string {
 
 function generateFieldId(): string {
   return `field_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+const SERVICE_TYPES = [
+  "Business Setup", "Quarterly Tax", "Annual Tax", "DOT Permit", "IFTA Permit",
+  "UCR Registration", "IRP Registration", "BOC-3 Filing", "MCS-150 Update", "Other",
+];
+
+function AutomationTab({ mappings, templates, loading, onCreateMapping, onDeleteMapping, isPending }: {
+  mappings: ServiceFormMapping[];
+  templates: FormTemplate[];
+  loading: boolean;
+  onCreateMapping: (serviceType: string, templateId: string) => void;
+  onDeleteMapping: (id: string) => void;
+  isPending: boolean;
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [newServiceType, setNewServiceType] = useState("");
+  const [newTemplateId, setNewTemplateId] = useState("");
+
+  const getTemplateName = (id: string) => templates.find(t => t.id === id)?.name || id;
+
+  const groupedByType = SERVICE_TYPES.reduce((acc, type) => {
+    const items = mappings.filter(m => m.serviceType === type);
+    if (items.length > 0) acc[type] = items;
+    return acc;
+  }, {} as Record<string, ServiceFormMapping[]>);
+
+  const unmatchedMappings = mappings.filter(m => !SERVICE_TYPES.includes(m.serviceType));
+  if (unmatchedMappings.length > 0) {
+    unmatchedMappings.forEach(m => {
+      if (!groupedByType[m.serviceType]) groupedByType[m.serviceType] = [];
+      groupedByType[m.serviceType].push(m);
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Auto-Generate Forms on Ticket Creation</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Map service types to form templates. When a ticket is created, forms will be auto-generated and pre-filled with client data.
+          </p>
+        </div>
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" data-testid="button-add-mapping">
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Mapping
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>New Automation Mapping</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>When a ticket has this service type:</Label>
+                <Select value={newServiceType} onValueChange={setNewServiceType}>
+                  <SelectTrigger data-testid="select-mapping-service-type">
+                    <SelectValue placeholder="Select service type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SERVICE_TYPES.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div>
+                <Label>Auto-generate this form template:</Label>
+                <Select value={newTemplateId} onValueChange={setNewTemplateId}>
+                  <SelectTrigger data-testid="select-mapping-template">
+                    <SelectValue placeholder="Select form template..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name} ({t.category})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!newServiceType || !newTemplateId) return;
+                  onCreateMapping(newServiceType, newTemplateId);
+                  setNewServiceType("");
+                  setNewTemplateId("");
+                  setAddOpen(false);
+                }}
+                disabled={!newServiceType || !newTemplateId || isPending}
+                data-testid="button-confirm-mapping"
+              >
+                <Zap className="w-4 h-4 mr-2" /> Create Mapping
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-16" />)}
+        </div>
+      ) : Object.keys(groupedByType).length === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={Zap}
+              title="No automation mappings yet"
+              description="Add a mapping to auto-generate forms when tickets are created. For example, map 'DOT Compliance' tickets to auto-create your DOT compliance form templates."
+              action={
+                <Button size="sm" onClick={() => setAddOpen(true)} data-testid="button-empty-add-mapping">
+                  <Plus className="w-4 h-4 mr-2" /> Add First Mapping
+                </Button>
+              }
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(groupedByType).map(([serviceType, items]) => (
+            <Card key={serviceType} data-testid={`card-mapping-group-${serviceType.replace(/\s+/g, '-').toLowerCase()}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge className="bg-primary/10 text-primary text-xs">{serviceType}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {items.length} form{items.length !== 1 ? "s" : ""} auto-generated
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {items.map(mapping => (
+                    <div key={mapping.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md border border-border/50" data-testid={`mapping-item-${mapping.id}`}>
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="text-sm font-medium">{getTemplateName(mapping.templateId)}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive"
+                        onClick={() => onDeleteMapping(mapping.id)}
+                        data-testid={`button-delete-mapping-${mapping.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Card className="border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex-shrink-0">
+              <Settings className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h4 className="text-sm font-medium">How it works</h4>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                When a new service ticket is created (by staff or client portal), the system checks for matching mappings.
+                For each match, a pre-filled form is automatically generated using the client's data (company name, DOT/MC numbers, contact info, etc.).
+                Staff can then review, edit, and send the forms for signature — no manual setup needed.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function formStatusBadge(status: string) {
@@ -456,6 +633,9 @@ export default function AdminForms() {
   const { data: clientsList = [] } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
   });
+  const { data: mappings = [], isLoading: loadingMappings } = useQuery<ServiceFormMapping[]>({
+    queryKey: ["/api/admin/service-form-mappings"],
+  });
 
   const createTemplate = useMutation({
     mutationFn: async (data: any) => {
@@ -531,6 +711,26 @@ export default function AdminForms() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/filled-forms"] });
       toast({ title: "Saved to documents", description: "Form has been saved to the client's document folder." });
+    },
+  });
+
+  const createMapping = useMutation({
+    mutationFn: async (data: { serviceType: string; templateId: string }) => {
+      await apiRequest("POST", "/api/admin/service-form-mappings", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/service-form-mappings"] });
+      toast({ title: "Mapping created", description: "Forms will be auto-generated for this service type." });
+    },
+  });
+
+  const deleteMapping = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/admin/service-form-mappings/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/service-form-mappings"] });
+      toast({ title: "Mapping removed" });
     },
   });
 
@@ -788,6 +988,9 @@ export default function AdminForms() {
           <TabsTrigger value="filled" data-testid="tab-filled-forms">
             <FileText className="w-3.5 h-3.5 mr-1.5" /> Filled Forms ({filledForms.length})
           </TabsTrigger>
+          <TabsTrigger value="automation" data-testid="tab-automation">
+            <Zap className="w-3.5 h-3.5 mr-1.5" /> Automation ({mappings.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="templates" className="mt-4">
@@ -927,6 +1130,17 @@ export default function AdminForms() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="automation" className="mt-4">
+          <AutomationTab
+            mappings={mappings}
+            templates={templates}
+            loading={loadingMappings}
+            onCreateMapping={(serviceType, templateId) => createMapping.mutate({ serviceType, templateId })}
+            onDeleteMapping={(id) => { if (confirm("Remove this automation mapping?")) deleteMapping.mutate(id); }}
+            isPending={createMapping.isPending}
+          />
         </TabsContent>
       </Tabs>
 

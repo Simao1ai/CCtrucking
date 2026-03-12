@@ -894,3 +894,18 @@ export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
 });
 export type EmailMessage = typeof emailMessages.$inferSelect;
 export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
+
+export const serviceFormMappings = pgTable("service_form_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceType: text("service_type").notNull(),
+  templateId: varchar("template_id").notNull().references(() => formTemplates.id),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertServiceFormMappingSchema = createInsertSchema(serviceFormMappings).omit({
+  id: true, createdAt: true,
+});
+export type ServiceFormMapping = typeof serviceFormMappings.$inferSelect;
+export type InsertServiceFormMapping = z.infer<typeof insertServiceFormMappingSchema>;

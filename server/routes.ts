@@ -22,7 +22,8 @@ import {
   insertPlatformSmsConfigSchema, insertSmsPhoneNumberSchema, insertSmsTemplateSchema,
   insertSmsCampaignSchema, insertSmsAutomationSchema,
   emailTemplates, emailCampaigns, emailAutomations, emailMessages,
-  insertEmailTemplateSchema, insertEmailCampaignSchema, insertEmailAutomationSchema
+  insertEmailTemplateSchema, insertEmailCampaignSchema, insertEmailAutomationSchema,
+  insertServiceFormMappingSchema,
 } from "@shared/schema";
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
@@ -296,6 +297,84 @@ async function logAiUsage(tenantId: string | undefined, userId: string | undefin
     });
   } catch (err) {
     console.error("[AI Usage] Failed to log usage:", err);
+  }
+}
+
+interface FormField {
+  id: string;
+  label: string;
+  type: string;
+  autoFillKey?: string;
+  [key: string]: any;
+}
+
+function getAutoFillValue(key: string, client: any): string {
+  const map: Record<string, string> = {
+    company_name: client.companyName || "",
+    contact_name: client.contactName || "",
+    email: client.email || "",
+    phone: client.phone || "",
+    dot_number: client.dotNumber || "",
+    mc_number: client.mcNumber || "",
+    ein_number: client.einNumber || "",
+    address: client.address || "",
+    city: client.city || "",
+    state: client.state || "",
+    zip_code: client.zipCode || "",
+    today_date: new Date().toLocaleDateString("en-US"),
+  };
+  return map[key] || "";
+}
+
+async function generateFormsForTicket(ticketId: string, clientId: string, serviceType: string, tenantId: string) {
+  try {
+    const mappings = await storage.getServiceFormMappingsByServiceType(serviceType, tenantId);
+    if (mappings.length === 0) return [];
+
+    const client = await storage.getClient(clientId, tenantId);
+    if (!client) return [];
+
+    const generatedForms = [];
+    for (const mapping of mappings) {
+      const template = await storage.getFormTemplate(mapping.templateId, tenantId);
+      if (!template) continue;
+
+      const fields = (template.fields as FormField[] | null) || [];
+      const fieldValues: Record<string, any> = {};
+      fields.forEach(f => {
+        if (f.autoFillKey) fieldValues[f.id] = getAutoFillValue(f.autoFillKey, client);
+      });
+
+      const filledContent = fields.length > 0
+        ? fields.map(f => {
+            const val = fieldValues[f.id];
+            if (f.type === "checkbox") return `${f.label}: ${val ? "Yes" : "No"}`;
+            return `${f.label}: ${val || ""}`;
+          }).join("\n")
+        : template.content;
+
+      const form = await storage.createFilledForm({
+        templateId: template.id,
+        clientId,
+        name: `${template.name} — ${client.companyName}`,
+        filledContent,
+        fieldValues,
+        status: "draft",
+        filledBy: null,
+        signatureRequestId: null,
+        tenantId,
+      });
+
+      generatedForms.push(form);
+    }
+
+    if (generatedForms.length > 0) {
+      console.log(`[AutoForms] Generated ${generatedForms.length} form(s) for ticket ${ticketId} (${serviceType})`);
+    }
+    return generatedForms;
+  } catch (err) {
+    console.error("[AutoForms] Error generating forms for ticket:", err);
+    return [];
   }
 }
 
@@ -931,6 +1010,10 @@ export async function registerRoutes(
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const ticket = await storage.createTicket(parsed.data);
     await audit(req, "created", "ticket", ticket.id, `Created ticket "${ticket.title}" (${ticket.serviceType})`);
+    const autoForms = await generateFormsForTicket(ticket.id, ticket.clientId, ticket.serviceType, tenantId);
+    if (autoForms.length > 0) {
+      await audit(req, "auto_generated", "filled_form", ticket.id, `Auto-generated ${autoForms.length} form(s) for ticket "${ticket.title}"`);
+    }
     res.status(201).json(ticket);
   });
 
@@ -1779,6 +1862,7 @@ Contact name: ${client.contactName}`
     const ticket = await storage.createTicket(parsed.data);
     const client = await storage.getClient(req.clientId, tenantId);
     notifyAllAdmins("New Service Request", `${client?.companyName || "A client"} submitted a new ${ticket.serviceType} request.`, "ticket", "/admin/tickets", tenantId);
+    await generateFormsForTicket(ticket.id, ticket.clientId, ticket.serviceType, tenantId);
     res.status(201).json(ticket);
   });
 
@@ -2181,6 +2265,28 @@ Contact name: ${client.contactName}`
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
+  });
+
+  app.get("/api/admin/service-form-mappings", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const mappings = await storage.getServiceFormMappings(tenantId);
+    res.json(mappings);
+  });
+
+  app.post("/api/admin/service-form-mappings", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    const parsed = insertServiceFormMappingSchema.safeParse({ ...req.body, tenantId });
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const mapping = await storage.createServiceFormMapping(parsed.data);
+    await audit(req, "created", "service_form_mapping", mapping.id, `Mapped "${mapping.serviceType}" → template ${mapping.templateId}`);
+    res.status(201).json(mapping);
+  });
+
+  app.delete("/api/admin/service-form-mappings/:id", isAuthenticated, isAdmin, async (req, res) => {
+    const tenantId = (req as any).tenantId;
+    await storage.deleteServiceFormMapping(param(req, "id"), tenantId);
+    await audit(req, "deleted", "service_form_mapping", param(req, "id"), `Removed form mapping`);
+    res.status(204).send();
   });
 
   app.get("/api/admin/notarizations", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {

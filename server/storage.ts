@@ -42,6 +42,8 @@ import {
   type KnowledgeArticle, type InsertKnowledgeArticle,
   type CustomFieldDefinition, type InsertCustomFieldDefinition,
   type CustomFieldValue, type InsertCustomFieldValue,
+  serviceFormMappings,
+  type ServiceFormMapping, type InsertServiceFormMapping,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -207,6 +209,11 @@ export interface IStorage {
   getCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<CustomFieldValue[]>;
   setCustomFieldValue(data: InsertCustomFieldValue, tenantId?: string): Promise<CustomFieldValue>;
   deleteCustomFieldValues(entityType: string, entityId: string, tenantId?: string): Promise<void>;
+
+  getServiceFormMappings(tenantId: string): Promise<ServiceFormMapping[]>;
+  getServiceFormMappingsByServiceType(serviceType: string, tenantId: string): Promise<ServiceFormMapping[]>;
+  createServiceFormMapping(data: InsertServiceFormMapping): Promise<ServiceFormMapping>;
+  deleteServiceFormMapping(id: string, tenantId: string): Promise<void>;
 
   getAllTenants(): Promise<Tenant[]>;
   getTenantWithStats(id: string): Promise<{ tenant: Tenant; branding: TenantBranding | undefined; userCount: number; clientCount: number } | undefined>;
@@ -1328,6 +1335,32 @@ export class DatabaseStorage implements IStorage {
       .offset(filters.offset || 0);
 
     return { logs, total: totalResult.count };
+  }
+
+  async getServiceFormMappings(tenantId: string): Promise<ServiceFormMapping[]> {
+    return db.select().from(serviceFormMappings)
+      .where(eq(serviceFormMappings.tenantId, tenantId))
+      .orderBy(desc(serviceFormMappings.createdAt));
+  }
+
+  async getServiceFormMappingsByServiceType(serviceType: string, tenantId: string): Promise<ServiceFormMapping[]> {
+    return db.select().from(serviceFormMappings)
+      .where(and(
+        eq(serviceFormMappings.serviceType, serviceType),
+        eq(serviceFormMappings.tenantId, tenantId),
+        eq(serviceFormMappings.isActive, true)
+      ));
+  }
+
+  async createServiceFormMapping(data: InsertServiceFormMapping): Promise<ServiceFormMapping> {
+    const [m] = await db.insert(serviceFormMappings).values(data).returning();
+    return m;
+  }
+
+  async deleteServiceFormMapping(id: string, tenantId: string): Promise<void> {
+    await db.delete(serviceFormMappings).where(
+      and(eq(serviceFormMappings.id, id), eq(serviceFormMappings.tenantId, tenantId))
+    );
   }
 }
 
