@@ -38,8 +38,17 @@ All outbound emails (invoices, reminders, signature requests, notarization updat
 ### Dual Notarization System
 The notarization module supports both in-house manual tracking and integration with Notarize.com (Proof API) for remote online notarizations. Tenants can choose one or both methods.
 
+### SMS Campaign System
+The platform includes a full SMS/text campaign system accessible from Admin > Communication > Text Campaigns (`/admin/sms`). Powered by Twilio. DB tables: `sms_phone_numbers`, `sms_templates`, `sms_campaigns`, `sms_automations`, `sms_messages`. Features phone number management, reusable templates with merge tokens, bulk campaigns, trigger-based automations (`invoice_due_reminder`, `overdue_invoice`, `welcome_message`, `compliance_reminder`), and full message history. Automation scheduler runs every 6 hours.
+
+### Email Campaign System
+Full email campaign system accessible from Admin > Communication > Email Campaigns (`/admin/email-campaigns`). Built on existing Nodemailer/SMTP infrastructure. DB tables: `email_templates`, `email_campaigns`, `email_automations`, `email_messages`. Features HTML email templates with merge tokens, bulk campaigns with audience targeting, trigger-based automations, and message history. All emails are tenant-branded. Automation scheduler runs every 6 hours.
+
+### AI Campaign Content Generation
+Both SMS and Email campaign pages feature AI-powered content generation via `POST /api/admin/ai/generate-campaign-content`. Uses OpenAI (gpt-4o-mini) to generate industry-specific trucking content for templates, campaigns, and automations. Accepts `channel` (sms/email), `contentType` (template/campaign/automation), `prompt`, and optional `category`/`triggerType`. AI quota tracked under `campaign_content` feature with resilient JSON parsing. Frontend shows "Generate with AI" button in every creation dialog with quick suggestion pills for common trucking industry use cases. Generated content auto-fills form fields for review before saving.
+
 ## External Dependencies
-- **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization.
+- **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, AI transaction categorization, and AI campaign content generation.
 - **Google Cloud (googleapis)**: Integrated for Google Sheets functionality.
 - **Stripe**: Scaffolded for future subscription billing integration.
 - **Twilio**: Used for SMS/Text campaign messaging, phone number management, and automated text notifications.

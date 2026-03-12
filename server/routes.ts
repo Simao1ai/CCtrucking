@@ -6313,6 +6313,137 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
+  app.post("/api/admin/ai/generate-campaign-content", isAuthenticated, isAdmin, checkAiQuota("campaign_content"), async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const dbUser = (req as any).dbUser;
+      const { channel, contentType, prompt, category, triggerType } = req.body;
+
+      if (!channel || !contentType || !prompt) {
+        return res.status(400).json({ message: "channel, contentType, and prompt are required" });
+      }
+      if (!["sms", "email"].includes(channel)) {
+        return res.status(400).json({ message: "channel must be 'sms' or 'email'" });
+      }
+      if (!["template", "campaign", "automation"].includes(contentType)) {
+        return res.status(400).json({ message: "contentType must be 'template', 'campaign', or 'automation'" });
+      }
+
+      const tenant = await storage.getTenantById(tenantId);
+      const companyName = tenant?.companyName || "Our Company";
+
+      const mergeTokenNote = "Available merge tokens: {{clientName}}, {{companyName}}, {{invoiceNumber}}, {{amount}}, {{dueDate}}. Use these tokens where appropriate so messages auto-personalize.";
+
+      let systemPrompt = `You are an expert marketing copywriter specializing in the trucking and transportation industry. You write professional, clear, and actionable ${channel === "sms" ? "SMS text messages" : "HTML emails"} for trucking companies, freight carriers, and logistics businesses. The company name is "${companyName}".
+
+${mergeTokenNote}
+
+`;
+
+      if (channel === "sms") {
+        systemPrompt += `SMS messages must be concise (under 160 characters ideally, max 320). Write in a professional but friendly tone. Do not use emojis excessively.`;
+      } else {
+        systemPrompt += `Write well-formatted HTML emails with inline styles. Use professional styling with colors like #1e3a5f for headers. Include proper headings, paragraphs, tables where useful, and clear calls to action. Do not include <html>, <head>, or <body> tags — just the inner content.`;
+      }
+
+      let userPrompt = "";
+
+      if (contentType === "template") {
+        const categoryContext = category ? ` in the "${category}" category` : "";
+        if (channel === "sms") {
+          userPrompt = `Create an SMS template${categoryContext} for a trucking company. User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive template name
+- "category": one of: general, billing, compliance, marketing, welcome, payment, reminder
+- "body": the SMS message text (use merge tokens where appropriate)`;
+        } else {
+          userPrompt = `Create an email template${categoryContext} for a trucking company. User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive template name  
+- "subject": the email subject line
+- "category": one of: invoice, reminder, compliance, welcome, newsletter, promotion, general
+- "bodyHtml": the HTML email body content with inline styles`;
+        }
+      } else if (contentType === "campaign") {
+        if (channel === "sms") {
+          userPrompt = `Create an SMS campaign for a trucking company. User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive campaign name
+- "messageBody": the SMS message text (use merge tokens where appropriate)`;
+        } else {
+          userPrompt = `Create an email campaign for a trucking company. User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive campaign name
+- "subject": the email subject line
+- "bodyHtml": the HTML email body content with inline styles`;
+        }
+      } else if (contentType === "automation") {
+        const triggerContext = triggerType ? ` The trigger type is "${triggerType}".` : "";
+        if (channel === "sms") {
+          userPrompt = `Create an SMS automation message for a trucking company.${triggerContext} User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive automation name
+- "messageBody": the SMS message text (use merge tokens where appropriate)`;
+        } else {
+          userPrompt = `Create an email automation for a trucking company.${triggerContext} User request: "${prompt}"
+
+Return a JSON object with these fields:
+- "name": a descriptive automation name
+- "subject": the email subject line
+- "bodyHtml": the HTML email body content with inline styles`;
+        }
+      }
+
+      userPrompt += `\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown code fences, no explanations.`;
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+
+      const raw = completion.choices[0]?.message?.content?.trim() || "";
+      const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+
+      let result: any;
+      try {
+        result = JSON.parse(cleaned);
+      } catch {
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          return res.status(422).json({ message: "AI returned invalid content. Please try again with a different prompt." });
+        }
+      }
+
+      await logAiUsage(tenantId, dbUser?.id, "gpt-4o-mini", completion.usage, "campaign_content");
+      await audit(req, "generated", "ai_campaign_content", null, `AI generated ${channel} ${contentType} content`);
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("[AI Campaign] Error:", error.message);
+      if (error instanceof SyntaxError) {
+        return res.status(422).json({ message: "AI returned invalid content. Please try again with a different prompt." });
+      }
+      res.status(500).json({ message: "Failed to generate content. Please try again." });
+    }
+  });
+
   // Start background schedulers
   startInvoiceScheduler();
   startRecurringScheduler();

@@ -16,7 +16,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import {
   Mail, Send, Plus, Trash2, Clock, CheckCircle,
-  AlertCircle, Zap, FileText, Users, Loader2, Eye, BarChart3, Edit
+  AlertCircle, Zap, FileText, Users, Loader2, Eye, BarChart3, Edit, Sparkles
 } from "lucide-react";
 import { format } from "date-fns";
 import type { Client } from "@shared/schema";
@@ -33,6 +33,124 @@ function sanitizeHtmlPreview(html: string): string {
     }
   });
   return div.innerHTML;
+}
+
+function AiGenerateButton({ channel, contentType, category, triggerType, onGenerated }: {
+  channel: "sms" | "email";
+  contentType: "template" | "campaign" | "automation";
+  category?: string;
+  triggerType?: string;
+  onGenerated: (result: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
+
+  const suggestions: Record<string, string[]> = {
+    template: [
+      "Payment reminder for overdue invoices",
+      "Welcome message for new trucking clients",
+      "IFTA quarterly filing deadline reminder",
+      "DOT audit preparation checklist",
+      "Annual permit renewal notification",
+      "Holiday schedule and office closure notice",
+    ],
+    campaign: [
+      "End-of-quarter compliance checkup promotion",
+      "New service announcement for tax preparation",
+      "Seasonal safety reminder for winter driving",
+      "Referral program launch for existing clients",
+      "Rate increase notification with value highlights",
+    ],
+    automation: [
+      "Friendly payment reminder before invoice due date",
+      "Welcome sequence for newly onboarded carriers",
+      "Overdue invoice escalation notice",
+      "Compliance deadline approaching warning",
+    ],
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    setIsGenerating(true);
+    try {
+      const response = await apiRequest("POST", "/api/admin/ai/generate-campaign-content", {
+        channel,
+        contentType,
+        prompt: prompt.trim(),
+        category,
+        triggerType,
+      });
+      const result = await response.json();
+      onGenerated(result);
+      setOpen(false);
+      setPrompt("");
+      toast({ title: "Content generated", description: "AI-generated content has been filled in. Review and edit as needed." });
+    } catch (e: any) {
+      toast({ title: "Generation failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800 hover:bg-violet-50 dark:hover:bg-violet-950" data-testid={`button-ai-generate-${contentType}`}>
+          <Sparkles className="w-3.5 h-3.5" /> Generate with AI
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-500" />
+            AI Content Generator
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Describe what you want to create</Label>
+            <Textarea
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              placeholder={`e.g. "${suggestions[contentType]?.[0] || "Describe your content..."}"`}
+              rows={3}
+              data-testid="textarea-ai-prompt"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Quick suggestions</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {(suggestions[contentType] || []).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  className="text-[11px] px-2 py-1 rounded-full bg-violet-50 dark:bg-violet-950 hover:bg-violet-100 dark:hover:bg-violet-900 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 transition-colors"
+                  onClick={() => setPrompt(s)}
+                  data-testid={`suggestion-${s.slice(0, 20).replace(/\s/g, '-')}`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleGenerate}
+            disabled={!prompt.trim() || isGenerating}
+            className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+            data-testid="button-ai-generate-submit"
+          >
+            {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {isGenerating ? "Generating..." : "Generate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 interface EmailStats {
@@ -328,6 +446,18 @@ function CreateCampaignForm({ clients, templates, onClose }: {
         <DialogTitle>Create Email Campaign</DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs text-muted-foreground">Use AI to generate campaign content</Label>
+          <AiGenerateButton
+            channel="email"
+            contentType="campaign"
+            onGenerated={(result) => {
+              if (result.name) setName(result.name);
+              if (result.subject) setSubject(result.subject);
+              if (result.bodyHtml) setBodyHtml(result.bodyHtml);
+            }}
+          />
+        </div>
         <div>
           <Label>Campaign Name</Label>
           <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. March Newsletter" data-testid="input-email-campaign-name" />
@@ -503,6 +633,20 @@ function TemplatesTab() {
               <DialogTitle>Create Email Template</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Use AI to generate template content</Label>
+                <AiGenerateButton
+                  channel="email"
+                  contentType="template"
+                  category={category}
+                  onGenerated={(result) => {
+                    if (result.name) setName(result.name);
+                    if (result.subject) setSubject(result.subject);
+                    if (result.category) setCategory(result.category);
+                    if (result.bodyHtml) setBodyHtml(result.bodyHtml);
+                  }}
+                />
+              </div>
               <div>
                 <Label>Template Name</Label>
                 <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Monthly Newsletter" data-testid="input-email-template-name" />
@@ -680,6 +824,19 @@ function AutomationsTab() {
               <DialogTitle>Create Email Automation</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Use AI to generate automation content</Label>
+                <AiGenerateButton
+                  channel="email"
+                  contentType="automation"
+                  triggerType={triggerType}
+                  onGenerated={(result) => {
+                    if (result.name) setName(result.name);
+                    if (result.subject) setSubject(result.subject);
+                    if (result.bodyHtml) setBodyHtml(result.bodyHtml);
+                  }}
+                />
+              </div>
               <div>
                 <Label>Automation Name</Label>
                 <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Welcome Email" data-testid="input-email-automation-name" />
