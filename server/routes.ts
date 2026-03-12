@@ -2080,7 +2080,8 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/form-templates/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const template = await storage.updateFormTemplate(param(req, "id"), stripTenantId(req.body));
+    const tenantId = (req as any).tenantId;
+    const template = await storage.updateFormTemplate(param(req, "id"), stripTenantId(req.body), tenantId);
     if (!template) return res.status(404).json({ message: "Template not found" });
     await audit(req, "updated", "form_template", template.id, `Updated form template "${template.name}"`);
     res.json(template);
@@ -2090,7 +2091,7 @@ Contact name: ${client.contactName}`
     const tenantId = (req as any).tenantId;
     const id = param(req, "id");
     const template = await storage.getFormTemplate(id, tenantId);
-    await storage.deleteFormTemplate(id);
+    await storage.deleteFormTemplate(id, tenantId);
     await audit(req, "deleted", "form_template", id, `Deleted form template "${template?.name || id}"`);
     res.status(204).send();
   });
@@ -2118,7 +2119,8 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/admin/filled-forms/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const form = await storage.updateFilledForm(param(req, "id"), stripTenantId(req.body));
+    const tenantId = (req as any).tenantId;
+    const form = await storage.updateFilledForm(param(req, "id"), stripTenantId(req.body), tenantId);
     if (!form) return res.status(404).json({ message: "Form not found" });
     await audit(req, "updated", "filled_form", form.id, `Updated filled form "${form.name}" — status: ${form.status}`);
     res.json(form);
@@ -2159,6 +2161,26 @@ Contact name: ${client.contactName}`
 
     await audit(req, "sent_for_signature", "filled_form", form.id, `Sent "${form.name}" for signature (sig request ${sigReq.id})`);
     res.json({ signatureRequest: sigReq });
+  });
+
+  app.post("/api/admin/filled-forms/:id/save-to-documents", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const form = await storage.getFilledForm(param(req, "id"), tenantId);
+      if (!form) return res.status(404).json({ message: "Form not found" });
+      const doc = await storage.createDocument({
+        clientId: form.clientId,
+        name: form.name,
+        type: "Filled Form",
+        status: "approved",
+        tenantId,
+      });
+      await storage.updateFilledForm(form.id, { status: "saved_to_documents" }, tenantId);
+      await audit(req, "saved_to_documents", "filled_form", form.id, `Saved form "${form.name}" as document ${doc.id}`);
+      res.json({ document: doc });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/admin/notarizations", isAuthenticated, isAdmin, requireModule('notarizations'), async (req, res) => {
