@@ -18,7 +18,8 @@ import type { Client, ServiceTicket, Document as DocType, Invoice, ChatMessage, 
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, Hash, Ticket, FileText, Receipt,
   MessageCircle, PenLine, Clock, CheckCircle, AlertCircle, DollarSign,
-  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus, Mic, MicOff, Loader2, BookOpen
+  Calendar, User, Send, ClipboardList, Stamp, StickyNote, Pencil, Trash2, Plus, Mic, MicOff, Loader2, BookOpen,
+  TrendingUp, Heart, Star, Award
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -442,6 +443,10 @@ export default function AdminClientDetail() {
                 <StickyNote className="w-3.5 h-3.5 hidden sm:inline" />
                 Notes ({notes.length})
               </TabsTrigger>
+              <TabsTrigger value="analytics" data-testid="tab-analytics" className="flex-1 text-xs gap-1">
+                <TrendingUp className="w-3.5 h-3.5 hidden sm:inline" />
+                Analytics
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="tickets" className="mt-3">
@@ -722,9 +727,230 @@ export default function AdminClientDetail() {
                 )}
               </div>
             </TabsContent>
+
+            <TabsContent value="analytics" className="mt-3">
+              <ClientAnalyticsTab clientId={clientId!} />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface ClientAnalyticsData {
+  lifetimeValue: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  overdueAmount: number;
+  overdueCount: number;
+  invoiceCount: number;
+  paidInvoiceCount: number;
+  paymentRate: number;
+  avgPaymentDays: number;
+  clientSince: string | null;
+  durationDays: number | null;
+  durationMonths: number | null;
+  durationYears: number | null;
+  nextAnniversary: string | null;
+  daysUntilAnniversary: number | null;
+  revenueTimeline: { month: string; amount: number }[];
+  serviceBreakdown: Record<string, { count: number }>;
+  ticketCount: number;
+  openTickets: number;
+  completedTickets: number;
+  ticketCompletionRate: number;
+  documentCount: number;
+  signatureCount: number;
+  avgMonthlySpend: number;
+  recentInvoices: { id: string; invoiceNumber: string; amount: number; status: string; createdAt: string; paidDate: string | null }[];
+}
+
+function ClientAnalyticsTab({ clientId }: { clientId: string }) {
+  const { data: analytics, isLoading } = useQuery<ClientAnalyticsData>({
+    queryKey: ["/api/clients", clientId, "analytics"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/analytics`);
+      if (!res.ok) throw new Error("Failed to load analytics");
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-48" />
+      </div>
+    );
+  }
+
+  if (!analytics) return null;
+
+  const fmt = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+
+  return (
+    <div className="space-y-4" data-testid="section-client-analytics">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <div className="bg-card border border-card-border rounded-xl p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-[11px] text-muted-foreground uppercase font-medium">Lifetime Value</span>
+          </div>
+          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-lifetime-value">{fmt(analytics.lifetimeValue)}</p>
+          <p className="text-[11px] text-muted-foreground">{fmt(analytics.avgMonthlySpend)}/mo avg</p>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-xl p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Calendar className="w-3.5 h-3.5 text-blue-500" />
+            <span className="text-[11px] text-muted-foreground uppercase font-medium">Client Duration</span>
+          </div>
+          <p className="text-xl font-bold" data-testid="text-client-duration">
+            {analytics.durationYears !== null && analytics.durationYears > 0
+              ? `${analytics.durationYears}y ${(analytics.durationMonths || 0) % 12}m`
+              : analytics.durationMonths !== null
+                ? `${analytics.durationMonths}m`
+                : analytics.durationDays !== null
+                  ? `${analytics.durationDays}d`
+                  : "N/A"}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {analytics.clientSince ? `Since ${format(new Date(analytics.clientSince), "MMM d, yyyy")}` : ""}
+          </p>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-xl p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <CheckCircle className="w-3.5 h-3.5 text-blue-500" />
+            <span className="text-[11px] text-muted-foreground uppercase font-medium">Payment Rate</span>
+          </div>
+          <p className={`text-xl font-bold ${analytics.paymentRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : analytics.paymentRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`} data-testid="text-payment-rate">
+            {analytics.paymentRate}%
+          </p>
+          <p className="text-[11px] text-muted-foreground">{analytics.paidInvoiceCount}/{analytics.invoiceCount} invoices paid</p>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-xl p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-[11px] text-muted-foreground uppercase font-medium">Avg Payment Time</span>
+          </div>
+          <p className={`text-xl font-bold ${analytics.avgPaymentDays <= 15 ? "text-emerald-600 dark:text-emerald-400" : analytics.avgPaymentDays <= 30 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`} data-testid="text-avg-payment">
+            {analytics.avgPaymentDays > 0 ? `${analytics.avgPaymentDays}d` : "N/A"}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Days to pay invoices</p>
+        </div>
+      </div>
+
+      {analytics.daysUntilAnniversary !== null && analytics.daysUntilAnniversary <= 30 && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-pink-50 dark:bg-pink-950/20 border border-pink-200 dark:border-pink-800/50" data-testid="banner-anniversary">
+          <Heart className="w-5 h-5 text-pink-500 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium">
+              {analytics.daysUntilAnniversary === 0 ? "Anniversary is today!" : `Anniversary in ${analytics.daysUntilAnniversary} days`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {analytics.nextAnniversary ? format(new Date(analytics.nextAnniversary), "MMMM d, yyyy") : ""} — Consider sending a thank-you email!
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="bg-card border border-card-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+            Financial Summary
+          </h3>
+          <div className="space-y-2">
+            {[
+              { label: "Total Invoiced", value: fmt(analytics.totalInvoiced), color: "" },
+              { label: "Total Paid", value: fmt(analytics.totalPaid), color: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Outstanding", value: fmt(analytics.totalOutstanding), color: analytics.totalOutstanding > 0 ? "text-amber-600 dark:text-amber-400" : "" },
+              { label: "Overdue", value: `${fmt(analytics.overdueAmount)} (${analytics.overdueCount})`, color: analytics.overdueAmount > 0 ? "text-red-600 dark:text-red-400" : "" },
+            ].map(row => (
+              <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                <span className="text-sm text-muted-foreground">{row.label}</span>
+                <span className={`text-sm font-medium ${row.color}`}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Ticket className="w-3.5 h-3.5 text-blue-500" />
+            Service Activity
+          </h3>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center py-1.5 border-b border-border/30">
+              <span className="text-sm text-muted-foreground">Total Tickets</span>
+              <span className="text-sm font-medium">{analytics.ticketCount}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-border/30">
+              <span className="text-sm text-muted-foreground">Completion Rate</span>
+              <span className="text-sm font-medium">{analytics.ticketCompletionRate}%</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-border/30">
+              <span className="text-sm text-muted-foreground">Open/Active</span>
+              <span className="text-sm font-medium">{analytics.openTickets}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-border/30">
+              <span className="text-sm text-muted-foreground">Documents</span>
+              <span className="text-sm font-medium">{analytics.documentCount}</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-sm text-muted-foreground">Signatures</span>
+              <span className="text-sm font-medium">{analytics.signatureCount}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {Object.keys(analytics.serviceBreakdown).length > 0 && (
+        <div className="bg-card border border-card-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Award className="w-3.5 h-3.5 text-purple-500" />
+            Services Used
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(analytics.serviceBreakdown).map(([svc, data]) => (
+              <div key={svc} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50" data-testid={`badge-service-${svc}`}>
+                <span className="text-sm">{svc}</span>
+                <span className="text-xs font-medium text-muted-foreground bg-background rounded-full px-1.5">{data.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {analytics.recentInvoices.length > 0 && (
+        <div className="bg-card border border-card-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Receipt className="w-3.5 h-3.5 text-emerald-500" />
+            Recent Invoices
+          </h3>
+          <div className="space-y-1">
+            {analytics.recentInvoices.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0" data-testid={`row-recent-invoice-${inv.id}`}>
+                <div>
+                  <p className="text-sm font-medium">{inv.invoiceNumber}</p>
+                  <p className="text-[11px] text-muted-foreground">{inv.createdAt ? format(new Date(inv.createdAt), "MMM d, yyyy") : ""}</p>
+                </div>
+                <div className="text-right flex items-center gap-2">
+                  <span className="text-sm font-medium">{fmt(inv.amount)}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${inv.status === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : inv.status === "overdue" ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"}`}>
+                    {inv.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -67,6 +67,7 @@ export const clients = pgTable("clients", {
   pipelineStage: text("pipeline_stage").default("new"),
   nextActionDate: timestamp("next_action_date"),
   nextActionNote: text("next_action_note"),
+  createdAt: timestamp("created_at").defaultNow(),
   tenantId: varchar('tenant_id').references(() => tenants.id),
 });
 
@@ -267,7 +268,7 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true, c
 export const insertTenantBrandingSchema = createInsertSchema(tenantBranding).omit({ id: true });
 export const insertTenantSettingsSchema = createInsertSchema(tenantSettings).omit({ id: true, updatedAt: true });
 
-export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
 export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, uploadedAt: true });
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });

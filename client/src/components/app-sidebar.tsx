@@ -27,6 +27,7 @@ import {
   Shield,
   CreditCard,
   KeyRound,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant, useTenantIcon } from "@/context/tenant-context";
@@ -66,6 +67,7 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
       { title: "Clients", url: "/admin/clients", icon: Users },
+      { title: "Client Insights", url: "/admin/client-insights", icon: TrendingUp },
       { title: "Service Tickets", url: "/admin/tickets", icon: Ticket },
       { title: "Documents", url: "/admin/documents", icon: FileText },
       { title: "Invoices", url: "/admin/invoices", icon: Receipt },

@@ -627,6 +627,247 @@ export async function registerRoutes(
     res.json({ client, tickets, documents, invoices, messages, signatures, forms, notarizations: notarizationRecords });
   });
 
+  app.get("/api/clients/:id/analytics", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const clientId = param(req, "id");
+      const client = await storage.getClient(clientId, tenantId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+
+      const [tickets, clientInvoices, docs, signatures] = await Promise.all([
+        storage.getTicketsByClient(clientId, tenantId),
+        storage.getInvoicesByClient(clientId, tenantId),
+        storage.getDocumentsByClient(clientId, tenantId),
+        storage.getSignatureRequestsByClient(clientId, tenantId),
+      ]);
+
+      const totalInvoiced = clientInvoices.reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0);
+      const totalPaid = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0);
+      const totalOutstanding = totalInvoiced - totalPaid;
+      const overdueInvoices = clientInvoices.filter(i => i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date());
+
+      const paidInvoices = clientInvoices.filter(i => i.status === "paid" && i.paidDate && i.createdAt);
+      let avgPaymentDays = 0;
+      if (paidInvoices.length > 0) {
+        const totalDays = paidInvoices.reduce((s, i) => {
+          const created = new Date(i.createdAt!);
+          const paid = new Date(i.paidDate!);
+          return s + Math.max(0, (paid.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        }, 0);
+        avgPaymentDays = Math.round(totalDays / paidInvoices.length);
+      }
+
+      const allPaidInvoices = clientInvoices.filter(i => i.status === "paid");
+      const paymentRate = clientInvoices.length > 0
+        ? Math.round((allPaidInvoices.length / clientInvoices.length) * 100)
+        : 0;
+
+      const now = new Date();
+      const clientSince = client.createdAt ? new Date(client.createdAt) : null;
+      const durationDays = clientSince ? Math.floor((now.getTime() - clientSince.getTime()) / (1000 * 60 * 60 * 24)) : null;
+      const durationMonths = durationDays !== null ? Math.floor(durationDays / 30) : null;
+      const durationYears = durationDays !== null ? Math.floor(durationDays / 365) : null;
+
+      const nextAnniversary = clientSince ? (() => {
+        const ann = new Date(clientSince);
+        ann.setFullYear(now.getFullYear());
+        if (ann < now) ann.setFullYear(now.getFullYear() + 1);
+        return ann.toISOString();
+      })() : null;
+
+      const daysUntilAnniversary = nextAnniversary
+        ? Math.ceil((new Date(nextAnniversary).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      const monthlyRevenue: Record<string, number> = {};
+      clientInvoices.forEach(inv => {
+        if (inv.createdAt) {
+          const key = new Date(inv.createdAt).toISOString().slice(0, 7);
+          monthlyRevenue[key] = (monthlyRevenue[key] || 0) + parseFloat(String(inv.amount || "0"));
+        }
+      });
+      const revenueTimeline = Object.entries(monthlyRevenue)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([month, amount]) => ({ month, amount: Math.round(amount * 100) / 100 }));
+
+      const serviceBreakdown: Record<string, { count: number; types: string[] }> = {};
+      tickets.forEach(t => {
+        const svc = t.serviceType || "Other";
+        if (!serviceBreakdown[svc]) serviceBreakdown[svc] = { count: 0, types: [] };
+        serviceBreakdown[svc].count++;
+      });
+
+      const ticketCompletionRate = tickets.length > 0
+        ? Math.round((tickets.filter(t => t.status === "completed" || t.status === "closed").length / tickets.length) * 100)
+        : 0;
+
+      const avgMonthlySpend = revenueTimeline.length > 0
+        ? Math.round(revenueTimeline.reduce((s, r) => s + r.amount, 0) / revenueTimeline.length)
+        : 0;
+
+      const recentInvoices = clientInvoices
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, 5)
+        .map(i => ({
+          id: i.id,
+          invoiceNumber: i.invoiceNumber,
+          amount: parseFloat(String(i.amount || "0")),
+          status: i.status,
+          createdAt: i.createdAt,
+          paidDate: i.paidDate,
+        }));
+
+      res.json({
+        lifetimeValue: totalPaid,
+        totalInvoiced,
+        totalPaid,
+        totalOutstanding,
+        overdueAmount: overdueInvoices.reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0),
+        overdueCount: overdueInvoices.length,
+        invoiceCount: clientInvoices.length,
+        paidInvoiceCount: allPaidInvoices.length,
+        paymentRate,
+        avgPaymentDays,
+        clientSince: clientSince?.toISOString() || null,
+        durationDays,
+        durationMonths,
+        durationYears,
+        nextAnniversary,
+        daysUntilAnniversary,
+        revenueTimeline,
+        serviceBreakdown,
+        ticketCount: tickets.length,
+        openTickets: tickets.filter(t => t.status === "open" || t.status === "in_progress").length,
+        completedTickets: tickets.filter(t => t.status === "completed" || t.status === "closed").length,
+        ticketCompletionRate,
+        documentCount: docs.length,
+        signatureCount: signatures.length,
+        avgMonthlySpend,
+        recentInvoices,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/client-insights", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const allClients = await storage.getClients(tenantId);
+
+      const clientAnalytics = await Promise.all(allClients.map(async (client) => {
+        const clientInvoices = await storage.getInvoicesByClient(client.id, tenantId);
+        const totalInvoiced = clientInvoices.reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0);
+        const totalPaid = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0);
+        const totalOutstanding = totalInvoiced - totalPaid;
+        const overdueInvoices = clientInvoices.filter(i => i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date());
+        const overdueAmount = overdueInvoices.reduce((s, i) => s + parseFloat(String(i.amount || "0")), 0);
+
+        const clientSince = client.createdAt ? new Date(client.createdAt) : null;
+        const now = new Date();
+        const durationDays = clientSince ? Math.floor((now.getTime() - clientSince.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+        const nextAnniversary = clientSince ? (() => {
+          const ann = new Date(clientSince);
+          ann.setFullYear(now.getFullYear());
+          if (ann < now) ann.setFullYear(now.getFullYear() + 1);
+          return ann.toISOString();
+        })() : null;
+        const daysUntilAnniversary = nextAnniversary
+          ? Math.ceil((new Date(nextAnniversary).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        const paidInvoices = clientInvoices.filter(i => i.status === "paid" && i.paidDate && i.createdAt);
+        let avgPaymentDays = 0;
+        if (paidInvoices.length > 0) {
+          const totalDaysToPay = paidInvoices.reduce((s, i) => {
+            const created = new Date(i.createdAt!);
+            const paid = new Date(i.paidDate!);
+            return s + Math.max(0, (paid.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+          }, 0);
+          avgPaymentDays = Math.round(totalDaysToPay / paidInvoices.length);
+        }
+
+        const lastInvoice = clientInvoices.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+        const daysSinceLastInvoice = lastInvoice?.createdAt
+          ? Math.floor((now.getTime() - new Date(lastInvoice.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        return {
+          id: client.id,
+          companyName: client.companyName,
+          contactName: client.contactName,
+          email: client.email,
+          status: client.status,
+          clientSince: clientSince?.toISOString() || null,
+          durationDays,
+          lifetimeValue: totalPaid,
+          totalInvoiced,
+          totalOutstanding,
+          overdueAmount,
+          overdueCount: overdueInvoices.length,
+          invoiceCount: clientInvoices.length,
+          avgPaymentDays,
+          daysUntilAnniversary,
+          nextAnniversary,
+          daysSinceLastInvoice,
+        };
+      }));
+
+      const topClients = [...clientAnalytics]
+        .sort((a, b) => b.lifetimeValue - a.lifetimeValue)
+        .slice(0, 10);
+
+      const atRiskClients = clientAnalytics.filter(c =>
+        c.status === "active" && (
+          (c.daysSinceLastInvoice !== null && c.daysSinceLastInvoice > 90) ||
+          c.overdueAmount > 0
+        )
+      );
+
+      const upcomingMilestones = clientAnalytics
+        .filter(c => c.daysUntilAnniversary !== null && c.daysUntilAnniversary <= 30 && c.daysUntilAnniversary >= 0)
+        .sort((a, b) => (a.daysUntilAnniversary || 0) - (b.daysUntilAnniversary || 0));
+
+      const totalRevenue = clientAnalytics.reduce((s, c) => s + c.lifetimeValue, 0);
+      const totalOutstanding = clientAnalytics.reduce((s, c) => s + c.totalOutstanding, 0);
+      const totalOverdue = clientAnalytics.reduce((s, c) => s + c.overdueAmount, 0);
+      const activeClients = clientAnalytics.filter(c => c.status === "active").length;
+
+      const allInvoices = await db.select().from(invoices).where(eq(invoices.tenantId, tenantId));
+      const monthlyRevenue: Record<string, number> = {};
+      allInvoices.filter(i => i.status === "paid").forEach(inv => {
+        if (inv.paidDate) {
+          const key = new Date(inv.paidDate).toISOString().slice(0, 7);
+          monthlyRevenue[key] = (monthlyRevenue[key] || 0) + parseFloat(String(inv.amount || "0"));
+        }
+      });
+      const revenueTimeline = Object.entries(monthlyRevenue)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([month, amount]) => ({ month, amount: Math.round(amount * 100) / 100 }));
+
+      res.json({
+        summary: {
+          totalClients: clientAnalytics.length,
+          activeClients,
+          totalRevenue: Math.round(totalRevenue * 100) / 100,
+          totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+          totalOverdue: Math.round(totalOverdue * 100) / 100,
+          avgClientValue: activeClients > 0 ? Math.round((totalRevenue / activeClients) * 100) / 100 : 0,
+        },
+        topClients,
+        atRiskClients,
+        upcomingMilestones,
+        revenueTimeline,
+        allClients: clientAnalytics,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/clients", isAuthenticated, isAdmin, async (req, res) => {
     const tenantId = (req as any).tenantId;
 

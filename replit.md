@@ -66,3 +66,9 @@ The Platform Admin area (`/platform`) includes:
 - **Announcements** (`/platform/announcements`): Broadcast messages to tenants with type (info/warning/critical/success), priority, target audience filtering (all/admins/clients), scheduled start/expiry dates, active toggle. DB table: `platform_announcements`. Active announcements served to tenant users via `/api/announcements/active` with role-based audience filtering.
 - **Backup & Export** (`/platform/backup`): CSV exports for tenants, users, audit logs, and revenue/invoices with formula-injection-safe escaping. Database overview with table counts.
 - **Health** (`/platform/health`): System uptime, audit log stats, DB row counts
+
+### Client Analytics & Insights
+The platform provides two levels of client analytics:
+- **Per-Client Analytics Tab**: Available on the client detail page (`/admin/clients/:id`), the "Analytics" tab shows lifetime value, client duration/anniversary, payment rate, avg payment time, financial summary, service activity breakdown, services used, and recent invoices. API: `GET /api/clients/:id/analytics`.
+- **Client Insights Dashboard** (`/admin/client-insights`): Cross-client analytics page showing summary stats (active clients, total revenue, outstanding, upcoming milestones), top clients by revenue, at-risk clients (overdue or inactive 90+ days), upcoming anniversaries (within 30 days for thank-you emails), monthly revenue chart, and a searchable all-clients table with lifetime value, duration, and payment metrics. API: `GET /api/admin/client-insights`.
+- The `clients` table includes a `createdAt` field for tracking client tenure and calculating anniversaries.
