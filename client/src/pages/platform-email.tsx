@@ -43,6 +43,7 @@ interface EmailConfigResponse {
 const PROVIDER_PRESETS: Record<string, { host: string; port: number; secure: boolean }> = {
   office365: { host: "smtp.office365.com", port: 587, secure: false },
   gmail: { host: "smtp.gmail.com", port: 587, secure: false },
+  neo: { host: "smtp0001.neo.space", port: 587, secure: false },
   ses: { host: "email-smtp.us-east-1.amazonaws.com", port: 587, secure: false },
   custom: { host: "", port: 587, secure: false },
 };
@@ -247,6 +248,7 @@ export default function PlatformEmail() {
                 <SelectContent>
                   <SelectItem value="office365">Microsoft 365 / Outlook</SelectItem>
                   <SelectItem value="gmail">Gmail / Google Workspace</SelectItem>
+                  <SelectItem value="neo">Neo (neo.space)</SelectItem>
                   <SelectItem value="ses">Amazon SES</SelectItem>
                   <SelectItem value="custom">Custom SMTP</SelectItem>
                 </SelectContent>
