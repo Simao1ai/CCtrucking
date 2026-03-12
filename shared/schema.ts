@@ -672,3 +672,129 @@ export const insertPlatformAnnouncementSchema = createInsertSchema(platformAnnou
 });
 export type PlatformAnnouncement = typeof platformAnnouncements.$inferSelect;
 export type InsertPlatformAnnouncement = z.infer<typeof insertPlatformAnnouncementSchema>;
+
+export const platformSmsConfig = pgTable("platform_sms_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  twilioAccountSid: text("twilio_account_sid"),
+  twilioAuthToken: text("twilio_auth_token"),
+  twilioApiKeySid: text("twilio_api_key_sid"),
+  twilioApiKeySecret: text("twilio_api_key_secret"),
+  defaultFromNumber: text("default_from_number"),
+  enabled: boolean("enabled").notNull().default(false),
+  monthlyBudgetCents: integer("monthly_budget_cents"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPlatformSmsConfigSchema = createInsertSchema(platformSmsConfig).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type PlatformSmsConfig = typeof platformSmsConfig.$inferSelect;
+export type InsertPlatformSmsConfig = z.infer<typeof insertPlatformSmsConfigSchema>;
+
+export const smsPhoneNumbers = pgTable("sms_phone_numbers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  phoneNumber: text("phone_number").notNull(),
+  friendlyName: text("friendly_name"),
+  twilioSid: text("twilio_sid"),
+  capabilities: text("capabilities").default("sms"),
+  isActive: boolean("is_active").notNull().default(true),
+  purchasedAt: timestamp("purchased_at").defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSmsPhoneNumberSchema = createInsertSchema(smsPhoneNumbers).omit({
+  id: true, createdAt: true,
+});
+export type SmsPhoneNumber = typeof smsPhoneNumbers.$inferSelect;
+export type InsertSmsPhoneNumber = z.infer<typeof insertSmsPhoneNumberSchema>;
+
+export const smsTemplates = pgTable("sms_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("general"),
+  body: text("body").notNull(),
+  mergeTokens: text("merge_tokens").array().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSmsTemplateSchema = createInsertSchema(smsTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type SmsTemplate = typeof smsTemplates.$inferSelect;
+export type InsertSmsTemplate = z.infer<typeof insertSmsTemplateSchema>;
+
+export const smsCampaigns = pgTable("sms_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  templateId: varchar("template_id").references(() => smsTemplates.id),
+  messageBody: text("message_body").notNull(),
+  audienceType: text("audience_type").notNull().default("all"),
+  audienceFilter: jsonb("audience_filter"),
+  clientIds: text("client_ids").array().default([]),
+  fromNumberId: varchar("from_number_id").references(() => smsPhoneNumbers.id),
+  status: text("status").notNull().default("draft"),
+  scheduledAt: timestamp("scheduled_at"),
+  sentAt: timestamp("sent_at"),
+  totalRecipients: integer("total_recipients").default(0),
+  delivered: integer("delivered").default(0),
+  failed: integer("failed").default(0),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSmsCampaignSchema = createInsertSchema(smsCampaigns).omit({
+  id: true, createdAt: true, updatedAt: true, sentAt: true, delivered: true, failed: true,
+});
+export type SmsCampaign = typeof smsCampaigns.$inferSelect;
+export type InsertSmsCampaign = z.infer<typeof insertSmsCampaignSchema>;
+
+export const smsAutomations = pgTable("sms_automations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull(),
+  triggerConfig: jsonb("trigger_config").notNull(),
+  templateId: varchar("template_id").references(() => smsTemplates.id),
+  messageBody: text("message_body"),
+  fromNumberId: varchar("from_number_id").references(() => smsPhoneNumbers.id),
+  isActive: boolean("is_active").notNull().default(true),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  totalSent: integer("total_sent").default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const smsMessages = pgTable("sms_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  campaignId: varchar("campaign_id").references(() => smsCampaigns.id),
+  automationId: varchar("automation_id").references(() => smsAutomations.id),
+  clientId: varchar("client_id").references(() => clients.id),
+  toNumber: text("to_number").notNull(),
+  fromNumber: text("from_number").notNull(),
+  body: text("body").notNull(),
+  twilioSid: text("twilio_sid"),
+  status: text("status").notNull().default("queued"),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at").defaultNow(),
+  deliveredAt: timestamp("delivered_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSmsMessageSchema = createInsertSchema(smsMessages).omit({
+  id: true, createdAt: true,
+});
+export const insertSmsAutomationSchema = createInsertSchema(smsAutomations).omit({
+  id: true, createdAt: true, updatedAt: true, lastTriggeredAt: true, totalSent: true,
+});
+export type SmsMessage = typeof smsMessages.$inferSelect;
+export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
+export type SmsAutomation = typeof smsAutomations.$inferSelect;
+export type InsertSmsAutomation = z.infer<typeof insertSmsAutomationSchema>;

@@ -12,6 +12,7 @@ import {
   FileText,
   Megaphone,
   HardDrive,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { title: "Settings", url: "/platform/settings", icon: Settings },
   { title: "Security", url: "/platform/security", icon: Shield },
   { title: "Email", url: "/platform/email", icon: Mail },
+  { title: "SMS", url: "/platform/sms", icon: MessageSquare },
   { title: "Audit Log", url: "/platform/audit-log", icon: FileText },
   { title: "Announcements", url: "/platform/announcements", icon: Megaphone },
   { title: "Backup", url: "/platform/backup", icon: HardDrive },

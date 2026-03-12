@@ -17,10 +17,14 @@ import {
   clients, notifications, invoices, invoiceLineItems, serviceItems, taxDocuments,
   bookkeepingSubscriptions, bankTransactions, preparerAssignments,
   ticketRequiredDocuments, recurringTemplates, clientRecurringSchedules, serviceTickets, documents,
-  tenantSettings, aiUsageLogs, tenants, tenantBranding, auditLogs, insertTenantSchema
+  tenantSettings, aiUsageLogs, tenants, tenantBranding, auditLogs, insertTenantSchema,
+  platformSmsConfig, smsPhoneNumbers, smsTemplates, smsCampaigns, smsAutomations, smsMessages,
+  insertPlatformSmsConfigSchema, insertSmsPhoneNumberSchema, insertSmsTemplateSchema,
+  insertSmsCampaignSchema, insertSmsAutomationSchema
 } from "@shared/schema";
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
+import { sendSms, executeCampaign, searchAvailableNumbers, purchaseNumber, resolveMergeTokens, startSmsAutomationScheduler } from "./sms-service";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users, insertPlatformSettingsSchema, insertSecuritySettingsSchema, insertPlatformAnnouncementSchema } from "@shared/schema";
@@ -5660,9 +5664,406 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
+  // ─── SMS / Text Campaign Routes ───────────────────────────────────────
+  app.get("/api/platform/sms-config", isAuthenticated, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      if (!["platform_owner", "platform_admin"].includes(dbUser?.role)) {
+        return res.status(403).json({ message: "Platform admin access required" });
+      }
+      const [config] = await db.select().from(platformSmsConfig).limit(1);
+      if (!config) {
+        return res.json({
+          twilioAccountSid: "",
+          twilioAuthToken: "",
+          defaultFromNumber: "",
+          enabled: false,
+          monthlyBudgetCents: null,
+        });
+      }
+      res.json({
+        ...config,
+        twilioAuthToken: config.twilioAuthToken ? "••••••••" : "",
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/platform/sms-config", isAuthenticated, async (req, res) => {
+    try {
+      const dbUser = (req as any).dbUser;
+      if (!["platform_owner", "platform_admin"].includes(dbUser?.role)) {
+        return res.status(403).json({ message: "Platform admin access required" });
+      }
+      const [existing] = await db.select().from(platformSmsConfig).limit(1);
+      const { twilioAccountSid, twilioAuthToken, defaultFromNumber, enabled, monthlyBudgetCents } = req.body;
+      const data: any = { twilioAccountSid, defaultFromNumber, enabled: enabled ?? false, monthlyBudgetCents: monthlyBudgetCents ?? null };
+      if (twilioAuthToken === "••••••••" && existing) {
+        data.twilioAuthToken = existing.twilioAuthToken;
+      } else {
+        data.twilioAuthToken = twilioAuthToken || "";
+      }
+      if (existing) {
+        const [updated] = await db.update(platformSmsConfig)
+          .set({ ...data, updatedAt: new Date() })
+          .where(eq(platformSmsConfig.id, existing.id))
+          .returning();
+        res.json({ ...updated, twilioAuthToken: "••••••••" });
+      } else {
+        const [created] = await db.insert(platformSmsConfig).values(data).returning();
+        res.json({ ...created, twilioAuthToken: created.twilioAuthToken ? "••••••••" : "" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/phone-numbers", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const numbers = await db.select().from(smsPhoneNumbers)
+        .where(eq(smsPhoneNumbers.tenantId, tenantId))
+        .orderBy(desc(smsPhoneNumbers.createdAt));
+      res.json(numbers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/phone-numbers", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { phoneNumber, friendlyName } = req.body;
+      if (!phoneNumber) return res.status(400).json({ message: "Phone number required" });
+      const [record] = await db.insert(smsPhoneNumbers).values({
+        tenantId,
+        phoneNumber,
+        friendlyName: friendlyName || phoneNumber,
+        isActive: true,
+      }).returning();
+      await audit(req, "created", "sms_phone_number", record.id, `Added SMS number ${phoneNumber}`);
+      res.status(201).json(record);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/sms/phone-numbers/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      await db.delete(smsPhoneNumbers)
+        .where(and(eq(smsPhoneNumbers.id, id), eq(smsPhoneNumbers.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/search-numbers", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const areaCode = req.query.areaCode as string | undefined;
+      const country = req.query.country as string | undefined;
+      const numbers = await searchAvailableNumbers(areaCode, country);
+      res.json(numbers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/purchase-number", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { phoneNumber, friendlyName } = req.body;
+      const record = await purchaseNumber(tenantId, phoneNumber, friendlyName);
+      await audit(req, "created", "sms_phone_number", record.id, `Purchased SMS number ${phoneNumber}`);
+      res.status(201).json(record);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/templates", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const templates = await db.select().from(smsTemplates)
+        .where(eq(smsTemplates.tenantId, tenantId))
+        .orderBy(desc(smsTemplates.createdAt));
+      res.json(templates);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/templates", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const parsed = insertSmsTemplateSchema.safeParse({ ...req.body, tenantId });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [template] = await db.insert(smsTemplates).values(parsed.data).returning();
+      await audit(req, "created", "sms_template", template.id, `Created SMS template "${template.name}"`);
+      res.status(201).json(template);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/sms/templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, body, category } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (body !== undefined) updates.body = body;
+      if (category !== undefined) updates.category = category;
+      const [updated] = await db.update(smsTemplates)
+        .set(updates)
+        .where(and(eq(smsTemplates.id, id), eq(smsTemplates.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/sms/templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      await db.delete(smsTemplates)
+        .where(and(eq(smsTemplates.id, id), eq(smsTemplates.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/campaigns", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const campaigns = await db.select().from(smsCampaigns)
+        .where(eq(smsCampaigns.tenantId, tenantId))
+        .orderBy(desc(smsCampaigns.createdAt));
+      res.json(campaigns);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/campaigns", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const dbUser = (req as any).dbUser;
+      const parsed = insertSmsCampaignSchema.safeParse({
+        ...req.body,
+        tenantId,
+        createdBy: dbUser?.id,
+      });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [campaign] = await db.insert(smsCampaigns).values(parsed.data).returning();
+      await audit(req, "created", "sms_campaign", campaign.id, `Created SMS campaign "${campaign.name}"`);
+      res.status(201).json(campaign);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/sms/campaigns/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, message, recipientFilter, scheduledAt, status } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (message !== undefined) updates.message = message;
+      if (recipientFilter !== undefined) updates.recipientFilter = recipientFilter;
+      if (scheduledAt !== undefined) updates.scheduledAt = scheduledAt;
+      if (status !== undefined) updates.status = status;
+      const [updated] = await db.update(smsCampaigns)
+        .set(updates)
+        .where(and(eq(smsCampaigns.id, id), eq(smsCampaigns.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/campaigns/:id/send", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [campaign] = await db.select().from(smsCampaigns)
+        .where(and(eq(smsCampaigns.id, id), eq(smsCampaigns.tenantId, tenantId)));
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+      if (campaign.status === "sent") return res.status(400).json({ message: "Campaign already sent" });
+
+      const result = await executeCampaign(id);
+      await audit(req, "executed", "sms_campaign", id, `Sent SMS campaign "${campaign.name}" - ${result.sent} sent, ${result.failed} failed`);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/sms/campaigns/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [campaign] = await db.select().from(smsCampaigns)
+        .where(and(eq(smsCampaigns.id, id), eq(smsCampaigns.tenantId, tenantId)));
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+      await db.delete(smsMessages).where(eq(smsMessages.campaignId, id));
+      await db.delete(smsCampaigns)
+        .where(and(eq(smsCampaigns.id, id), eq(smsCampaigns.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/automations", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const automations = await db.select().from(smsAutomations)
+        .where(eq(smsAutomations.tenantId, tenantId))
+        .orderBy(desc(smsAutomations.createdAt));
+      res.json(automations);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/automations", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const parsed = insertSmsAutomationSchema.safeParse({ ...req.body, tenantId });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [automation] = await db.insert(smsAutomations).values(parsed.data).returning();
+      await audit(req, "created", "sms_automation", automation.id, `Created SMS automation "${automation.name}"`);
+      res.status(201).json(automation);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/sms/automations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, triggerType, triggerConfig, messageTemplate, enabled } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (triggerType !== undefined) updates.triggerType = triggerType;
+      if (triggerConfig !== undefined) updates.triggerConfig = triggerConfig;
+      if (messageTemplate !== undefined) updates.messageTemplate = messageTemplate;
+      if (enabled !== undefined) updates.enabled = enabled;
+      const [updated] = await db.update(smsAutomations)
+        .set(updates)
+        .where(and(eq(smsAutomations.id, id), eq(smsAutomations.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/sms/automations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [automation] = await db.select().from(smsAutomations)
+        .where(and(eq(smsAutomations.id, id), eq(smsAutomations.tenantId, tenantId)));
+      if (!automation) return res.status(404).json({ message: "Automation not found" });
+      await db.delete(smsMessages).where(eq(smsMessages.automationId, id));
+      await db.delete(smsAutomations)
+        .where(and(eq(smsAutomations.id, id), eq(smsAutomations.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/messages", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const messages = await db.select().from(smsMessages)
+        .where(eq(smsMessages.tenantId, tenantId))
+        .orderBy(desc(smsMessages.createdAt))
+        .limit(200);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/sms/stats", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const [numbers] = await db.select({ count: count() }).from(smsPhoneNumbers)
+        .where(and(eq(smsPhoneNumbers.tenantId, tenantId), eq(smsPhoneNumbers.isActive, true)));
+      const [campaigns] = await db.select({ count: count() }).from(smsCampaigns)
+        .where(eq(smsCampaigns.tenantId, tenantId));
+      const [templates] = await db.select({ count: count() }).from(smsTemplates)
+        .where(eq(smsTemplates.tenantId, tenantId));
+      const [automations] = await db.select({ count: count() }).from(smsAutomations)
+        .where(and(eq(smsAutomations.tenantId, tenantId), eq(smsAutomations.isActive, true)));
+      const [totalMessages] = await db.select({ count: count() }).from(smsMessages)
+        .where(eq(smsMessages.tenantId, tenantId));
+      const [sentMessages] = await db.select({ count: count() }).from(smsMessages)
+        .where(and(eq(smsMessages.tenantId, tenantId), eq(smsMessages.status, "sent")));
+      const [failedMessages] = await db.select({ count: count() }).from(smsMessages)
+        .where(and(eq(smsMessages.tenantId, tenantId), eq(smsMessages.status, "failed")));
+
+      const [smsConfig] = await db.select().from(platformSmsConfig).limit(1);
+
+      res.json({
+        phoneNumbers: numbers?.count || 0,
+        campaigns: campaigns?.count || 0,
+        templates: templates?.count || 0,
+        activeAutomations: automations?.count || 0,
+        totalMessages: totalMessages?.count || 0,
+        sentMessages: sentMessages?.count || 0,
+        failedMessages: failedMessages?.count || 0,
+        smsEnabled: smsConfig?.enabled || false,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/sms/send-test", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { toNumber, fromNumber, body } = req.body;
+      if (!toNumber || !body) return res.status(400).json({ message: "Phone number and message body required" });
+
+      let sendFromNumber = fromNumber;
+      if (!sendFromNumber) {
+        const [num] = await db.select().from(smsPhoneNumbers)
+          .where(and(eq(smsPhoneNumbers.tenantId, tenantId), eq(smsPhoneNumbers.isActive, true)))
+          .limit(1);
+        sendFromNumber = num?.phoneNumber;
+      }
+      if (!sendFromNumber) {
+        const [config] = await db.select().from(platformSmsConfig).limit(1);
+        sendFromNumber = config?.defaultFromNumber;
+      }
+      if (!sendFromNumber) return res.status(400).json({ message: "No sending number configured" });
+
+      const result = await sendSms(tenantId, toNumber, sendFromNumber, body);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Start background schedulers
   startInvoiceScheduler();
   startRecurringScheduler();
+  startSmsAutomationScheduler();
 
   return httpServer;
 }

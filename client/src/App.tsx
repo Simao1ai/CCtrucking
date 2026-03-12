@@ -43,6 +43,8 @@ import AdminClientDetail from "@/pages/admin-client-detail";
 import AdminForms from "@/pages/admin-forms";
 import AdminNotarizations from "@/pages/admin-notarizations";
 import AdminAudit from "@/pages/admin-audit";
+import AdminSms from "@/pages/admin-sms";
+import PlatformSmsSettings from "@/pages/platform-sms-settings";
 import AdminServiceItems from "@/pages/admin-service-items";
 import AdminAnalytics from "@/pages/admin-analytics";
 import ClientInsights from "@/pages/client-insights";
@@ -325,6 +327,9 @@ function App() {
           <Route path="/admin/audit">
             <AdminLayout><AdminAudit /></AdminLayout>
           </Route>
+          <Route path="/admin/sms">
+            <AdminLayout><AdminSms /></AdminLayout>
+          </Route>
           <Route path="/admin/service-items">
             <AdminLayout><AdminServiceItems /></AdminLayout>
           </Route>
@@ -407,6 +412,9 @@ function App() {
           </Route>
           <Route path="/platform/email">
             <PlatformLayout><PlatformEmail /></PlatformLayout>
+          </Route>
+          <Route path="/platform/sms">
+            <PlatformLayout><PlatformSmsSettings /></PlatformLayout>
           </Route>
           <Route path="/platform/audit-log">
             <PlatformLayout><PlatformAuditLogPage /></PlatformLayout>

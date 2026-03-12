@@ -39,6 +39,7 @@ The backend uses Express.js with a RESTful API, backed by PostgreSQL and Drizzle
 - **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization.
 - **Google Cloud (googleapis)**: Integrated for Google Sheets functionality.
 - **Stripe**: Scaffolded for future subscription billing integration.
+- **Twilio**: Used for SMS/Text campaign messaging, phone number management, and automated text notifications.
 
 ### Tenant-Aware Email System
 All outbound emails (invoices, reminders, signature requests, notarization updates) are sent via the platform's SMTP connection but branded per-tenant. The `server/tenant-email.ts` module sets the tenant's company name as the "From Name" and the tenant's support email as the "Reply-To" header. Email sending is wrapped in try/catch so failures don't block the parent operation. Email types: invoice delivery (with PDF attachment), payment reminders (3 escalation levels), signature request notifications, and notarization status updates.
@@ -62,6 +63,7 @@ The Platform Admin area (`/platform`) includes:
 - **Settings** (`/platform/settings`): Platform identity (name, tagline, logo, favicon), contact info, regional defaults (timezone, date format), legal URLs (terms/privacy), maintenance mode toggle. DB table: `platform_settings`
 - **Security** (`/platform/security`): Password policies (length, complexity requirements), session timeout, max login attempts/lockout, IP allowlist, 2FA toggle. DB table: `security_settings`. Note: policies are stored but enforcement in auth middleware is pending implementation.
 - **Email** (`/platform/email`): SMTP provider config (Office365, Gmail, Neo, SES, custom)
+- **SMS** (`/platform/sms`): Twilio credentials config (Account SID, Auth Token, default From Number), enable/disable SMS, monthly budget. DB table: `platform_sms_config`
 - **Audit Log** (`/platform/audit-log`): Full searchable audit trail with filters (tenant, entity type, action, date range), pagination, color-coded action badges
 - **Announcements** (`/platform/announcements`): Broadcast messages to tenants with type (info/warning/critical/success), priority, target audience filtering (all/admins/clients), scheduled start/expiry dates, active toggle. DB table: `platform_announcements`. Active announcements served to tenant users via `/api/announcements/active` with role-based audience filtering.
 - **Backup & Export** (`/platform/backup`): CSV exports for tenants, users, audit logs, and revenue/invoices with formula-injection-safe escaping. Database overview with table counts.
@@ -72,3 +74,15 @@ The platform provides two levels of client analytics:
 - **Per-Client Analytics Tab**: Available on the client detail page (`/admin/clients/:id`), the "Analytics" tab shows lifetime value, client duration/anniversary, payment rate, avg payment time, financial summary, service activity breakdown, services used, and recent invoices. API: `GET /api/clients/:id/analytics`.
 - **Client Insights Dashboard** (`/admin/client-insights`): Cross-client analytics page showing summary stats (active clients, total revenue, outstanding, upcoming milestones), top clients by revenue, at-risk clients (overdue or inactive 90+ days), upcoming anniversaries (within 30 days for thank-you emails), monthly revenue chart, and a searchable all-clients table with lifetime value, duration, and payment metrics. API: `GET /api/admin/client-insights`.
 - The `clients` table includes a `createdAt` field for tracking client tenure and calculating anniversaries.
+
+### SMS/Text Campaign System
+The platform includes an SMS/Text messaging system powered by Twilio, accessible from Admin > Communication > Text Campaigns (`/admin/sms`). Platform-level Twilio credentials are configured at `/platform/sms`. DB tables (created via direct SQL): `platform_sms_config`, `sms_phone_numbers`, `sms_templates`, `sms_campaigns`, `sms_automations`, `sms_messages`.
+
+Features:
+- **Phone Numbers**: Tenants manage their Twilio phone numbers for sending SMS. Search and provision numbers by area code.
+- **Templates**: Reusable message templates with merge tokens (`{{clientName}}`, `{{companyName}}`, `{{invoiceNumber}}`, `{{amount}}`, `{{dueDate}}`). Categories: general, billing, compliance, marketing.
+- **Campaigns**: Bulk SMS campaigns with recipient filtering (all clients, active, specific status). Campaign execution sends to all matching recipients and tracks delivery status per message.
+- **Automations**: Trigger-based automated SMS. Trigger types: `invoice_due_reminder` (daysBefore config), `overdue_invoice` (daysOverdue config), `welcome_message` (on client creation). Automation scheduler runs every 6 hours via `startSmsAutomationScheduler()`.
+- **Message History**: Full log of all sent/failed SMS messages with status, recipient, timestamp.
+
+Backend service: `server/sms-service.ts` (Twilio client init, send SMS, campaign execution, automation processing). All SMS write routes use field whitelisting. Delete operations verify tenant ownership before cascading message deletions. Auth token is masked in API responses.
