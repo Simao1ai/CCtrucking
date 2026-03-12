@@ -6329,7 +6329,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         return res.status(400).json({ message: "contentType must be 'template', 'campaign', or 'automation'" });
       }
 
-      const tenant = await storage.getTenantById(tenantId);
+      const tenant = await storage.getTenant(tenantId);
       const companyName = tenant?.companyName || "Our Company";
 
       const mergeTokenNote = "Available merge tokens: {{clientName}}, {{companyName}}, {{invoiceNumber}}, {{amount}}, {{dueDate}}. Use these tokens where appropriate so messages auto-personalize.";
