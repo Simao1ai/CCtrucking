@@ -1,7 +1,7 @@
 # CarrierDeskHQ - Trucking Operations Platform
 
 ## Overview
-CarrierDeskHQ is a multi-tenant SaaS platform offering a comprehensive CRM and operations management solution tailored for trucking companies. It provides distinct Admin, Client, and Preparer Portals to streamline operations, enhance client communication, and deliver business insights. The platform supports client management, service tickets (DOT/IFTA compliance, tax filings, business setup), document management, invoicing, forms, notarizations, bookkeeping, and business analytics. The platform enables the owner to lease the product to trucking companies as tenants, retaining 100% IP ownership.
+CarrierDeskHQ is a multi-tenant SaaS platform designed for trucking companies, offering a comprehensive CRM and operations management solution. It provides distinct Admin, Client, and Preparer Portals to streamline operations, enhance communication, and deliver business insights. The platform supports client management, service tickets (DOT/IFTA compliance, tax filings, business setup), document management, invoicing, forms, notarizations, bookkeeping, and business analytics. The core business vision is to provide a robust, scalable solution that owners can lease to trucking companies as tenants, retaining full IP ownership and enabling them to manage their operations efficiently.
 
 ## User Preferences
 I prefer iterative development, so please provide updates frequently. I value clear and concise communication. When making changes, please ask for confirmation before implementing major architectural shifts.
@@ -9,80 +9,37 @@ I prefer iterative development, so please provide updates frequently. I value cl
 ## System Architecture
 
 ### Multi-Tenant Architecture
-The platform features a multi-tenant design with `tenant_id` for data isolation across all entity tables. Role-based access control includes `platform_owner`, `platform_admin`, `tenant_owner`, `tenant_admin`, `client`, and `preparer` roles. Module feature gates allow toggling functionalities like bookkeeping and tax prep per tenant. Branding is dynamically loaded from the database based on the tenant. AI prompts and scheduling are scoped to individual tenants.
+The platform is built with a multi-tenant design, using `tenant_id` for data isolation across all entity tables. It features robust role-based access control including `platform_owner`, `platform_admin`, `tenant_owner`, `tenant_admin`, `client`, and `preparer` roles. Module feature gates allow per-tenant toggling of functionalities like bookkeeping and tax prep, and branding is dynamically loaded from the database based on the tenant.
 
 ### Commercial Layer
-A flexible plan configuration (`shared/plan-config.ts`) defines subscription tiers (basic, pro, enterprise) with associated limits (clients, users, AI tokens). Module access and resource creation are enforced based on the tenant's plan, returning a `PLAN_LIMIT_REACHED` error when limits are exceeded. A usage API provides real-time client, user, and AI consumption data versus plan limits.
+A flexible plan configuration (`shared/plan-config.ts`) defines subscription tiers (basic, pro, enterprise) with associated limits on clients, users, and AI tokens. Module access and resource creation are enforced based on the tenant's plan, with a `PLAN_LIMIT_REACHED` error for exceeded limits. A usage API provides real-time consumption data.
 
 ### Onboarding & Provisioning
-A multi-step wizard facilitates tenant creation, including company info, plan selection, and owner account setup. An onboarding checklist guides new tenants through initial setup steps. Features include client CSV import/export and an enhanced user invitation flow with plan limit awareness.
+Tenant creation is managed via a multi-step wizard, covering company info, plan selection, and owner account setup. An onboarding checklist guides initial setup, complemented by client CSV import/export and an enhanced user invitation flow.
 
 ### Platform Operations Layer
-A Super Admin Dashboard (`/platform`) provides an overview of tenants, users, and revenue, with dedicated sub-pages for tenant management, analytics, AI usage tracking, and system health. AI usage is tracked per tenant, and quotas are enforced based on subscription plans. Platform admins can impersonate tenants for support purposes, with all actions audit-logged.
+A Super Admin Dashboard (`/platform`) provides comprehensive oversight of tenants, users, and revenue, with dedicated sub-pages for tenant management, analytics, AI usage tracking, system health, and security settings. Platform admins can impersonate tenants for support, with all actions audit-logged.
 
 ### User Accounts & Authentication
-Authentication is custom, using username/password with bcrypt and session management. Login routing is role-based, directing users to their respective portals (platform, admin, preparer, client). Slug-based login allows tenant-branded login pages. Logout is tenant-aware, redirecting users back to their specific tenant login page. Seed migrations ensure initial tenant and user setup.
-
-### Hardening & Launch
-Security measures include `helmet` middleware for HTTP headers, `express-rate-limit` for API request control, and `sanitize-html` for input sanitization. Standardized error handling provides consistent responses, and request IDs aid in log correlation. Password security includes strength validation and account lockout after multiple failed login attempts.
+Authentication is custom, utilizing username/password with bcrypt and session management. Login routing is role-based, directing users to their respective portals, and supports slug-based login for tenant-branded pages. Logout is tenant-aware, redirecting users to their specific login page.
 
 ### Programmatic API
-A programmatic API is available for external integrations, managed via API keys with granular permissions. API keys are securely stored and authenticated via middleware, with separate rate limits. External API routes are available for managing clients, invoices, tickets, and documents, following a consistent response format for lists, single resources, and errors. An admin UI (`/admin/api-keys`) allows tenant owners to manage their API keys, and comprehensive API documentation (`/admin/api-docs`) is provided.
+A programmatic API is available for external integrations, secured by API keys with granular permissions and separate rate limits. It supports managing clients, invoices, tickets, and documents, following a consistent response format. An admin UI allows tenant owners to manage keys, and comprehensive API documentation is provided.
 
 ### UI/UX Decisions
-The frontend is built with React, TypeScript, Vite, TanStack Query, and Wouter for routing. Styling utilizes Shadcn UI, Tailwind CSS, and the Inter font, adhering to a navy/steel blue theme. Recharts is used for data visualization. The platform features a triple portal system for Admin, Client, and Preparer roles, with client-friendly features like a signature pad for document signing.
+The frontend is developed using React, TypeScript, Vite, TanStack Query, and Wouter, styled with Shadcn UI, Tailwind CSS, and the Inter font, adhering to a navy/steel blue theme. Recharts is used for data visualization. The platform features triple portals (Admin, Client, Preparer) and includes client-friendly features like a signature pad.
 
 ### Technical Implementations
-The backend uses Express.js with a RESTful API, backed by PostgreSQL and Drizzle ORM. Authentication is session-based with bcrypt. Key features include a service catalog, form management, notarization tracking, comprehensive audit logging, and an in-app/push notification system. PWA support ensures mobile and desktop installability. Additional features include client and service ticket management, document management, detailed invoicing with PDF generation, client-admin and staff-to-staff chat systems, signature requests, tax preparation intake with AI analysis, business analytics, employee performance tracking, and recurring compliance templates. A subscription-based bookkeeping system offers bank statement upload, AI transaction categorization, monthly financial summaries, preparer assignment, and receipt scanning with AI extraction. A dedicated Preparer Portal allows management of assigned client bookkeeping data. Features like ticket claim/lock, multi-employee client notes (with AI summarization), an enhanced dual-role AI Assistant, a knowledge base, and a client portal AI assistant enhance operational efficiency and user support. A tax document approval workflow facilitates client review and approval.
+The backend uses Express.js with a RESTful API, PostgreSQL, and Drizzle ORM. Key features include a service catalog, form management, notarization tracking, audit logging, in-app/push notifications, and PWA support. It also supports client and service ticket management, document management, detailed invoicing with PDF generation, client-admin and staff-to-staff chat systems, signature requests, tax preparation intake with AI analysis, business analytics, employee performance tracking, and recurring compliance templates. A subscription-based bookkeeping system offers bank statement upload, AI transaction categorization, monthly summaries, preparer assignment, and receipt scanning. A dedicated Preparer Portal manages assigned client bookkeeping data, and features like ticket claiming, multi-employee client notes (with AI summarization), a dual-role AI Assistant, a knowledge base, and a client portal AI assistant enhance operational efficiency.
+
+### Tenant-Aware Email & SMS System
+All outbound emails (invoices, reminders, signature requests, notarization updates) are tenant-branded and sent via the platform's SMTP connection. SMTP configuration is managed via the Platform Admin settings. Similarly, an SMS/Text campaign system powered by Twilio allows tenants to manage phone numbers, create reusable templates, run bulk campaigns, and set up trigger-based automations for invoices and client welcome messages.
+
+### Dual Notarization System
+The notarization module supports both in-house manual tracking and integration with Notarize.com (Proof API) for remote online notarizations. Tenants can choose one or both methods.
 
 ## External Dependencies
 - **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, and AI transaction categorization.
 - **Google Cloud (googleapis)**: Integrated for Google Sheets functionality.
 - **Stripe**: Scaffolded for future subscription billing integration.
 - **Twilio**: Used for SMS/Text campaign messaging, phone number management, and automated text notifications.
-
-### Tenant-Aware Email System
-All outbound emails (invoices, reminders, signature requests, notarization updates) are sent via the platform's SMTP connection but branded per-tenant. The `server/tenant-email.ts` module sets the tenant's company name as the "From Name" and the tenant's support email as the "Reply-To" header. Email sending is wrapped in try/catch so failures don't block the parent operation. Email types: invoice delivery (with PDF attachment), payment reminders (3 escalation levels), signature request notifications, and notarization status updates.
-
-SMTP configuration is managed via the Platform Admin > Email page (`/platform/email`), stored in the `platform_email_config` database table. The system supports Office365, Gmail, Amazon SES, and custom SMTP providers. Settings fall back to `SMTP_EMAIL` / `SMTP_PASSWORD` environment secrets if no database config exists. The transporter is cached and rebuilt only when settings change. The admin can test the connection and send a verification email from the settings page.
-
-### Dual Notarization System
-The notarization module supports two provider modes per tenant, configured via Admin > Notarizations > Settings:
-- **In-House Notary**: Manual tracking of on-site notarizations with notary name, commission number, dates, and status updates.
-- **Notarize.com (Remote Online)**: Integration with Notarize.com (Proof API at `api.proof.com/business/v1`). Creates remote notarization transactions where the signer receives an email link to complete the notarization via live video with a commissioned notary. Status syncs via manual refresh or webhook (`/api/webhooks/notarize`).
-- **Both**: Tenants can use either method depending on the situation.
-
-The `notarizations` table includes `provider` (in_house/notarize), `external_transaction_id`, `external_status`, `signer_email/first_name/last_name`, `signer_link`, and `completed_document_url` fields. API key for Notarize.com is stored in tenant settings as `notarize_api_key`. The integration service is at `server/notarize-service.ts`.
-
-### Platform Operations Layer (Extended)
-The Platform Admin area (`/platform`) includes:
-- **Dashboard** (`/platform`): Overview stats (tenants, users, revenue)
-- **Tenants** (`/platform/tenants`): Multi-step tenant creation wizard, edit/manage tenants
-- **Analytics** (`/platform/analytics`): Revenue charts, per-tenant breakdown, status distribution
-- **AI Usage** (`/platform/ai-usage`): Token consumption monitoring per feature and tenant
-- **Settings** (`/platform/settings`): Platform identity (name, tagline, logo, favicon), contact info, regional defaults (timezone, date format), legal URLs (terms/privacy), maintenance mode toggle. DB table: `platform_settings`
-- **Security** (`/platform/security`): Password policies (length, complexity requirements), session timeout, max login attempts/lockout, IP allowlist, 2FA toggle. DB table: `security_settings`. Note: policies are stored but enforcement in auth middleware is pending implementation.
-- **Email** (`/platform/email`): SMTP provider config (Office365, Gmail, Neo, SES, custom)
-- **SMS** (`/platform/sms`): Twilio credentials config (Account SID, Auth Token, default From Number), enable/disable SMS, monthly budget. DB table: `platform_sms_config`
-- **Audit Log** (`/platform/audit-log`): Full searchable audit trail with filters (tenant, entity type, action, date range), pagination, color-coded action badges
-- **Announcements** (`/platform/announcements`): Broadcast messages to tenants with type (info/warning/critical/success), priority, target audience filtering (all/admins/clients), scheduled start/expiry dates, active toggle. DB table: `platform_announcements`. Active announcements served to tenant users via `/api/announcements/active` with role-based audience filtering.
-- **Backup & Export** (`/platform/backup`): CSV exports for tenants, users, audit logs, and revenue/invoices with formula-injection-safe escaping. Database overview with table counts.
-- **Health** (`/platform/health`): System uptime, audit log stats, DB row counts
-
-### Client Analytics & Insights
-The platform provides two levels of client analytics:
-- **Per-Client Analytics Tab**: Available on the client detail page (`/admin/clients/:id`), the "Analytics" tab shows lifetime value, client duration/anniversary, payment rate, avg payment time, financial summary, service activity breakdown, services used, and recent invoices. API: `GET /api/clients/:id/analytics`.
-- **Client Insights Dashboard** (`/admin/client-insights`): Cross-client analytics page showing summary stats (active clients, total revenue, outstanding, upcoming milestones), top clients by revenue, at-risk clients (overdue or inactive 90+ days), upcoming anniversaries (within 30 days for thank-you emails), monthly revenue chart, and a searchable all-clients table with lifetime value, duration, and payment metrics. API: `GET /api/admin/client-insights`.
-- The `clients` table includes a `createdAt` field for tracking client tenure and calculating anniversaries.
-
-### SMS/Text Campaign System
-The platform includes an SMS/Text messaging system powered by Twilio, accessible from Admin > Communication > Text Campaigns (`/admin/sms`). Platform-level Twilio credentials are configured at `/platform/sms`. DB tables (created via direct SQL): `platform_sms_config`, `sms_phone_numbers`, `sms_templates`, `sms_campaigns`, `sms_automations`, `sms_messages`.
-
-Features:
-- **Phone Numbers**: Tenants manage their Twilio phone numbers for sending SMS. Search and provision numbers by area code.
-- **Templates**: Reusable message templates with merge tokens (`{{clientName}}`, `{{companyName}}`, `{{invoiceNumber}}`, `{{amount}}`, `{{dueDate}}`). Categories: general, billing, compliance, marketing.
-- **Campaigns**: Bulk SMS campaigns with recipient filtering (all clients, active, specific status). Campaign execution sends to all matching recipients and tracks delivery status per message.
-- **Automations**: Trigger-based automated SMS. Trigger types: `invoice_due_reminder` (daysBefore config), `overdue_invoice` (daysOverdue config), `welcome_message` (on client creation). Automation scheduler runs every 6 hours via `startSmsAutomationScheduler()`.
-- **Message History**: Full log of all sent/failed SMS messages with status, recipient, timestamp.
-
-Backend service: `server/sms-service.ts` (Twilio client init, send SMS, campaign execution, automation processing). All SMS write routes use field whitelisting. Delete operations verify tenant ownership before cascading message deletions. Auth token is masked in API responses.

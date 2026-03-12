@@ -44,6 +44,7 @@ import AdminForms from "@/pages/admin-forms";
 import AdminNotarizations from "@/pages/admin-notarizations";
 import AdminAudit from "@/pages/admin-audit";
 import AdminSms from "@/pages/admin-sms";
+import AdminEmailCampaigns from "@/pages/admin-email-campaigns";
 import PlatformSmsSettings from "@/pages/platform-sms-settings";
 import AdminServiceItems from "@/pages/admin-service-items";
 import AdminAnalytics from "@/pages/admin-analytics";
@@ -329,6 +330,9 @@ function App() {
           </Route>
           <Route path="/admin/sms">
             <AdminLayout><AdminSms /></AdminLayout>
+          </Route>
+          <Route path="/admin/email-campaigns">
+            <AdminLayout><AdminEmailCampaigns /></AdminLayout>
           </Route>
           <Route path="/admin/service-items">
             <AdminLayout><AdminServiceItems /></AdminLayout>

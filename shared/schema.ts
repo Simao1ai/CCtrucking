@@ -798,3 +798,97 @@ export type SmsMessage = typeof smsMessages.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
 export type SmsAutomation = typeof smsAutomations.$inferSelect;
 export type InsertSmsAutomation = z.infer<typeof insertSmsAutomationSchema>;
+
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  subject: text("subject").notNull().default(""),
+  category: text("category").notNull().default("general"),
+  bodyHtml: text("body_html").notNull().default(""),
+  bodyText: text("body_text"),
+  mergeTokens: text("merge_tokens").array().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  templateId: varchar("template_id").references(() => emailTemplates.id),
+  subject: text("subject").notNull().default(""),
+  bodyHtml: text("body_html").notNull().default(""),
+  audienceType: text("audience_type").notNull().default("all"),
+  audienceFilter: jsonb("audience_filter"),
+  clientIds: text("client_ids").array().default([]),
+  status: text("status").notNull().default("draft"),
+  scheduledAt: timestamp("scheduled_at"),
+  sentAt: timestamp("sent_at"),
+  totalRecipients: integer("total_recipients").default(0),
+  delivered: integer("delivered").default(0),
+  failed: integer("failed").default(0),
+  opened: integer("opened").default(0),
+  clicked: integer("clicked").default(0),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).omit({
+  id: true, createdAt: true, updatedAt: true, sentAt: true, delivered: true, failed: true, opened: true, clicked: true,
+});
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
+
+export const emailAutomations = pgTable("email_automations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull(),
+  triggerConfig: jsonb("trigger_config").notNull(),
+  templateId: varchar("template_id").references(() => emailTemplates.id),
+  subject: text("subject"),
+  bodyHtml: text("body_html"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  totalSent: integer("total_sent").default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEmailAutomationSchema = createInsertSchema(emailAutomations).omit({
+  id: true, createdAt: true, updatedAt: true, lastTriggeredAt: true, totalSent: true,
+});
+export type EmailAutomation = typeof emailAutomations.$inferSelect;
+export type InsertEmailAutomation = z.infer<typeof insertEmailAutomationSchema>;
+
+export const emailMessages = pgTable("email_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  campaignId: varchar("campaign_id").references(() => emailCampaigns.id),
+  automationId: varchar("automation_id").references(() => emailAutomations.id),
+  clientId: varchar("client_id").references(() => clients.id),
+  toEmail: text("to_email").notNull(),
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  status: text("status").notNull().default("queued"),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at").defaultNow(),
+  openedAt: timestamp("opened_at"),
+  clickedAt: timestamp("clicked_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
+  id: true, createdAt: true,
+});
+export type EmailMessage = typeof emailMessages.$inferSelect;
+export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;

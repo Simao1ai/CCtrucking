@@ -22,6 +22,7 @@ import {
   RefreshCcw,
   MessagesSquare,
   MessageSquare,
+  Mail,
   Building2,
   Briefcase,
   Settings2,
@@ -96,6 +97,7 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Client Messages", url: "/admin/chat", icon: MessageCircle },
       { title: "Staff Chat", url: "/admin/staff-chat", icon: MessagesSquare },
+      { title: "Email Campaigns", url: "/admin/email-campaigns", icon: Mail },
       { title: "Text Campaigns", url: "/admin/sms", icon: MessageSquare },
     ],
   },

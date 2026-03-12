@@ -20,11 +20,14 @@ import {
   tenantSettings, aiUsageLogs, tenants, tenantBranding, auditLogs, insertTenantSchema,
   platformSmsConfig, smsPhoneNumbers, smsTemplates, smsCampaigns, smsAutomations, smsMessages,
   insertPlatformSmsConfigSchema, insertSmsPhoneNumberSchema, insertSmsTemplateSchema,
-  insertSmsCampaignSchema, insertSmsAutomationSchema
+  insertSmsCampaignSchema, insertSmsAutomationSchema,
+  emailTemplates, emailCampaigns, emailAutomations, emailMessages,
+  insertEmailTemplateSchema, insertEmailCampaignSchema, insertEmailAutomationSchema
 } from "@shared/schema";
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
 import { sendSms, executeCampaign, searchAvailableNumbers, purchaseNumber, resolveMergeTokens, startSmsAutomationScheduler } from "./sms-service";
+import { executeEmailCampaign, startEmailAutomationScheduler } from "./email-campaign-service";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { users, insertPlatformSettingsSchema, insertSecuritySettingsSchema, insertPlatformAnnouncementSchema } from "@shared/schema";
@@ -6060,10 +6063,261 @@ If you cannot read a field clearly, make your best estimate and lower the confid
     }
   });
 
+  // ═══════════════════════ EMAIL CAMPAIGNS ═══════════════════════
+
+  app.get("/api/admin/email-campaigns/stats", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const [campaigns] = await db.select({ count: count() }).from(emailCampaigns)
+        .where(eq(emailCampaigns.tenantId, tenantId));
+      const [templates] = await db.select({ count: count() }).from(emailTemplates)
+        .where(eq(emailTemplates.tenantId, tenantId));
+      const [automations] = await db.select({ count: count() }).from(emailAutomations)
+        .where(and(eq(emailAutomations.tenantId, tenantId), eq(emailAutomations.isActive, true)));
+      const [totalMessages] = await db.select({ count: count() }).from(emailMessages)
+        .where(eq(emailMessages.tenantId, tenantId));
+      const [sentMessages] = await db.select({ count: count() }).from(emailMessages)
+        .where(and(eq(emailMessages.tenantId, tenantId), eq(emailMessages.status, "sent")));
+      const [failedMessages] = await db.select({ count: count() }).from(emailMessages)
+        .where(and(eq(emailMessages.tenantId, tenantId), eq(emailMessages.status, "failed")));
+
+      const emailConfig = await storage.getPlatformEmailConfig();
+      const smtpUser = emailConfig?.smtpUser || process.env.SMTP_EMAIL;
+
+      res.json({
+        campaigns: campaigns?.count || 0,
+        templates: templates?.count || 0,
+        activeAutomations: automations?.count || 0,
+        totalMessages: totalMessages?.count || 0,
+        sentMessages: sentMessages?.count || 0,
+        failedMessages: failedMessages?.count || 0,
+        emailEnabled: !!smtpUser,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/templates", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const result = await db.select().from(emailTemplates)
+        .where(eq(emailTemplates.tenantId, tenantId))
+        .orderBy(desc(emailTemplates.createdAt));
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/templates", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const parsed = insertEmailTemplateSchema.safeParse({ ...req.body, tenantId });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [created] = await db.insert(emailTemplates).values(parsed.data).returning();
+      res.json(created);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/email-campaigns/templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, subject, bodyHtml, bodyText, category } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (subject !== undefined) updates.subject = subject;
+      if (bodyHtml !== undefined) updates.bodyHtml = bodyHtml;
+      if (bodyText !== undefined) updates.bodyText = bodyText;
+      if (category !== undefined) updates.category = category;
+      const [updated] = await db.update(emailTemplates)
+        .set(updates)
+        .where(and(eq(emailTemplates.id, id), eq(emailTemplates.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/email-campaigns/templates/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      await db.delete(emailTemplates)
+        .where(and(eq(emailTemplates.id, id), eq(emailTemplates.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/campaigns", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const result = await db.select().from(emailCampaigns)
+        .where(eq(emailCampaigns.tenantId, tenantId))
+        .orderBy(desc(emailCampaigns.createdAt));
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/campaigns", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const dbUser = (req as any).dbUser;
+      const parsed = insertEmailCampaignSchema.safeParse({ ...req.body, tenantId, createdBy: dbUser?.id });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [created] = await db.insert(emailCampaigns).values(parsed.data).returning();
+      await audit(req, "created", "email_campaign", created.id, `Created email campaign "${created.name}"`);
+      res.json(created);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/email-campaigns/campaigns/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, subject, bodyHtml, audienceType, audienceFilter, clientIds, scheduledAt, status } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (subject !== undefined) updates.subject = subject;
+      if (bodyHtml !== undefined) updates.bodyHtml = bodyHtml;
+      if (audienceType !== undefined) updates.audienceType = audienceType;
+      if (audienceFilter !== undefined) updates.audienceFilter = audienceFilter;
+      if (clientIds !== undefined) updates.clientIds = clientIds;
+      if (scheduledAt !== undefined) updates.scheduledAt = scheduledAt;
+      if (status !== undefined) updates.status = status;
+      const [updated] = await db.update(emailCampaigns)
+        .set(updates)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/campaigns/:id/send", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [campaign] = await db.select().from(emailCampaigns)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.tenantId, tenantId)));
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+      if (campaign.status === "sent") return res.status(400).json({ message: "Campaign already sent" });
+
+      const result = await executeEmailCampaign(id, tenantId);
+      await audit(req, "executed", "email_campaign", id, `Sent email campaign "${campaign.name}" - ${result.sent} sent, ${result.failed} failed`);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/email-campaigns/campaigns/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [campaign] = await db.select().from(emailCampaigns)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.tenantId, tenantId)));
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+      await db.delete(emailMessages).where(eq(emailMessages.campaignId, id));
+      await db.delete(emailCampaigns)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/automations", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const result = await db.select().from(emailAutomations)
+        .where(eq(emailAutomations.tenantId, tenantId))
+        .orderBy(desc(emailAutomations.createdAt));
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/automations", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const parsed = insertEmailAutomationSchema.safeParse({ ...req.body, tenantId });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const [created] = await db.insert(emailAutomations).values(parsed.data).returning();
+      res.json(created);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/email-campaigns/automations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const { name, triggerType, triggerConfig, subject, bodyHtml, enabled } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (triggerType !== undefined) updates.triggerType = triggerType;
+      if (triggerConfig !== undefined) updates.triggerConfig = triggerConfig;
+      if (subject !== undefined) updates.subject = subject;
+      if (bodyHtml !== undefined) updates.bodyHtml = bodyHtml;
+      if (enabled !== undefined) updates.isActive = enabled;
+      const [updated] = await db.update(emailAutomations)
+        .set(updates)
+        .where(and(eq(emailAutomations.id, id), eq(emailAutomations.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/email-campaigns/automations/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const id = param(req, "id");
+      const [automation] = await db.select().from(emailAutomations)
+        .where(and(eq(emailAutomations.id, id), eq(emailAutomations.tenantId, tenantId)));
+      if (!automation) return res.status(404).json({ message: "Automation not found" });
+      await db.delete(emailMessages).where(eq(emailMessages.automationId, id));
+      await db.delete(emailAutomations)
+        .where(and(eq(emailAutomations.id, id), eq(emailAutomations.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/messages", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const messages = await db.select().from(emailMessages)
+        .where(eq(emailMessages.tenantId, tenantId))
+        .orderBy(desc(emailMessages.createdAt))
+        .limit(200);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Start background schedulers
   startInvoiceScheduler();
   startRecurringScheduler();
   startSmsAutomationScheduler();
+  startEmailAutomationScheduler();
 
   return httpServer;
 }
