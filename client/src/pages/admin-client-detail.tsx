@@ -413,41 +413,37 @@ export default function AdminClientDetail() {
 
         <div className="lg:col-span-2">
           <Tabs defaultValue="tickets" className="w-full">
-            <TabsList className="w-full flex flex-wrap h-8 gap-0.5 p-0.5" data-testid="tabs-client-detail">
-              <TabsTrigger value="tickets" data-testid="tab-tickets" className="flex-1 text-[11px] h-7 gap-1">
-                Tickets ({tickets.length})
-              </TabsTrigger>
-              <TabsTrigger value="invoices" data-testid="tab-invoices" className="flex-1 text-[11px] h-7 gap-1">
-                Invoices ({invoices.length})
-              </TabsTrigger>
-              <TabsTrigger value="documents" data-testid="tab-documents" className="flex-1 text-[11px] h-7 gap-1">
-                Docs ({documents.length})
-              </TabsTrigger>
-              <TabsTrigger value="forms" data-testid="tab-forms" className="flex-1 text-[11px] h-7 gap-1">
-                <ClipboardList className="w-3 h-3 hidden sm:inline" />
-                Forms ({forms.length})
-              </TabsTrigger>
-              <TabsTrigger value="signatures" data-testid="tab-signatures" className="flex-1 text-xs gap-1">
-                <PenLine className="w-3.5 h-3.5 hidden sm:inline" />
-                Signing ({signatures.length})
-              </TabsTrigger>
-              <TabsTrigger value="notarizations" data-testid="tab-notarizations" className="flex-1 text-xs gap-1">
-                <Stamp className="w-3.5 h-3.5 hidden sm:inline" />
-                Notary ({notarizations.length})
-              </TabsTrigger>
-              <TabsTrigger value="messages" data-testid="tab-messages" className="flex-1 text-xs gap-1">
-                <MessageCircle className="w-3.5 h-3.5 hidden sm:inline" />
-                Chat ({messages.length})
-              </TabsTrigger>
-              <TabsTrigger value="notes" data-testid="tab-notes" className="flex-1 text-xs gap-1">
-                <StickyNote className="w-3.5 h-3.5 hidden sm:inline" />
-                Notes ({notes.length})
-              </TabsTrigger>
-              <TabsTrigger value="analytics" data-testid="tab-analytics" className="flex-1 text-xs gap-1">
-                <TrendingUp className="w-3.5 h-3.5 hidden sm:inline" />
-                Analytics
-              </TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto -mx-1 px-1 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+              <TabsList className="inline-flex h-8 gap-0.5 p-0.5 w-auto" style={{ flexWrap: "nowrap" }} data-testid="tabs-client-detail">
+                <TabsTrigger value="tickets" data-testid="tab-tickets" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Tickets ({tickets.length})
+                </TabsTrigger>
+                <TabsTrigger value="invoices" data-testid="tab-invoices" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Invoices ({invoices.length})
+                </TabsTrigger>
+                <TabsTrigger value="documents" data-testid="tab-documents" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Docs ({documents.length})
+                </TabsTrigger>
+                <TabsTrigger value="forms" data-testid="tab-forms" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Forms ({forms.length})
+                </TabsTrigger>
+                <TabsTrigger value="signatures" data-testid="tab-signatures" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Signing ({signatures.length})
+                </TabsTrigger>
+                <TabsTrigger value="notarizations" data-testid="tab-notarizations" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Notary ({notarizations.length})
+                </TabsTrigger>
+                <TabsTrigger value="messages" data-testid="tab-messages" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Chat ({messages.length})
+                </TabsTrigger>
+                <TabsTrigger value="notes" data-testid="tab-notes" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Notes ({notes.length})
+                </TabsTrigger>
+                <TabsTrigger value="analytics" data-testid="tab-analytics" className="text-[11px] h-7 px-2.5 gap-1 whitespace-nowrap flex-shrink-0">
+                  Analytics
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="tickets" className="mt-3">
               {tickets.length === 0 ? (
@@ -455,18 +451,19 @@ export default function AdminClientDetail() {
               ) : (
                 <div className="bg-card border border-card-border rounded-xl overflow-hidden divide-y divide-border/40">
                   {tickets.map(ticket => (
-                    <div key={ticket.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`card-ticket-${ticket.id}`}>
-                      <div className={`flex-shrink-0 w-1.5 h-8 rounded-full ${ticket.status === "open" ? "bg-blue-500" : ticket.status === "in_progress" ? "bg-amber-500" : ticket.status === "completed" || ticket.status === "closed" ? "bg-emerald-500" : "bg-gray-400"}`} />
+                    <div key={ticket.id} className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`card-ticket-${ticket.id}`}>
+                      <div className={`flex-shrink-0 w-1.5 h-8 rounded-full mt-0.5 ${ticket.status === "open" ? "bg-blue-500" : ticket.status === "in_progress" ? "bg-amber-500" : ticket.status === "completed" || ticket.status === "closed" ? "bg-emerald-500" : "bg-gray-400"}`} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2"><h4 className="font-medium text-sm truncate">{ticket.title}</h4><StatusBadge status={ticket.status} /></div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                          <span>{ticket.serviceType}</span>
-                          {ticket.assignedTo && <><span>·</span><span>{ticket.assignedTo}</span></>}
-                          {ticket.createdAt && <><span>·</span><span>{format(new Date(ticket.createdAt), "MMM d")}</span></>}
+                        <h4 className="font-medium text-sm truncate">{ticket.title}</h4>
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+                          <StatusBadge status={ticket.status} />
+                          <span className="text-[11px] text-muted-foreground">{ticket.serviceType}</span>
+                          {ticket.assignedTo && <><span className="text-[11px] text-muted-foreground">·</span><span className="text-[11px] text-muted-foreground truncate max-w-[100px]">{ticket.assignedTo}</span></>}
+                          {ticket.createdAt && <><span className="text-[11px] text-muted-foreground">·</span><span className="text-[11px] text-muted-foreground">{format(new Date(ticket.createdAt), "MMM d")}</span></>}
                         </div>
                       </div>
                       {ticket.dueDate && (
-                        <span className={`text-[11px] flex-shrink-0 ${new Date(ticket.dueDate) < new Date() ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}`}>
+                        <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${new Date(ticket.dueDate) < new Date() ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}`}>
                           Due {format(new Date(ticket.dueDate), "MMM d")}
                         </span>
                       )}

@@ -394,7 +394,7 @@ export function AiChatWidget() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-primary text-primary-foreground shadow-lg rounded-full px-4 py-3 hover:shadow-xl transition-all duration-200 hover:scale-105 group"
+          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 flex items-center gap-2 bg-primary text-primary-foreground shadow-lg rounded-full px-4 py-3 hover:shadow-xl transition-all duration-200 hover:scale-105 group"
           data-testid="button-ai-chat-toggle"
         >
           <Bot className="w-5 h-5" />
@@ -409,7 +409,7 @@ export function AiChatWidget() {
 
       {isOpen && (
         <div
-          className="fixed bottom-6 right-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-6rem)] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
+          className="fixed bottom-4 sm:bottom-6 right-2 sm:right-6 z-50 w-[420px] max-w-[calc(100vw-1rem)] h-[600px] max-h-[calc(100vh-6rem)] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
           data-testid="container-ai-chat-widget"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b bg-primary/5">
