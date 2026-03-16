@@ -494,6 +494,16 @@ export const apiKeys = pgTable("api_keys", {
 
 export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true, lastUsedAt: true });
 
+export const mobileSessions = pgTable("mobile_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tokenHash: text("token_hash").notNull(),
+  userId: varchar("user_id").notNull(),
+  clientId: varchar("client_id").notNull(),
+  tenantId: varchar("tenant_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertKnowledgeArticleSchema = createInsertSchema(knowledgeArticles).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomFieldDefinitionSchema = createInsertSchema(customFieldDefinitions).omit({ id: true, createdAt: true });

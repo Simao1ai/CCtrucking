@@ -54,7 +54,25 @@ Full email campaign system accessible from Admin > Communication > Email Campaig
 Both SMS and Email campaign pages feature AI-powered content generation via `POST /api/admin/ai/generate-campaign-content`. Uses OpenAI (gpt-4o-mini) to generate industry-specific trucking content for templates, campaigns, and automations. Accepts `channel` (sms/email), `contentType` (template/campaign/automation), `prompt`, and optional `category`/`triggerType`. AI quota tracked under `campaign_content` feature with resilient JSON parsing. Frontend shows "Generate with AI" button in every creation dialog with quick suggestion pills for common trucking industry use cases. Generated content auto-fills form fields for review before saving.
 
 ### Mobile API (Bubble.io Integration)
-A mobile-optimized API endpoint at `GET /api/v1/mobile/dashboard` aggregates all key data into a single response for mobile app consumption. Authenticated via API key (Bearer token). Returns summary counts (clients, tickets, invoices, documents), compliance alerts (overdue + upcoming), recent activity feed, and status breakdowns. A per-client detail endpoint at `GET /api/v1/mobile/dashboard/client/:clientId` returns the client profile, summary metrics, recent tickets/invoices/documents, and pending actions (signatures, notarizations). Both endpoints support tenant isolation via API key binding. File: `server/api-v1/mobile-dashboard.ts`.
+Two authentication modes for mobile API access:
+
+**Client Login (Token-Based) — for end-user mobile apps:**
+- `POST /api/v1/mobile/auth/lookup` — resolve company slug to tenant branding (no auth required)
+- `POST /api/v1/mobile/auth/login` — client login with slug/username/password, returns Bearer token (7-day expiry)
+- `POST /api/v1/mobile/auth/logout` — invalidate token
+- `GET /api/v1/mobile/auth/me` — get authenticated client profile
+- `GET /api/v1/mobile/client/dashboard` — full client dashboard (profile, summary, tickets, invoices, pending actions)
+- `GET /api/v1/mobile/client/tickets` — client's tickets (filterable by status)
+- `GET /api/v1/mobile/client/invoices` — client's invoices (filterable by status)
+- `GET /api/v1/mobile/client/documents` — client's documents
+- `GET /api/v1/mobile/client/signatures` — client's signature requests
+- `GET /api/v1/mobile/client/notarizations` — client's notarizations
+Files: `server/api-v1/mobile-auth.ts`, `server/api-v1/mobile-client.ts`
+
+**API Key (Per-Tenant) — for system-to-system integrations:**
+- `GET /api/v1/mobile/dashboard` — tenant-wide dashboard (all clients aggregated)
+- `GET /api/v1/mobile/dashboard/client/:clientId` — single client detail view
+File: `server/api-v1/mobile-dashboard.ts`
 
 ## External Dependencies
 - **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, AI transaction categorization, and AI campaign content generation.
