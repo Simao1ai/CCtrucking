@@ -45,6 +45,13 @@ import { generateInvoicePDF } from "./invoice-pdf";
 import { sendInvoiceEmail, sendSignatureEmail, sendNotarizationEmail } from "./tenant-email";
 import { createNotarizeTransaction, getNotarizeTransactionStatus, testNotarizeConnection, mapProofStatusToInternal } from "./notarize-service";
 import { brandingConfig } from "./branding-config";
+import clientsV1Router from "./api-v1/clients";
+import invoicesV1Router from "./api-v1/invoices";
+import ticketsV1Router from "./api-v1/tickets";
+import documentsV1Router from "./api-v1/documents";
+import mobileDashboardV1Router from "./api-v1/mobile-dashboard";
+import mobileAuthV1Router from "./api-v1/mobile-auth";
+import mobileClientV1Router from "./api-v1/mobile-client";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule, getTenantPlan } from "./middleware/module-gates";
 import { isPlatformAdmin } from "./middleware/tenant";
@@ -388,13 +395,6 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  const clientsV1Router = (await import("./api-v1/clients")).default;
-  const invoicesV1Router = (await import("./api-v1/invoices")).default;
-  const ticketsV1Router = (await import("./api-v1/tickets")).default;
-  const documentsV1Router = (await import("./api-v1/documents")).default;
-  const mobileDashboardV1Router = (await import("./api-v1/mobile-dashboard")).default;
-  const mobileAuthV1Router = (await import("./api-v1/mobile-auth")).default;
-  const mobileClientV1Router = (await import("./api-v1/mobile-client")).default;
   app.use("/api/v1/clients", clientsV1Router);
   app.use("/api/v1/invoices", invoicesV1Router);
   app.use("/api/v1/tickets", ticketsV1Router);
