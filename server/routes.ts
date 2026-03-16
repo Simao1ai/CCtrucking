@@ -392,10 +392,12 @@ export async function registerRoutes(
   const invoicesV1Router = (await import("./api-v1/invoices")).default;
   const ticketsV1Router = (await import("./api-v1/tickets")).default;
   const documentsV1Router = (await import("./api-v1/documents")).default;
+  const mobileDashboardV1Router = (await import("./api-v1/mobile-dashboard")).default;
   app.use("/api/v1/clients", clientsV1Router);
   app.use("/api/v1/invoices", invoicesV1Router);
   app.use("/api/v1/tickets", ticketsV1Router);
   app.use("/api/v1/documents", documentsV1Router);
+  app.use("/api/v1/mobile/dashboard", mobileDashboardV1Router);
 
   app.get("/api/branding", async (req, res) => {
     try {
