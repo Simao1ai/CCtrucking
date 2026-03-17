@@ -1,0 +1,114 @@
+What your data shows (quick system health check)
+•
+Clients: 4 total — 3 active, 1 prospect (good, but small pipeline)
+•
+Tickets: 5 total — 4 open (workload is concentrated on Lone Star Freight LLC and Summit Logistics Inc)
+•
+Invoices: Outstanding: $4,700.00; mix includes draft, sent, and overdue
+
+- One clear risk: INV-2025-042 (overdue) for Lone Star Freight LLC ($950.00)
+•
+Documents: Several pending items that can block compliance work:
+
+- Q1 2026 Mileage Report (pending) + Power of Attorney (pending) for Lone Star Freight LLC
+- Operating Agreement Draft (pending) for Atlantic Coast Transport
+•
+Service Catalog: 0 items (this is a major operational gap—hard to standardize pricing, scope, and automation)
+
+
+Suggestions to make the system better (highest impact first)
+
+
+#### 1) Build a Service Catalog (standardize your business)
+Right now you have tickets and invoices, but no standardized “products/services” to anchor them.
+•
+Create service items like:
+
+- IFTA Quarterly Filing
+- MCS-150 Biennial Update
+- UCR Annual Registration
+- Annual DOT Compliance Review
+- Business Entity Setup
+•
+Add to each item:
+
+- Standard price, deliverables, typical turnaround time
+- Required documents checklist (so “pending docs” stops stalling tickets)
+•
+Link: Service Catalog
+
+
+#### 2) Add “blockers” and automated follow-ups for pending documents
+You already track doc status (approved/pending). Make it operational:
+•
+If a required doc is pending, ticket status should show blocked (or tag it)
+•
+Auto-reminders to clients every X days until received
+•
+Example: Lone Star can’t complete IFTA cleanly with Mileage Report (pending)
+•
+Link: View Documents and View Tickets
+
+
+#### 3) Tighten accounts receivable (reduce the $4,700.00 outstanding)
+Immediate improvements:
+•
+Add an escalation workflow:
+
+- Day 0: invoice sent
+- Day 7: reminder
+- Day 14: reminder + call task
+- Day 21+: final notice + pause non-critical work (policy-based)
+•
+Convert draft invoices into sent quickly (drafts hide revenue)
+•
+Prioritize collecting INV-2025-042 (overdue) ($950.00, Lone Star Freight LLC)
+•
+Link: View Invoices
+
+
+#### 4) Create recurring compliance schedules per client (prevent fire drills)
+Your tickets are deadline-driven; make them predictable:
+•
+For each active carrier, store recurring obligations:
+
+- IFTA quarterly, UCR annual, MCS-150 biennial, DOT review annual
+•
+Auto-generate tickets 30–60 days ahead with preset checklists + doc requests
+•
+Link: View Tickets
+
+
+#### 5) Improve pipeline management for prospects
+You have Pacific Route Carriers as a prospect, but no visible next step.
+•
+Add “next action” fields: next call date, stage (new → contacted → quoted → won/lost)
+•
+Add templated proposals tied to Service Catalog items
+•
+Link: View Clients
+
+
+#### 6) Add simple KPI tracking (management visibility)
+A few KPIs would immediately improve control:
+•
+AR aging: current / 30 / 60 / 90+ (you already have overdue—expand it)
+•
+Ticket SLA: due in next 7/14/30 days; overdue tickets count
+•
+Docs pending by client (top blockers)
+•
+Link: Analytics and Bookkeeping
+
+
+Top 5 concrete actions to do this week
+•
+Set up 5–8 core service items in the catalog. Service Catalog
+•
+Send reminders + call Lone Star Freight LLC about INV-2025-042 (overdue) and open balance. View Invoices
+•
+Request/collect Q1 2026 Mileage Report + Power of Attorney from Lone Star (make them ticket blockers). View Documents
+•
+Convert all draft invoices to sent once verified. View Invoices
+•
+Add recurring ticket templates for IFTA/UCR/MCS-150/DOT annual so deadlines are auto-managed. View Tickets

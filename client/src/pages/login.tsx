@@ -1,0 +1,212 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Truck, Loader2, AlertCircle, ShieldCheck, User, Calculator, Building2, Briefcase } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { queryClient } from "@/lib/queryClient";
+import { useTenant } from "@/context/tenant-context";
+import type { BrandingConfig } from "@shared/branding";
+import { BrandLogo } from "@/components/brand-logo";
+
+export default function Login({ slug }: { slug?: string }) {
+  const [, setLocation] = useLocation();
+  const defaultBranding = useTenant();
+
+  const { data: slugBranding } = useQuery<BrandingConfig>({
+    queryKey: ["/api/branding", { slug }],
+    queryFn: async () => {
+      const res = await fetch(`/api/branding?slug=${encodeURIComponent(slug!)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Tenant not found");
+      return res.json();
+    },
+    enabled: !!slug,
+    retry: false,
+  });
+
+  const branding = slug ? (slugBranding ?? defaultBranding) : defaultBranding;
+  const isTenantLogin = !!slug && !!slugBranding;
+  const [loginType, setLoginType] = useState<"platform" | "admin" | "client" | "preparer">(isTenantLogin ? "admin" : "admin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.message || "Login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      const user = await res.json();
+      queryClient.setQueryData(["/api/auth/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/branding"] });
+
+      if (user.role === "platform_owner" || user.role === "platform_admin") {
+        setLocation("/platform");
+      } else if (user.role === "admin" || user.role === "owner" || user.role === "tenant_owner" || user.role === "tenant_admin") {
+        setLocation("/admin");
+      } else if (user.role === "preparer") {
+        setLocation("/preparer");
+      } else {
+        setLocation("/portal");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
+      <header className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <a href={slug ? `/login/${slug}` : "/"} data-testid="link-logo">
+          {isTenantLogin ? (
+            <BrandLogo size="sm" variant="dark" name={branding.companyName} logoUrl={branding.logoUrl || undefined} />
+          ) : (
+            <BrandLogo size="sm" variant="dark" />
+          )}
+        </a>
+        <ThemeToggle />
+      </header>
+
+      <div className="flex-1 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-[360px]" data-testid="card-login">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-2">
+              {loginType === "platform" ? (
+                <Building2 className="w-6 h-6 text-primary" />
+              ) : loginType === "admin" ? (
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              ) : loginType === "preparer" ? (
+                <Calculator className="w-6 h-6 text-primary" />
+              ) : (
+                <Truck className="w-6 h-6 text-primary" />
+              )}
+            </div>
+            <CardTitle className="text-xl">Sign In</CardTitle>
+            <CardDescription>
+              {loginType === "platform"
+                ? "Sign in to the platform admin console"
+                : loginType === "admin"
+                ? "Sign in to manage operations and clients"
+                : loginType === "preparer"
+                ? "Sign in to access assigned client bookkeeping"
+                : "Sign in to access your client portal"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md p-3" data-testid="text-login-error">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="login-type">Login As</Label>
+                <Select
+                  value={loginType}
+                  onValueChange={(val: "platform" | "admin" | "client" | "preparer") => {
+                    setLoginType(val);
+                    setError("");
+                  }}
+                >
+                  <SelectTrigger id="login-type" data-testid="select-login-type">
+                    <SelectValue placeholder="Select login type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!isTenantLogin && (
+                      <SelectItem value="platform" data-testid="option-platform">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          <span>Platform Admin</span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    <SelectItem value="admin" data-testid="option-admin">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Admin / Staff</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="client" data-testid="option-client">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        <span>Client Portal</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="preparer" data-testid="option-preparer">
+                      <div className="flex items-center gap-2">
+                        <Calculator className="w-4 h-4" />
+                        <span>Tax Preparer</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  required
+                  autoComplete="username"
+                  data-testid="input-username"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  autoComplete="current-password"
+                  data-testid="input-password"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Signing in...
+                  </>
+                ) : (
+                  loginType === "platform" ? "Sign In as Platform Admin" : loginType === "admin" ? "Sign In as Admin" : loginType === "preparer" ? "Sign In as Tax Preparer" : "Sign In to Portal"
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/60" data-testid="powered-by">
+          <span>Powered by</span>
+          <BrandLogo size="sm" className="opacity-50 scale-75 origin-left" />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,19 @@
+{
+  "name": "CarrierDeskHQ",
+  "short_name": "CarrierDesk",
+  "description": "Trucking operations management platform — CRM, compliance, invoicing, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a5f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}
