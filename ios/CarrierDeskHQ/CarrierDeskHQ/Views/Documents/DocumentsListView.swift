@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DocumentsListView: View {
     @StateObject private var viewModel = DocumentsViewModel()
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack {
@@ -14,10 +15,10 @@ struct DocumentsListView: View {
                     EmptyStateView(
                         icon: "doc.fill",
                         title: "No Documents",
-                        message: "You don't have any documents yet."
+                        message: "All your compliance documents and files will appear here."
                     )
                 } else {
-                    documentsList
+                    documentsContent
                 }
             }
             .navigationTitle("Documents")
@@ -26,42 +27,104 @@ struct DocumentsListView: View {
         }
     }
 
-    private var documentsList: some View {
-        List(viewModel.documents) { doc in
-            HStack {
-                Image(systemName: iconForType(doc.type))
-                    .font(.title3)
-                    .foregroundStyle(.blue)
-                    .frame(width: 32)
+    private var pendingCount: Int {
+        viewModel.documents.filter { $0.status == "pending" }.count
+    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(doc.name)
+    private var filteredDocuments: [Document] {
+        if searchText.isEmpty { return viewModel.documents }
+        return viewModel.documents.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            ($0.type ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var documentsContent: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Subtitle with pending badge
+                HStack {
+                    Text("All your compliance documents and files")
                         .font(.subheadline)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                    if pendingCount > 0 {
+                        Text("\(pendingCount) pending")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
 
-                    HStack {
-                        if let type = doc.type {
-                            Text(type.uppercased())
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let createdAt = doc.createdAt {
-                            Text(formatDate(createdAt))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search documents...", text: $searchText)
+                        .textFieldStyle(.plain)
+                }
+                .padding(10)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal)
+
+                // Documents list
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredDocuments) { doc in
+                        documentRow(doc)
+                        if doc.id != filteredDocuments.last?.id {
+                            Divider().padding(.leading, 56)
                         }
                     }
                 }
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
 
-                Spacer()
+    private func documentRow(_ doc: Document) -> some View {
+        HStack {
+            Image(systemName: iconForType(doc.type))
+                .font(.title3)
+                .foregroundStyle(Brand.navy)
+                .frame(width: 32)
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text(doc.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                if let type = doc.type {
+                    Text(type)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
                 if let status = doc.status {
                     StatusBadge(status: status, compact: true)
                 }
+                if let createdAt = doc.createdAt {
+                    Text(formatDate(createdAt))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.vertical, 4)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     private func iconForType(_ type: String?) -> String {
@@ -79,8 +142,8 @@ struct DocumentsListView: View {
         guard let date = formatter.date(from: dateString) else {
             formatter.formatOptions = [.withInternetDateTime]
             guard let date = formatter.date(from: dateString) else { return dateString }
-            return date.formatted(date: .abbreviated, time: .omitted)
+            return date.formatted(.dateTime.month(.abbreviated).day().year())
         }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        return date.formatted(.dateTime.month(.abbreviated).day().year())
     }
 }

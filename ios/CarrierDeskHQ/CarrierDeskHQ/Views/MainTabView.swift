@@ -13,7 +13,7 @@ struct MainTabView: View {
 
             TicketsListView()
                 .tabItem {
-                    Label("Tickets", systemImage: "ticket.fill")
+                    Label("Services", systemImage: "briefcase.fill")
                 }
 
             InvoicesListView()

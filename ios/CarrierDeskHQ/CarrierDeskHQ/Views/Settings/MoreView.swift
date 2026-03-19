@@ -6,12 +6,33 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Services section
-                Section("Services") {
+                // Documents section (matching web sidebar)
+                Section("Documents") {
                     NavigationLink {
                         DocumentsListView()
                     } label: {
-                        Label("Documents", systemImage: "folder.fill")
+                        Label("Documents", systemImage: "doc.fill")
+                    }
+
+                    NavigationLink {
+                        SignaturesListView()
+                    } label: {
+                        Label("Sign Documents", systemImage: "signature")
+                    }
+
+                    NavigationLink {
+                        TaxDocumentsView()
+                    } label: {
+                        Label("Tax Documents", systemImage: "doc.text.magnifyingglass")
+                    }
+                }
+
+                // Financial section
+                Section("Financial") {
+                    NavigationLink {
+                        InvoicesListView()
+                    } label: {
+                        Label("Invoices", systemImage: "doc.text.fill")
                     }
 
                     NavigationLink {
@@ -19,23 +40,14 @@ struct MoreView: View {
                     } label: {
                         Label("Bookkeeping", systemImage: "banknote")
                     }
+                }
 
-                    NavigationLink {
-                        TaxDocumentsView()
-                    } label: {
-                        Label("Tax Prep", systemImage: "doc.text.magnifyingglass")
-                    }
-
+                // Additional
+                Section("Other") {
                     NavigationLink {
                         FormsListView()
                     } label: {
                         Label("Forms", systemImage: "doc.text")
-                    }
-
-                    NavigationLink {
-                        SignaturesListView()
-                    } label: {
-                        Label("Signatures", systemImage: "signature")
                     }
 
                     NavigationLink {
@@ -47,7 +59,7 @@ struct MoreView: View {
 
                 // Profile section
                 if let client = authViewModel.client {
-                    Section("Profile") {
+                    Section("Account") {
                         detailRow("Company", value: client.companyName)
                         if let contact = client.contactName {
                             detailRow("Contact", value: contact)
@@ -69,10 +81,10 @@ struct MoreView: View {
                     if client.dotNumber != nil || client.mcNumber != nil || client.einNumber != nil {
                         Section("Regulatory") {
                             if let dot = client.dotNumber {
-                                detailRow("DOT Number", value: dot)
+                                detailRow("DOT #", value: dot)
                             }
                             if let mc = client.mcNumber {
-                                detailRow("MC Number", value: mc)
+                                detailRow("MC #", value: mc)
                             }
                             if let ein = client.einNumber {
                                 detailRow("EIN", value: ein)
@@ -81,7 +93,7 @@ struct MoreView: View {
                     }
                 }
 
-                // Tenant info
+                // Support info
                 if let tenant = authViewModel.tenant {
                     Section("Support") {
                         detailRow("Provider", value: tenant.companyName)
@@ -94,25 +106,15 @@ struct MoreView: View {
                     }
                 }
 
-                // App & sign out
-                Section {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.1.0")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
+                // Sign out
                 Section {
                     Button(role: .destructive) {
                         Task { await authViewModel.logout() }
                     } label: {
                         HStack {
-                            Spacer()
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
                             Text("Sign Out")
                                 .fontWeight(.medium)
-                            Spacer()
                         }
                     }
                 }

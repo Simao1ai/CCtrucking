@@ -61,100 +61,105 @@ struct DashboardView: View {
     @ViewBuilder
     private func dashboardContent(_ dashboard: DashboardResponse) -> some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Welcome
+            VStack(spacing: 16) {
+                // Welcome header
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Welcome back,")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(greeting + ",")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text(dashboard.client.contactName ?? dashboard.client.companyName)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text(dashboard.client.companyName)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(dashboard.client.companyName)
-                            .font(.title3)
-                            .fontWeight(.bold)
                     }
                     Spacer()
                 }
                 .padding(.horizontal)
 
-                // Summary cards
+                // Action Needed banner
+                actionNeededSection(dashboard)
+
+                // Summary cards (2x2 grid)
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
                     GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
+                ], spacing: 10) {
                     SummaryCard(
-                        title: "Open Tickets",
+                        title: "Active Services",
                         value: "\(dashboard.summary.openTickets)",
-                        icon: "ticket",
-                        color: Brand.blue
+                        subtitle: "\(dashboard.recentTickets.filter { $0.status == "completed" }.count) completed",
+                        icon: "briefcase.fill",
+                        accentColor: Brand.blue
                     )
                     SummaryCard(
-                        title: "Outstanding",
+                        title: "Amount Due",
                         value: formatCurrency(dashboard.summary.totalOwed),
-                        icon: "dollarsign.circle",
-                        color: dashboard.summary.totalOwed > 0 ? .orange : .green
+                        subtitle: "\(dashboard.summary.outstandingInvoices) outstanding",
+                        icon: "dollarsign.circle.fill",
+                        accentColor: dashboard.summary.totalOwed > 0 ? .red : .green
+                    )
+                    SummaryCard(
+                        title: "Total Paid",
+                        value: "$0",
+                        subtitle: "All time",
+                        icon: "checkmark.circle.fill",
+                        accentColor: .green
                     )
                     SummaryCard(
                         title: "Documents",
                         value: "\(dashboard.summary.totalDocuments)",
+                        subtitle: "\(dashboard.summary.pendingSignatures) pending",
                         icon: "doc.fill",
-                        color: Brand.navy
+                        accentColor: Brand.navy
                     )
                 }
                 .padding(.horizontal)
 
-                // Alerts row
-                if dashboard.summary.overdueTickets > 0 || dashboard.summary.pendingSignatures > 0 {
-                    HStack(spacing: 12) {
-                        if dashboard.summary.overdueTickets > 0 {
-                            alertBadge(
-                                "\(dashboard.summary.overdueTickets) Overdue",
-                                icon: "exclamationmark.triangle",
-                                color: .red
-                            )
-                        }
-                        if dashboard.summary.pendingSignatures > 0 {
-                            alertBadge(
-                                "\(dashboard.summary.pendingSignatures) To Sign",
-                                icon: "signature",
-                                color: .orange
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-
-                // Recent Tickets
+                // Services section
                 if !dashboard.recentTickets.isEmpty {
-                    sectionHeader("Recent Tickets")
-                    LazyVStack(spacing: 8) {
+                    sectionHeader("Services", linkText: "All services")
+                    LazyVStack(spacing: 0) {
                         ForEach(dashboard.recentTickets) { ticket in
                             TicketRow(ticket: ticket)
+                            if ticket.id != dashboard.recentTickets.last?.id {
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
                 }
 
-                // Recent Invoices
+                // Invoices section
                 if !dashboard.recentInvoices.isEmpty {
-                    sectionHeader("Recent Invoices")
-                    LazyVStack(spacing: 8) {
+                    sectionHeader("Invoices", linkText: "All invoices")
+                    LazyVStack(spacing: 0) {
                         ForEach(dashboard.recentInvoices) { invoice in
                             InvoiceRow(invoice: invoice)
+                            if invoice.id != dashboard.recentInvoices.last?.id {
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
                 }
 
                 // Pending Actions
                 if !dashboard.pendingActions.isEmpty {
-                    sectionHeader("Pending Actions")
-                    LazyVStack(spacing: 8) {
+                    sectionHeader("Pending Actions", linkText: nil)
+                    LazyVStack(spacing: 0) {
                         ForEach(dashboard.pendingActions) { action in
                             HStack {
                                 Image(systemName: action.type == "signature" ? "signature" : "checkmark.seal")
                                     .foregroundStyle(.orange)
-                                VStack(alignment: .leading) {
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(action.title)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
@@ -165,49 +170,247 @@ struct DashboardView: View {
                                 Spacer()
                                 StatusBadge(status: action.status, compact: true)
                             }
-                            .padding(12)
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            if action.id != dashboard.pendingActions.last?.id {
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
                 }
+
+                // Account section
+                accountSection(dashboard.client)
             }
             .padding(.vertical)
         }
         .background(Color(.systemGroupedBackground))
     }
 
-    private func sectionHeader(_ title: String) -> some View {
+    // MARK: - Action Needed
+
+    @ViewBuilder
+    private func actionNeededSection(_ dashboard: DashboardResponse) -> some View {
+        let overdueInvoices = dashboard.recentInvoices.filter { $0.status == "overdue" }
+        let sentInvoices = dashboard.recentInvoices.filter { $0.status == "sent" }
+        let hasActions = !overdueInvoices.isEmpty || !sentInvoices.isEmpty ||
+                         dashboard.summary.pendingSignatures > 0
+
+        if hasActions {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                    Text("Action Needed")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.orange)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.08))
+
+                if !overdueInvoices.isEmpty {
+                    actionRow(
+                        icon: "exclamationmark.square.fill",
+                        iconColor: .red,
+                        text: "\(overdueInvoices.count) overdue invoice\(overdueInvoices.count > 1 ? "s" : "")",
+                        detail: formatCurrency(overdueInvoices.compactMap(\.amount).reduce(0, +)),
+                        detailColor: .red
+                    )
+                }
+
+                if !sentInvoices.isEmpty {
+                    actionRow(
+                        icon: "clock.fill",
+                        iconColor: .blue,
+                        text: "\(sentInvoices.count) invoice\(sentInvoices.count > 1 ? "s" : "") awaiting payment",
+                        detail: formatCurrency(sentInvoices.compactMap(\.amount).reduce(0, +)),
+                        detailColor: .primary
+                    )
+                }
+
+                if dashboard.summary.pendingSignatures > 0 {
+                    actionRow(
+                        icon: "doc.text.fill",
+                        iconColor: .orange,
+                        text: "\(dashboard.summary.pendingSignatures) document\(dashboard.summary.pendingSignatures > 1 ? "s" : "") requested",
+                        detail: nil,
+                        detailColor: .primary
+                    )
+                }
+            }
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
+            .padding(.horizontal)
+        }
+    }
+
+    private func actionRow(icon: String, iconColor: Color, text: String, detail: String?, detailColor: Color) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .frame(width: 24)
+            Text(text)
+                .font(.subheadline)
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(detailColor)
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Account Section
+
+    private func accountSection(_ client: ClientProfile) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "building.2")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                Text("Account")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 0) {
+                if let contact = client.contactName {
+                    accountField("Contact", value: contact)
+                }
+                if let email = client.email {
+                    accountField("Email", value: email)
+                }
+                if let phone = client.phone {
+                    accountField("Phone", value: phone)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            if client.dotNumber != nil || client.mcNumber != nil || client.einNumber != nil {
+                Divider()
+                HStack(alignment: .top, spacing: 0) {
+                    if let dot = client.dotNumber {
+                        accountField("DOT #", value: dot)
+                    }
+                    if let mc = client.mcNumber {
+                        accountField("MC #", value: mc)
+                    }
+                    if let ein = client.einNumber {
+                        accountField("EIN", value: ein)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+        }
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+    }
+
+    private func accountField(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.medium)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(_ title: String, linkText: String?) -> some View {
         HStack {
             Text(title)
                 .font(.headline)
             Spacer()
+            if let linkText {
+                Text(linkText)
+                    .font(.caption)
+                    .foregroundStyle(Brand.blue)
+            }
         }
         .padding(.horizontal)
         .padding(.top, 4)
     }
 
-    private func alertBadge(_ text: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-            Text(text)
-                .font(.caption)
-                .fontWeight(.medium)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(color.opacity(0.1))
-        .foregroundStyle(color)
-        .clipShape(Capsule())
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 { return "Good morning" }
+        if hour < 17 { return "Good afternoon" }
+        return "Good evening"
     }
 
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+}
+
+// MARK: - Summary Card
+
+struct SummaryCard: View {
+    let title: String
+    let value: String
+    var subtitle: String? = nil
+    let icon: String
+    var accentColor: Color = Brand.blue
+    var color: Color? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color ?? accentColor)
+                    .frame(width: 4, height: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title.uppercased())
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                    Text(value)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                }
+            }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -232,14 +435,26 @@ struct TicketRow: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 StatusBadge(status: ticket.status, compact: true)
-                if let priority = ticket.priority {
-                    StatusBadge(status: priority, compact: true)
+                if let dueDate = ticket.dueDate {
+                    Text(formatDate(dueDate))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func formatDate(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: dateString) else {
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: dateString) else { return "" }
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }
 
@@ -269,9 +484,8 @@ struct InvoiceRow: View {
                 StatusBadge(status: invoice.status, compact: true)
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func formatCurrency(_ amount: Double) -> String {
