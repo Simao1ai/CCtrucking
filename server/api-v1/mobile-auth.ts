@@ -83,7 +83,7 @@ router.post("/login", loginRateLimit, async (req, res) => {
 
     const [user] = await db.select().from(users).where(
       and(
-        eq(users.username, username.trim()),
+        eq(users.username, username.trim().toLowerCase()),
         eq(users.tenantId, tenant.id)
       )
     );

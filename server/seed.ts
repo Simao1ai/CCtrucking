@@ -88,6 +88,52 @@ async function ensureCCTruckingTenant() {
   console.log("CC Trucking tenant seeded with branding and modules.");
 }
 
+async function ensureTestClientUsers() {
+  const tenantId = "cc-trucking-tenant-001";
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant) return;
+
+  const existingClients = await db.select().from(clients).where(eq(clients.tenantId, tenantId));
+  if (existingClients.length === 0) return;
+
+  const firstClient = existingClients[0];
+
+  const testClientUsers = [
+    {
+      username: "client1",
+      password: "client123",
+      email: "marcus@lonestarfreight.com",
+      firstName: "Marcus",
+      lastName: "Johnson",
+    },
+    {
+      username: "test",
+      password: "test123",
+      email: "test@lonestarfreight.com",
+      firstName: "Test",
+      lastName: "User",
+    },
+  ];
+
+  for (const u of testClientUsers) {
+    const [existing] = await db.select().from(users).where(eq(users.username, u.username));
+    if (existing) continue;
+
+    const hashedPassword = await bcrypt.hash(u.password, 10);
+    await db.insert(users).values({
+      username: u.username,
+      password: hashedPassword,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: "client",
+      clientId: firstClient.id,
+      tenantId,
+    });
+    console.log(`Test client user '${u.username}' seeded.`);
+  }
+}
+
 async function ensureUserTenantAssignment() {
   const ccTruckingUsers = ["admin", "staff"];
   for (const username of ccTruckingUsers) {
@@ -207,6 +253,7 @@ export async function seedDatabase() {
   await seedUsers();
   await ensureCCTruckingTenant();
   await ensureUserTenantAssignment();
+  await ensureTestClientUsers();
   await migrateOrphanedDataToCCTrucking();
   await markOnboardingComplete();
   await ensurePlatformOwner();
