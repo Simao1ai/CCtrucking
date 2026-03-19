@@ -19,7 +19,7 @@ struct ListMeta: Decodable {
 // MARK: - Flexible Decoding Helpers
 
 /// Decodes a Double that might arrive as a String, Number, or null from the backend
-private func decodeFlexibleDouble(from container: KeyedDecodingContainer<some CodingKey>, forKey key: some CodingKey) -> Double? {
+private func decodeFlexibleDouble<K: CodingKey>(from container: KeyedDecodingContainer<K>, forKey key: K) -> Double? {
     if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: key) {
         return doubleVal
     } else if let intVal = try? container.decodeIfPresent(Int.self, forKey: key) {
@@ -31,7 +31,7 @@ private func decodeFlexibleDouble(from container: KeyedDecodingContainer<some Co
 }
 
 /// Decodes a required Double that might arrive as a String or Number
-private func decodeFlexibleDoubleRequired(from container: KeyedDecodingContainer<some CodingKey>, forKey key: some CodingKey) throws -> Double {
+private func decodeFlexibleDoubleRequired<K: CodingKey>(from container: KeyedDecodingContainer<K>, forKey key: K) throws -> Double {
     if let doubleVal = try? container.decode(Double.self, forKey: key) {
         return doubleVal
     } else if let intVal = try? container.decode(Int.self, forKey: key) {
