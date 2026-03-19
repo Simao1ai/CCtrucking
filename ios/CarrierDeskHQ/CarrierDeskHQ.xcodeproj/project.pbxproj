@@ -1,0 +1,526 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001 /* CarrierDeskHQApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001; };
+		A1000002 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002; };
+		A1000003 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000003; };
+		A1000004 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004; };
+		A1000005 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000005; };
+		A1000006 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006; };
+		A1000007 /* DataListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000007; };
+		A1000008 /* CompanyLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000008; };
+		A1000009 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000009; };
+		A1000010 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000010; };
+		A1000011 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000011; };
+		A1000012 /* TicketsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000012; };
+		A1000013 /* TicketDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013; };
+		A1000014 /* InvoicesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014; };
+		A1000015 /* InvoiceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000015; };
+		A1000016 /* DocumentsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000016; };
+		A1000017 /* SignaturesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000017; };
+		A1000018 /* NotarizationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000018; };
+		A1000019 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000019; };
+		A1000020 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000020; };
+		A1000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000021; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B1000000 /* CarrierDeskHQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CarrierDeskHQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000001 /* CarrierDeskHQApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeskHQApp.swift; sourceTree = "<group>"; };
+		B1000002 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		B1000003 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		B1000004 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		B1000005 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		B1000006 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+		B1000007 /* DataListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataListViewModel.swift; sourceTree = "<group>"; };
+		B1000008 /* CompanyLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyLookupView.swift; sourceTree = "<group>"; };
+		B1000009 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		B1000010 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		B1000011 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		B1000012 /* TicketsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketsListView.swift; sourceTree = "<group>"; };
+		B1000013 /* TicketDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketDetailView.swift; sourceTree = "<group>"; };
+		B1000014 /* InvoicesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoicesListView.swift; sourceTree = "<group>"; };
+		B1000015 /* InvoiceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceDetailView.swift; sourceTree = "<group>"; };
+		B1000016 /* DocumentsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsListView.swift; sourceTree = "<group>"; };
+		B1000017 /* SignaturesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignaturesListView.swift; sourceTree = "<group>"; };
+		B1000018 /* NotarizationsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotarizationsListView.swift; sourceTree = "<group>"; };
+		B1000019 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B1000020 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		B1000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B1000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C1000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D1000001 = {
+			isa = PBXGroup;
+			children = (
+				D1000002 /* CarrierDeskHQ */,
+				D1000099 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D1000099 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000 /* CarrierDeskHQ.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D1000002 /* CarrierDeskHQ */ = {
+			isa = PBXGroup;
+			children = (
+				D1000003 /* App */,
+				D1000004 /* Models */,
+				D1000005 /* Services */,
+				D1000006 /* ViewModels */,
+				D1000007 /* Views */,
+				B1000021 /* Assets.xcassets */,
+				B1000022 /* Info.plist */,
+			);
+			path = CarrierDeskHQ;
+			sourceTree = "<group>";
+		};
+		D1000003 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B1000001 /* CarrierDeskHQApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D1000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B1000002 /* APIModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D1000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B1000003 /* APIService.swift */,
+				B1000004 /* KeychainService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		D1000006 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B1000005 /* AuthViewModel.swift */,
+				B1000006 /* DashboardViewModel.swift */,
+				B1000007 /* DataListViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		D1000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B1000020 /* MainTabView.swift */,
+				D1000008 /* Auth */,
+				D1000009 /* Dashboard */,
+				D1000010 /* Tickets */,
+				D1000011 /* Invoices */,
+				D1000012 /* Documents */,
+				D1000013 /* Signatures */,
+				D1000014 /* Notarizations */,
+				D1000015 /* Settings */,
+				D1000016 /* Components */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D1000008 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				B1000008 /* CompanyLookupView.swift */,
+				B1000009 /* LoginView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		D1000009 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				B1000011 /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		D1000010 /* Tickets */ = {
+			isa = PBXGroup;
+			children = (
+				B1000012 /* TicketsListView.swift */,
+				B1000013 /* TicketDetailView.swift */,
+			);
+			path = Tickets;
+			sourceTree = "<group>";
+		};
+		D1000011 /* Invoices */ = {
+			isa = PBXGroup;
+			children = (
+				B1000014 /* InvoicesListView.swift */,
+				B1000015 /* InvoiceDetailView.swift */,
+			);
+			path = Invoices;
+			sourceTree = "<group>";
+		};
+		D1000012 /* Documents */ = {
+			isa = PBXGroup;
+			children = (
+				B1000016 /* DocumentsListView.swift */,
+			);
+			path = Documents;
+			sourceTree = "<group>";
+		};
+		D1000013 /* Signatures */ = {
+			isa = PBXGroup;
+			children = (
+				B1000017 /* SignaturesListView.swift */,
+			);
+			path = Signatures;
+			sourceTree = "<group>";
+		};
+		D1000014 /* Notarizations */ = {
+			isa = PBXGroup;
+			children = (
+				B1000018 /* NotarizationsListView.swift */,
+			);
+			path = Notarizations;
+			sourceTree = "<group>";
+		};
+		D1000015 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B1000019 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		D1000016 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				B1000010 /* StatusBadge.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E1000001 /* CarrierDeskHQ */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1000003 /* Build configuration list for PBXNativeTarget "CarrierDeskHQ" */;
+			buildPhases = (
+				E1000002 /* Sources */,
+				C1000001 /* Frameworks */,
+				E1000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CarrierDeskHQ;
+			productName = CarrierDeskHQ;
+			productReference = B1000000 /* CarrierDeskHQ.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E1000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					E1000001 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+				};
+			};
+			buildConfigurationList = F1000001 /* Build configuration list for PBXProject "CarrierDeskHQ" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D1000001;
+			productRefGroup = D1000099 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E1000001 /* CarrierDeskHQ */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E1000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000021 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E1000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001 /* CarrierDeskHQApp.swift in Sources */,
+				A1000002 /* APIModels.swift in Sources */,
+				A1000003 /* APIService.swift in Sources */,
+				A1000004 /* KeychainService.swift in Sources */,
+				A1000005 /* AuthViewModel.swift in Sources */,
+				A1000006 /* DashboardViewModel.swift in Sources */,
+				A1000007 /* DataListViewModel.swift in Sources */,
+				A1000008 /* CompanyLookupView.swift in Sources */,
+				A1000009 /* LoginView.swift in Sources */,
+				A1000010 /* StatusBadge.swift in Sources */,
+				A1000011 /* DashboardView.swift in Sources */,
+				A1000012 /* TicketsListView.swift in Sources */,
+				A1000013 /* TicketDetailView.swift in Sources */,
+				A1000014 /* InvoicesListView.swift in Sources */,
+				A1000015 /* InvoiceDetailView.swift in Sources */,
+				A1000016 /* DocumentsListView.swift in Sources */,
+				A1000017 /* SignaturesListView.swift in Sources */,
+				A1000018 /* NotarizationsListView.swift in Sources */,
+				A1000019 /* SettingsView.swift in Sources */,
+				A1000020 /* MainTabView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F1000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		F1000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		F1000020 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CarrierDeskHQ/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "CarrierDesk HQ";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.carrierdeskhq.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F1000021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CarrierDeskHQ/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "CarrierDesk HQ";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.carrierdeskhq.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F1000001 /* Build configuration list for PBXProject "CarrierDeskHQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1000010 /* Debug */,
+				F1000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F1000003 /* Build configuration list for PBXNativeTarget "CarrierDeskHQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1000020 /* Debug */,
+				F1000021 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = E1000000 /* Project object */;
+}
