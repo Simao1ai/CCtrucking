@@ -1,0 +1,53 @@
+The initial launch of the app works, I'm able to put in the slug and when I enter the client login information it says its invalid.
+
+
+Let me check the login flow — how credentials are sent and how the API responds.
+
+Read 2 files
+Read 2 files
+
+Let me check the backend to see what fields the login endpoint actually expects.
+
+Find backend login endpoint
+Find backend login endpoint
+
+The backend expects slug, username, and password — which matches exactly what the iOS app sends. The field names are correct.
+The issue is likely that the JSONEncoder is using camelCase by default, but let me check if there's a key encoding mismatch. Actually, the fields are all single words (slug, username, password) so casing isn't the issue.
+Let me check the backend more closely — specifically how it looks up the user and whether there's a clientId requirement.
+
+Read a file
+Read a file
+
+I found the issue. The backend login response (line 149-168) returns the client object without dotNumber, mcNumber, or einNumber fields, but more importantly — the iOS LoginResponse model expects all the ClientProfile fields to be present.
+However, the real problem is likely a decoding error being shown as "Invalid credentials". The backend returns a subset of client fields on login, but the iOS ClientProfile model has many optional fields that just won't be present. That should be fine since they're optional.
+Wait — let me look more carefully. The 401 response body is { error: true, message: "Invalid username or password." }, and the iOS execute method catches 401 and throws APIError.unauthorized which shows "Invalid credentials. Please try again." It doesn't even try to decode the server message.
+The question is: is the backend actually returning 401, or is there a decoding error that's being mishandled? Let me check if the LoginResponse decoding could fail because the backend response is missing fields the iOS model expects.
+The backend login response client object has: id, companyName, contactName, email, phone, status — but the iOS ClientProfile also expects address, city, state, zipCode, dotNumber, mcNumber, einNumber. Those are all Optional (String?), so they should decode as nil when missing. That's fine.
+But the backend login tenant object only returns: companyName, slug, logoUrl, primaryColor — while the iOS TenantBranding expects tenantId, tagline, supportEmail, supportPhone too. Those are also optional, so should be fine.
+Actually, the real issue might be that the user simply doesn't have a user account set up for mobile login, or the username/password is wrong. But let me also check — does the user need to use their email as the username? Let me check what the users table username field actually contains.
+
+Searched code, read a file
+Searched code, read a file
+
+The backend code and iOS code match up correctly — both use username and password. The issue isn't in the iOS app code itself.
+This is a backend/data issue, not an app bug. For a user to log in via the mobile app, they need:
+A record in the users table with a username and hashed password
+The user must belong to the correct tenant (tenantId matches the slug's tenant)
+The user must have a clientId set (links them to a client profile)
+Do you have a user account created for the client you're trying to log in with? In the web admin panel, the client would need a user account with:
+A username (not email — the login field is username)
+A password set
+Their clientId linked
+The correct tenantId
+If you're trying to log in with the admin credentials, those likely don't have a clientId and would get a 403 "does not have client portal access" error (though the app currently shows that as a generic message too).
+Would you like me to add better error messaging so the app shows the actual server error instead of the generic "Invalid credentials"? That would help debug what's actually happening.
+
+
+main
+
+claude/plan-ios-app-9Qh2G
+
++3150
+-0
+
+Cr
