@@ -35,7 +35,7 @@ struct LoginResponse: Decodable {
     let tenant: TenantBranding
 }
 
-struct TenantBranding: Decodable, Equatable {
+struct TenantBranding: Codable, Equatable {
     let tenantId: String?
     let companyName: String
     let slug: String?

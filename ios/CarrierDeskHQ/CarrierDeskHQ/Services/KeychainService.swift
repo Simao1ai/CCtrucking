@@ -98,6 +98,3 @@ enum KeychainService {
         SecItemDelete(query as CFDictionary)
     }
 }
-
-// Make TenantBranding Encodable for Keychain storage
-extension TenantBranding: Encodable {}
