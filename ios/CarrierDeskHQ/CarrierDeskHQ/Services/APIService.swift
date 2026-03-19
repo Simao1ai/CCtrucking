@@ -225,20 +225,54 @@ actor APIService {
         return try await execute(request)
     }
 
+    /// Retryable status codes (server waking up, temporary overload)
+    private static let retryableStatusCodes: Set<Int> = [502, 503, 504]
+    private static let maxRetries = 3
+    private static let retryDelays: [UInt64] = [2_000_000_000, 4_000_000_000, 8_000_000_000] // 2s, 4s, 8s
+
     private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let data: Data
-        let response: URLResponse
+        var lastError: Error?
 
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw APIError.networkError("Network error: \(error.localizedDescription)")
+        for attempt in 0...Self.maxRetries {
+            if attempt > 0 {
+                let delay = Self.retryDelays[min(attempt - 1, Self.retryDelays.count - 1)]
+                #if DEBUG
+                print("🔄 Retry \(attempt)/\(Self.maxRetries) after \(delay / 1_000_000_000)s...")
+                #endif
+                try await Task.sleep(nanoseconds: delay)
+            }
+
+            let data: Data
+            let response: URLResponse
+
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch {
+                lastError = APIError.networkError("Network error: \(error.localizedDescription)")
+                continue // retry on network failures too
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                lastError = APIError.networkError("Invalid response")
+                continue
+            }
+
+            // Retry on 502/503/504 (server waking up)
+            if Self.retryableStatusCodes.contains(httpResponse.statusCode) && attempt < Self.maxRetries {
+                #if DEBUG
+                print("⚠️ Got \(httpResponse.statusCode), server may be waking up...")
+                #endif
+                lastError = APIError.serverError("Server error (\(httpResponse.statusCode))")
+                continue
+            }
+
+            return try processResponse(data: data, httpResponse: httpResponse)
         }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.networkError("Invalid response")
-        }
+        throw lastError ?? APIError.serverError("Request failed after \(Self.maxRetries) retries")
+    }
 
+    private func processResponse<T: Decodable>(data: Data, httpResponse: HTTPURLResponse) throws -> T {
         switch httpResponse.statusCode {
         case 200...299:
             do {
