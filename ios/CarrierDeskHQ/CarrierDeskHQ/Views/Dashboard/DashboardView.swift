@@ -174,7 +174,7 @@ struct DashboardView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                StatusBadge(status: action.status, compact: true)
+                                StatusBadge(status: action.status ?? "pending", compact: true)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
