@@ -120,6 +120,29 @@ struct Invoice: Decodable, Identifiable {
     let dueDate: String?
     let description: String?
     let createdAt: String
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        invoiceNumber = try container.decodeIfPresent(String.self, forKey: .invoiceNumber)
+        status = try container.decode(String.self, forKey: .status)
+        dueDate = try container.decodeIfPresent(String.self, forKey: .dueDate)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+
+        // Backend sends decimal as string (e.g. "100.00"), handle both String and Number
+        if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .amount) {
+            amount = doubleVal
+        } else if let stringVal = try? container.decodeIfPresent(String.self, forKey: .amount) {
+            amount = Double(stringVal)
+        } else {
+            amount = nil
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, invoiceNumber, amount, status, dueDate, description, createdAt
+    }
 }
 
 // MARK: - Document

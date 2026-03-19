@@ -2,8 +2,9 @@ import Foundation
 
 enum APIError: LocalizedError {
     case invalidURL
-    case unauthorized
+    case unauthorized(String)
     case forbidden(String)
+    case rateLimited(String)
     case notFound
     case locked(String)
     case serverError(String)
@@ -14,9 +15,11 @@ enum APIError: LocalizedError {
         switch self {
         case .invalidURL:
             return "Invalid URL"
-        case .unauthorized:
-            return "Invalid credentials. Please try again."
+        case .unauthorized(let msg):
+            return msg
         case .forbidden(let msg):
+            return msg
+        case .rateLimited(let msg):
             return msg
         case .notFound:
             return "Resource not found."
@@ -189,7 +192,8 @@ actor APIService {
 
         case 401:
             KeychainService.deleteToken()
-            throw APIError.unauthorized
+            let apiErr = try? decoder.decode(APIErrorResponse.self, from: data)
+            throw APIError.unauthorized(apiErr?.message ?? "Invalid credentials. Please try again.")
 
         case 403:
             let apiErr = try? decoder.decode(APIErrorResponse.self, from: data)
@@ -201,6 +205,10 @@ actor APIService {
         case 423:
             let apiErr = try? decoder.decode(APIErrorResponse.self, from: data)
             throw APIError.locked(apiErr?.message ?? "Account locked. Try again later.")
+
+        case 429:
+            let apiErr = try? decoder.decode(APIErrorResponse.self, from: data)
+            throw APIError.rateLimited(apiErr?.message ?? "Too many attempts. Please try again later.")
 
         default:
             let apiErr = try? decoder.decode(APIErrorResponse.self, from: data)

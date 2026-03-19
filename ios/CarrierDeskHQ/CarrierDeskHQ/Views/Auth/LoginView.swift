@@ -86,11 +86,18 @@ struct LoginView: View {
                 .padding(.horizontal, 24)
 
                 if let error = authViewModel.error {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.top, 12)
-                        .padding(.horizontal)
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text(error)
+                            .foregroundStyle(.white)
+                    }
+                    .font(.callout)
+                    .padding(12)
+                    .background(Color.red.opacity(0.85))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.top, 12)
+                    .padding(.horizontal, 24)
                 }
 
                 Spacer()
