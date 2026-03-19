@@ -35,7 +35,7 @@ struct NotarizationsListView: View {
                     .frame(width: 32)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(notarization.documentName)
+                    Text(notarization.documentName ?? "Notarization")
                         .font(.subheadline)
                         .fontWeight(.medium)
 

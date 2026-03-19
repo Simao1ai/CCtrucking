@@ -244,6 +244,12 @@ actor APIService {
             do {
                 return try decoder.decode(T.self, from: data)
             } catch {
+                #if DEBUG
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    print("⚠️ Decode error for \(T.self): \(error)")
+                    print("⚠️ Raw JSON: \(jsonString.prefix(2000))")
+                }
+                #endif
                 throw APIError.decodingError(error.localizedDescription)
             }
 

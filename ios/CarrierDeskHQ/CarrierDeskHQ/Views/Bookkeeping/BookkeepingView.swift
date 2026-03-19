@@ -187,11 +187,11 @@ struct BookkeepingView: View {
     private func transactionRow(_ txn: BankTransaction) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(txn.description)
+                Text(txn.description ?? "Transaction")
                     .font(.subheadline)
                     .lineLimit(1)
                 HStack(spacing: 8) {
-                    Text(txn.category)
+                    Text(txn.category ?? "Uncategorized")
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)

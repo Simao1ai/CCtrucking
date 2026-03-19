@@ -49,12 +49,12 @@ struct FormsListView: View {
     private var formsList: some View {
         List(viewModel.forms) { form in
             HStack {
-                Image(systemName: form.status == "submitted" ? "doc.text.fill" : "doc.text")
-                    .foregroundStyle(form.status == "submitted" ? .green : Brand.navy)
+                Image(systemName: (form.status ?? "") == "submitted" ? "doc.text.fill" : "doc.text")
+                    .foregroundStyle((form.status ?? "") == "submitted" ? .green : Brand.navy)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(form.name)
+                    Text(form.name ?? "Form")
                         .font(.subheadline)
                         .fontWeight(.medium)
                     if let date = form.updatedAt ?? form.createdAt {
@@ -66,7 +66,7 @@ struct FormsListView: View {
 
                 Spacer()
 
-                StatusBadge(status: form.status, compact: true)
+                StatusBadge(status: form.status ?? "pending", compact: true)
             }
             .padding(.vertical, 4)
         }

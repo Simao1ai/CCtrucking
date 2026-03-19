@@ -93,12 +93,12 @@ struct ChatView: View {
     }
 
     private func messageBubble(_ msg: ChatMessage) -> some View {
-        let isClient = msg.senderRole == "client"
+        let isClient = (msg.senderRole ?? "client") == "client"
         return HStack {
             if isClient { Spacer(minLength: 60) }
             VStack(alignment: isClient ? .trailing : .leading, spacing: 4) {
-                if !isClient {
-                    Text(msg.senderName)
+                if !isClient, let name = msg.senderName {
+                    Text(name)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -109,9 +109,11 @@ struct ChatView: View {
                     .background(isClient ? Brand.navy : Color(.secondarySystemBackground))
                     .foregroundStyle(isClient ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-                Text(formatTime(msg.createdAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if let createdAt = msg.createdAt {
+                    Text(formatTime(createdAt))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
             if !isClient { Spacer(minLength: 60) }
         }

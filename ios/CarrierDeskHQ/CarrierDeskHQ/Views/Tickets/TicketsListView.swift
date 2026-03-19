@@ -173,9 +173,11 @@ struct TicketsListView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text("Opened \(formatDate(ticket.createdAt))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if let createdAt = ticket.createdAt {
+                    Text("Opened \(formatDate(createdAt))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.horizontal, 16)

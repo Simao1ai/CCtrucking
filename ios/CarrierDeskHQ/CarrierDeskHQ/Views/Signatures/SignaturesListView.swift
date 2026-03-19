@@ -35,13 +35,15 @@ struct SignaturesListView: View {
                     .frame(width: 32)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(sig.documentName)
+                    Text(sig.documentName ?? "Signature Request")
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    Text(formatDate(sig.createdAt))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let createdAt = sig.createdAt {
+                        Text(formatDate(createdAt))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
                     if let signedAt = sig.signedAt {
                         Text("Signed: \(formatDate(signedAt))")

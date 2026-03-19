@@ -43,7 +43,9 @@ struct InvoiceDetailView: View {
                     detailRow("Due Date", value: formatDate(dueDate))
                 }
 
-                detailRow("Created", value: formatDate(invoice.createdAt))
+                if let createdAt = invoice.createdAt {
+                    detailRow("Created", value: formatDate(createdAt))
+                }
             }
             .padding()
         }

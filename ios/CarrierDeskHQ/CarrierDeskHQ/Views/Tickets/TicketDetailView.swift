@@ -41,7 +41,9 @@ struct TicketDetailView: View {
                     detailRow("Due Date", value: formatDate(dueDate))
                 }
 
-                detailRow("Created", value: formatDate(ticket.createdAt))
+                if let createdAt = ticket.createdAt {
+                    detailRow("Created", value: formatDate(createdAt))
+                }
 
                 if let updatedAt = ticket.updatedAt {
                     detailRow("Last Updated", value: formatDate(updatedAt))

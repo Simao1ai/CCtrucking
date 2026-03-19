@@ -10,11 +10,23 @@ struct DashboardView: View {
                 if viewModel.isLoading && viewModel.dashboard == nil {
                     ProgressView("Loading dashboard...")
                 } else if let error = viewModel.error, viewModel.dashboard == nil {
-                    ErrorBanner(message: error) {
-                        await viewModel.loadDashboard()
+                    VStack {
+                        Spacer()
+                        ErrorBanner(message: error) {
+                            await viewModel.loadDashboard()
+                        }
+                        Spacer()
                     }
                 } else if let dashboard = viewModel.dashboard {
                     dashboardContent(dashboard)
+                } else {
+                    VStack {
+                        Spacer()
+                        ErrorBanner(message: "Unable to load dashboard.") {
+                            await viewModel.loadDashboard()
+                        }
+                        Spacer()
+                    }
                 }
             }
             .navigationTitle("Dashboard")
