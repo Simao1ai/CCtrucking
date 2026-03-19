@@ -35,7 +35,7 @@ enum APIError: LocalizedError {
 actor APIService {
     static let shared = APIService()
 
-    private let baseURL = "https://carrierdeskhq.com/api/v1/mobile"
+    private let baseURL = "https://5bc1639c-cdfb-4dc2-bdfb-64e5c5f8792e-00-3lwilqk7gnhaf.worf.replit.dev/api/v1/mobile"
     private let session: URLSession
     private let decoder: JSONDecoder
 
