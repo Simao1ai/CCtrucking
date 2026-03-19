@@ -182,6 +182,26 @@ actor APIService {
         return response.data
     }
 
+    // MARK: - Notification Endpoints
+
+    func getNotifications() async throws -> [AppNotification] {
+        let response: APIListResponse<AppNotification> = try await get("/notifications")
+        return response.data
+    }
+
+    func getUnreadNotificationCount() async throws -> Int {
+        let response: APIResponse<UnreadCountResponse> = try await get("/notifications/unread-count")
+        return response.data.count
+    }
+
+    func markNotificationRead(id: String) async throws {
+        let _: APIResponse<AppNotification> = try await patch("/notifications/\(id)/read")
+    }
+
+    func markAllNotificationsRead() async throws {
+        let _: APIResponse<[String: Bool]> = try await post("/notifications/mark-all-read", body: EmptyBody())
+    }
+
     // MARK: - HTTP Methods
 
     private func get<T: Decodable>(_ path: String, queryParams: [String: String] = [:]) async throws -> T {
@@ -198,6 +218,22 @@ actor APIService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        return try await execute(request)
+    }
+
+    private func patch<T: Decodable>(_ path: String) async throws -> T {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if let token = authToken {
@@ -264,6 +300,20 @@ actor APIService {
                 #endif
                 lastError = APIError.serverError("Server error (\(httpResponse.statusCode))")
                 continue
+            }
+
+            // Detect HTML responses (Replit serves HTML when server is waking up)
+            if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+                let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+                let isHTML = contentType.contains("text/html")
+                let startsWithHTML = data.prefix(1).first == UInt8(ascii: "<")
+                if (isHTML || startsWithHTML) && attempt < Self.maxRetries {
+                    #if DEBUG
+                    print("⚠️ Got HTML response instead of JSON, server may be waking up...")
+                    #endif
+                    lastError = APIError.serverError("Server is starting up, please wait...")
+                    continue
+                }
             }
 
             return try processResponse(data: data, httpResponse: httpResponse)

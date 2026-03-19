@@ -2,11 +2,13 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var notificationsViewModel = NotificationsViewModel()
 
     var body: some View {
         TabView {
             DashboardView()
                 .environmentObject(authViewModel)
+                .environmentObject(notificationsViewModel)
                 .tabItem {
                     Label("Dashboard", systemImage: "house.fill")
                 }
@@ -28,9 +30,13 @@ struct MainTabView: View {
 
             MoreView()
                 .environmentObject(authViewModel)
+                .environmentObject(notificationsViewModel)
                 .tabItem {
                     Label("More", systemImage: "ellipsis")
                 }
+        }
+        .task {
+            await notificationsViewModel.loadUnreadCount()
         }
     }
 }

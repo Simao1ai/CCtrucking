@@ -56,6 +56,7 @@ import mobileBookkeepingV1Router from "./api-v1/mobile-bookkeeping";
 import mobileTaxV1Router from "./api-v1/mobile-tax";
 import mobileChatV1Router from "./api-v1/mobile-chat";
 import mobileFormsV1Router from "./api-v1/mobile-forms";
+import mobileNotificationsV1Router from "./api-v1/mobile-notifications";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule, getTenantPlan } from "./middleware/module-gates";
 import { isPlatformAdmin } from "./middleware/tenant";
@@ -410,6 +411,7 @@ export async function registerRoutes(
   app.use("/api/v1/mobile/tax", mobileTaxV1Router);
   app.use("/api/v1/mobile/chat", mobileChatV1Router);
   app.use("/api/v1/mobile/forms", mobileFormsV1Router);
+  app.use("/api/v1/mobile/notifications", mobileNotificationsV1Router);
 
   app.get("/api/branding", async (req, res) => {
     try {

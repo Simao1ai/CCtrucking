@@ -2,7 +2,9 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var notificationsViewModel: NotificationsViewModel
     @StateObject private var viewModel = DashboardViewModel()
+    @State private var showNotifications = false
 
     var body: some View {
         NavigationStack {
@@ -40,26 +42,50 @@ struct DashboardView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if let tenant = authViewModel.tenant {
-                        Menu {
-                            Text(tenant.companyName)
-                            Divider()
-                            Button(role: .destructive) {
-                                Task { await authViewModel.logout() }
-                            } label: {
-                                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                            }
+                    HStack(spacing: 16) {
+                        Button {
+                            showNotifications = true
                         } label: {
-                            Image(systemName: "person.circle")
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell")
+                                if notificationsViewModel.unreadCount > 0 {
+                                    Text("\(min(notificationsViewModel.unreadCount, 99))")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(3)
+                                        .background(Color.red)
+                                        .clipShape(Circle())
+                                        .offset(x: 6, y: -6)
+                                }
+                            }
+                        }
+
+                        if let tenant = authViewModel.tenant {
+                            Menu {
+                                Text(tenant.companyName)
+                                Divider()
+                                Button(role: .destructive) {
+                                    Task { await authViewModel.logout() }
+                                } label: {
+                                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                                }
+                            } label: {
+                                Image(systemName: "person.circle")
+                            }
                         }
                     }
                 }
             }
             .task {
                 await viewModel.loadDashboard()
+                await notificationsViewModel.loadUnreadCount()
             }
             .refreshable {
                 await viewModel.refresh()
+                await notificationsViewModel.loadUnreadCount()
+            }
+            .sheet(isPresented: $showNotifications) {
+                NotificationsView()
             }
         }
     }

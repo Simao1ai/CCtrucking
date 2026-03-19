@@ -2,10 +2,33 @@ import SwiftUI
 
 struct MoreView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var notificationsViewModel: NotificationsViewModel
 
     var body: some View {
         NavigationStack {
             List {
+                // Notifications
+                Section {
+                    NavigationLink {
+                        NotificationsView()
+                    } label: {
+                        HStack {
+                            Label("Notifications", systemImage: "bell.fill")
+                            Spacer()
+                            if notificationsViewModel.unreadCount > 0 {
+                                Text("\(notificationsViewModel.unreadCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                }
+
                 // Documents section (matching web sidebar)
                 Section("Documents") {
                     NavigationLink {

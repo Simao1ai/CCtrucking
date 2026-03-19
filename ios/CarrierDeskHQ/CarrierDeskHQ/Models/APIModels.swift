@@ -370,6 +370,22 @@ struct FilledForm: Decodable, Identifiable {
     let updatedAt: String?
 }
 
+// MARK: - Notifications
+
+struct AppNotification: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let message: String
+    let type: String
+    let link: String?
+    let read: Bool
+    let createdAt: String?
+}
+
+struct UnreadCountResponse: Decodable {
+    let count: Int
+}
+
 // MARK: - API Error Response (for decoding server errors)
 
 struct APIErrorBody: Decodable {

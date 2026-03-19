@@ -34,6 +34,7 @@
 		A1000032 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000032; };
 		A1000033 /* FormsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000033; };
 		A1000034 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000034; };
+		A1000035 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000035; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +67,7 @@
 		B1000032 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		B1000033 /* FormsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormsListView.swift; sourceTree = "<group>"; };
 		B1000034 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
+		B1000035 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +161,7 @@
 				D1000018 /* TaxPrep */,
 				D1000019 /* Chat */,
 				D1000020 /* Forms */,
+				D1000021 /* Notifications */,
 				D1000015 /* Settings */,
 				D1000016 /* Components */,
 			);
@@ -274,6 +277,14 @@
 			path = Forms;
 			sourceTree = "<group>";
 		};
+		D1000021 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				B1000035 /* NotificationsView.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -369,6 +380,7 @@
 				A1000032 /* ChatView.swift in Sources */,
 				A1000033 /* FormsListView.swift in Sources */,
 				A1000034 /* MoreView.swift in Sources */,
+				A1000035 /* NotificationsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
