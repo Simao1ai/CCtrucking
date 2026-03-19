@@ -66,9 +66,14 @@ struct CompanyLookupView: View {
                 Spacer()
                 Spacer()
             }
-            .navigationDestination(item: $authViewModel.tenant) { tenant in
-                LoginView(tenant: tenant)
-                    .environmentObject(authViewModel)
+            .navigationDestination(isPresented: Binding<Bool>(
+                get: { authViewModel.tenant != nil },
+                set: { if !$0 { authViewModel.tenant = nil } }
+            )) {
+                if let tenant = authViewModel.tenant {
+                    LoginView(tenant: tenant)
+                        .environmentObject(authViewModel)
+                }
             }
         }
         .onAppear {
@@ -76,17 +81,5 @@ struct CompanyLookupView: View {
                 slug = savedSlug
             }
         }
-    }
-}
-
-// Make TenantBranding Hashable for navigationDestination
-extension TenantBranding: Hashable {
-    static func == (lhs: TenantBranding, rhs: TenantBranding) -> Bool {
-        lhs.companyName == rhs.companyName && lhs.slug == rhs.slug
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(companyName)
-        hasher.combine(slug)
     }
 }
