@@ -6,6 +6,42 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // Tenant logo header
+                if let tenant = authViewModel.tenant {
+                    Section {
+                        VStack(spacing: 12) {
+                            if let logoUrl = tenant.logoUrl, let url = URL(string: logoUrl) {
+                                AsyncImage(url: url) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                } placeholder: {
+                                    Image(systemName: "building.2.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundStyle(Color(hex: tenant.primaryColor ?? "#1e3a5f"))
+                                }
+                                .frame(height: 64)
+                            } else {
+                                Image(systemName: "building.2.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(Color(hex: tenant.primaryColor ?? "#1e3a5f"))
+                            }
+
+                            Text(tenant.companyName)
+                                .font(.title3)
+                                .fontWeight(.semibold)
+
+                            if let client = authViewModel.client {
+                                Text(client.companyName)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+                }
+
                 // Profile section
                 if let client = authViewModel.client {
                     Section("Profile") {

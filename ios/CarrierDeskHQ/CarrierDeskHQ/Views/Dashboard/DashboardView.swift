@@ -19,6 +19,20 @@ struct DashboardView: View {
             }
             .navigationTitle("Dashboard")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if let tenant = authViewModel.tenant,
+                       let logoUrl = tenant.logoUrl,
+                       let url = URL(string: logoUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                        } placeholder: {
+                            EmptyView()
+                        }
+                        .frame(height: 28)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if let tenant = authViewModel.tenant {
                         Menu {
