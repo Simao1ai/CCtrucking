@@ -125,6 +125,63 @@ actor APIService {
         return response.data
     }
 
+    // MARK: - Bookkeeping Endpoints
+
+    func getBookkeepingSubscription() async throws -> BookkeepingSubscription? {
+        let response: APIResponse<BookkeepingSubscription?> = try await get("/bookkeeping/subscription")
+        return response.data
+    }
+
+    func getTransactions(month: Int? = nil, year: Int? = nil) async throws -> [BankTransaction] {
+        var params: [String: String] = [:]
+        if let month { params["month"] = "\(month)" }
+        if let year { params["year"] = "\(year)" }
+        let response: APIListResponse<BankTransaction> = try await get("/bookkeeping/transactions", queryParams: params)
+        return response.data
+    }
+
+    func getMonthlySummaries() async throws -> [MonthlySummary] {
+        let response: APIListResponse<MonthlySummary> = try await get("/bookkeeping/summaries")
+        return response.data
+    }
+
+    // MARK: - Tax Document Endpoints
+
+    func getTaxDocuments(year: Int? = nil) async throws -> [TaxDocument] {
+        var params: [String: String] = [:]
+        if let year { params["year"] = "\(year)" }
+        let response: APIListResponse<TaxDocument> = try await get("/tax/documents", queryParams: params)
+        return response.data
+    }
+
+    func approveTaxDocument(id: String) async throws {
+        let _: APIResponse<[String: String]> = try await post("/tax/documents/\(id)/approve", body: EmptyBody())
+    }
+
+    func rejectTaxDocument(id: String, feedback: String) async throws {
+        struct RejectBody: Encodable { let feedback: String }
+        let _: APIResponse<[String: String]> = try await post("/tax/documents/\(id)/reject", body: RejectBody(feedback: feedback))
+    }
+
+    // MARK: - Chat Endpoints
+
+    func getChatMessages() async throws -> [ChatMessage] {
+        let response: APIListResponse<ChatMessage> = try await get("/chat")
+        return response.data
+    }
+
+    func sendChatMessage(_ message: String) async throws -> ChatMessage {
+        let response: APIResponse<ChatMessage> = try await post("/chat", body: SendMessageRequest(message: message))
+        return response.data
+    }
+
+    // MARK: - Forms Endpoints
+
+    func getForms() async throws -> [FilledForm] {
+        let response: APIListResponse<FilledForm> = try await get("/forms")
+        return response.data
+    }
+
     // MARK: - HTTP Methods
 
     private func get<T: Decodable>(_ path: String, queryParams: [String: String] = [:]) async throws -> T {

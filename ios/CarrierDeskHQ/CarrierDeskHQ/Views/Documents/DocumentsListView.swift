@@ -46,17 +46,18 @@ struct DocumentsListView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        Text(formatDate(doc.createdAt))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        if let createdAt = doc.createdAt {
+                            Text(formatDate(createdAt))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
                 Spacer()
 
-                if doc.fileUrl != nil {
-                    Image(systemName: "arrow.down.circle")
-                        .foregroundStyle(.blue)
+                if let status = doc.status {
+                    StatusBadge(status: status, compact: true)
                 }
             }
             .padding(.vertical, 4)

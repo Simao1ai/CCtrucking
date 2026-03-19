@@ -151,8 +151,8 @@ struct Document: Decodable, Identifiable {
     let id: String
     let name: String
     let type: String?
-    let fileUrl: String?
-    let createdAt: String
+    let status: String?
+    let createdAt: String?
 }
 
 // MARK: - Signature
@@ -175,6 +175,89 @@ struct Notarization: Decodable, Identifiable {
     let scheduledDate: String?
     let completedDate: String?
     let createdAt: String
+}
+
+// MARK: - Bookkeeping
+
+struct BookkeepingSubscription: Decodable {
+    let id: String
+    let plan: String
+    let price: Double
+    let status: String
+    let startDate: String?
+    let endDate: String?
+}
+
+struct BankTransaction: Decodable, Identifiable {
+    let id: String
+    let transactionDate: String
+    let description: String
+    let amount: Double
+    let category: String
+    let reviewed: Bool
+    let bankName: String?
+    let accountLast4: String?
+    let statementMonth: Int
+    let statementYear: Int
+    let createdAt: String?
+}
+
+struct MonthlySummary: Decodable, Identifiable {
+    let id: String
+    let month: Int
+    let year: Int
+    let totalIncome: Double
+    let totalExpenses: Double
+    let netIncome: Double
+    let generatedAt: String?
+}
+
+// MARK: - Tax Documents
+
+struct TaxDocument: Decodable, Identifiable {
+    let id: String
+    let taxYear: Int
+    let documentType: String
+    let payerName: String?
+    let fileName: String?
+    let fileType: String?
+    let totalIncome: Double?
+    let federalWithholding: Double?
+    let stateWithholding: Double?
+    let status: String
+    let confidenceLevel: String?
+    let notes: String?
+    let rejectionFeedback: String?
+    let approvedAt: String?
+    let analyzedAt: String?
+    let createdAt: String?
+}
+
+// MARK: - Chat
+
+struct ChatMessage: Decodable, Identifiable {
+    let id: String
+    let senderId: String
+    let senderName: String
+    let senderRole: String
+    let message: String
+    let createdAt: String
+}
+
+struct SendMessageRequest: Encodable {
+    let message: String
+}
+
+// MARK: - Forms
+
+struct FilledForm: Decodable, Identifiable {
+    let id: String
+    let templateId: String?
+    let name: String
+    let status: String
+    let signatureRequestId: String?
+    let createdAt: String?
+    let updatedAt: String?
 }
 
 // MARK: - API Error Response (for decoding server errors)

@@ -21,12 +21,12 @@ struct MainTabView: View {
                     Label("Invoices", systemImage: "doc.text.fill")
                 }
 
-            DocumentsListView()
+            ChatView()
                 .tabItem {
-                    Label("Documents", systemImage: "folder.fill")
+                    Label("Messages", systemImage: "bubble.left.and.bubble.right.fill")
                 }
 
-            SettingsView()
+            MoreView()
                 .environmentObject(authViewModel)
                 .tabItem {
                     Label("More", systemImage: "ellipsis")

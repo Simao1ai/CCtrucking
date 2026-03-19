@@ -29,6 +29,11 @@
 		A1000020 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000020; };
 		A1000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000021; };
 		A1000022 /* BrandTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000023; };
+		A1000030 /* BookkeepingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000030; };
+		A1000031 /* TaxDocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000031; };
+		A1000032 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000032; };
+		A1000033 /* FormsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000033; };
+		A1000034 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000034; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +61,11 @@
 		B1000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000023 /* BrandTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandTheme.swift; sourceTree = "<group>"; };
+		B1000030 /* BookkeepingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookkeepingView.swift; sourceTree = "<group>"; };
+		B1000031 /* TaxDocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxDocumentsView.swift; sourceTree = "<group>"; };
+		B1000032 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		B1000033 /* FormsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormsListView.swift; sourceTree = "<group>"; };
+		B1000034 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,6 +155,10 @@
 				D1000012 /* Documents */,
 				D1000013 /* Signatures */,
 				D1000014 /* Notarizations */,
+				D1000017 /* Bookkeeping */,
+				D1000018 /* TaxPrep */,
+				D1000019 /* Chat */,
+				D1000020 /* Forms */,
 				D1000015 /* Settings */,
 				D1000016 /* Components */,
 			);
@@ -214,6 +228,7 @@
 			isa = PBXGroup;
 			children = (
 				B1000019 /* SettingsView.swift */,
+				B1000034 /* MoreView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -225,6 +240,38 @@
 				B1000023 /* BrandTheme.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		D1000017 /* Bookkeeping */ = {
+			isa = PBXGroup;
+			children = (
+				B1000030 /* BookkeepingView.swift */,
+			);
+			path = Bookkeeping;
+			sourceTree = "<group>";
+		};
+		D1000018 /* TaxPrep */ = {
+			isa = PBXGroup;
+			children = (
+				B1000031 /* TaxDocumentsView.swift */,
+			);
+			path = TaxPrep;
+			sourceTree = "<group>";
+		};
+		D1000019 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				B1000032 /* ChatView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		D1000020 /* Forms */ = {
+			isa = PBXGroup;
+			children = (
+				B1000033 /* FormsListView.swift */,
+			);
+			path = Forms;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -317,6 +364,11 @@
 				A1000019 /* SettingsView.swift in Sources */,
 				A1000020 /* MainTabView.swift in Sources */,
 				A1000022 /* BrandTheme.swift in Sources */,
+				A1000030 /* BookkeepingView.swift in Sources */,
+				A1000031 /* TaxDocumentsView.swift in Sources */,
+				A1000032 /* ChatView.swift in Sources */,
+				A1000033 /* FormsListView.swift in Sources */,
+				A1000034 /* MoreView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

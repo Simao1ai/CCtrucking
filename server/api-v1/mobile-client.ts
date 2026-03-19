@@ -70,7 +70,7 @@ router.get("/dashboard", async (req, res) => {
         recentInvoices: invoices.slice(0, 10).map(i => ({
           id: i.id,
           invoiceNumber: i.invoiceNumber,
-          amount: i.amount,
+          amount: Number(i.amount),
           status: i.status,
           dueDate: i.dueDate,
           createdAt: i.createdAt,
@@ -142,7 +142,7 @@ router.get("/invoices", async (req, res) => {
       data: invoices.map(i => ({
         id: i.id,
         invoiceNumber: i.invoiceNumber,
-        amount: i.amount,
+        amount: Number(i.amount),
         status: i.status,
         dueDate: i.dueDate,
         description: i.description,
@@ -168,8 +168,8 @@ router.get("/documents", async (req, res) => {
         id: d.id,
         name: d.name,
         type: d.type,
-        fileUrl: d.fileUrl,
-        createdAt: d.createdAt,
+        status: d.status,
+        createdAt: d.uploadedAt,
       })),
       meta: { total: documents.length },
     });

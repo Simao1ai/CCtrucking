@@ -52,6 +52,10 @@ import documentsV1Router from "./api-v1/documents";
 import mobileDashboardV1Router from "./api-v1/mobile-dashboard";
 import mobileAuthV1Router from "./api-v1/mobile-auth";
 import mobileClientV1Router from "./api-v1/mobile-client";
+import mobileBookkeepingV1Router from "./api-v1/mobile-bookkeeping";
+import mobileTaxV1Router from "./api-v1/mobile-tax";
+import mobileChatV1Router from "./api-v1/mobile-chat";
+import mobileFormsV1Router from "./api-v1/mobile-forms";
 import { truckingIndustryKnowledge, truckingIndustryGuidance, truckingPortalComplianceTopics } from "./industry-packs/trucking";
 import { requireModule, getTenantPlan } from "./middleware/module-gates";
 import { isPlatformAdmin } from "./middleware/tenant";
@@ -402,6 +406,10 @@ export async function registerRoutes(
   app.use("/api/v1/mobile/dashboard", mobileDashboardV1Router);
   app.use("/api/v1/mobile/auth", mobileAuthV1Router);
   app.use("/api/v1/mobile/client", mobileClientV1Router);
+  app.use("/api/v1/mobile/bookkeeping", mobileBookkeepingV1Router);
+  app.use("/api/v1/mobile/tax", mobileTaxV1Router);
+  app.use("/api/v1/mobile/chat", mobileChatV1Router);
+  app.use("/api/v1/mobile/forms", mobileFormsV1Router);
 
   app.get("/api/branding", async (req, res) => {
     try {
