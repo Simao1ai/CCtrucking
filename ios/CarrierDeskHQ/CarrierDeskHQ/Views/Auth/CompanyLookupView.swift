@@ -6,65 +6,71 @@ struct CompanyLookupView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Spacer()
+            ZStack {
+                // Navy gradient background matching landing page hero
+                Brand.heroGradient
+                    .ignoresSafeArea()
 
-                // Logo & branding
-                VStack(spacing: 16) {
-                    Image(systemName: "truck.box.fill")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.blue)
+                VStack(spacing: 0) {
+                    Spacer()
 
-                    Text("CarrierDesk HQ")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                    // Logo & branding
+                    VStack(spacing: 16) {
+                        Image(systemName: "truck.box.fill")
+                            .font(.system(size: 64))
+                            .foregroundStyle(Brand.amber)
 
-                    Text("Enter your company code to get started")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.bottom, 48)
+                        BrandTitle()
 
-                // Slug input
-                VStack(spacing: 16) {
-                    TextField("Company Code", text: $slug)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.body)
-                        .padding(.horizontal)
-
-                    Button {
-                        authViewModel.slug = slug
-                        Task {
-                            await authViewModel.lookupCompany()
-                        }
-                    } label: {
-                        if authViewModel.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text("Continue")
-                                .fontWeight(.semibold)
-                        }
+                        Text("Enter your company code to get started")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(slug.isEmpty || authViewModel.isLoading)
-                    .padding(.horizontal)
-                }
+                    .padding(.bottom, 48)
 
-                if let error = authViewModel.error {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.top, 12)
+                    // Slug input
+                    VStack(spacing: 16) {
+                        TextField("Company Code", text: $slug)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.body)
+                            .padding(.horizontal)
+
+                        Button {
+                            authViewModel.slug = slug
+                            Task {
+                                await authViewModel.lookupCompany()
+                            }
+                        } label: {
+                            if authViewModel.isLoading {
+                                ProgressView()
+                                    .tint(Brand.foreground)
+                            } else {
+                                Text("Continue")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Brand.foreground)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Brand.amber)
+                        .controlSize(.large)
+                        .disabled(slug.isEmpty || authViewModel.isLoading)
                         .padding(.horizontal)
-                }
+                    }
 
-                Spacer()
-                Spacer()
+                    if let error = authViewModel.error {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.top, 12)
+                            .padding(.horizontal)
+                    }
+
+                    Spacer()
+                    Spacer()
+                }
             }
             .navigationDestination(isPresented: Binding<Bool>(
                 get: { authViewModel.tenant != nil },

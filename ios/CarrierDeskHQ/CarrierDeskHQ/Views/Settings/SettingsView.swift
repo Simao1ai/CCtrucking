@@ -18,13 +18,13 @@ struct SettingsView: View {
                                 } placeholder: {
                                     Image(systemName: "building.2.fill")
                                         .font(.system(size: 40))
-                                        .foregroundStyle(Color(hex: tenant.primaryColor ?? "#1e3a5f"))
+                                        .foregroundStyle(Brand.navy)
                                 }
                                 .frame(height: 64)
                             } else {
                                 Image(systemName: "building.2.fill")
                                     .font(.system(size: 40))
-                                    .foregroundStyle(Color(hex: tenant.primaryColor ?? "#1e3a5f"))
+                                    .foregroundStyle(Brand.navy)
                             }
 
                             Text(tenant.companyName)

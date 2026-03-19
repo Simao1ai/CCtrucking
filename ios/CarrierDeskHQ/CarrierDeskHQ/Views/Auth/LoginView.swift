@@ -11,104 +11,105 @@ struct LoginView: View {
         case username, password
     }
 
-    var primaryColor: Color {
-        if let hex = tenant.primaryColor {
-            return Color(hex: hex)
-        }
-        return .blue
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        ZStack {
+            // Navy gradient background matching landing page
+            Brand.heroGradient
+                .ignoresSafeArea()
 
-            // Tenant branding
-            VStack(spacing: 12) {
-                if let logoUrl = tenant.logoUrl, let url = URL(string: logoUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } placeholder: {
+            VStack(spacing: 0) {
+                Spacer()
+
+                // Tenant branding
+                VStack(spacing: 12) {
+                    if let logoUrl = tenant.logoUrl, let url = URL(string: logoUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                        } placeholder: {
+                            Image(systemName: "building.2.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(Brand.amber)
+                        }
+                        .frame(height: 80)
+                    } else {
                         Image(systemName: "building.2.fill")
                             .font(.system(size: 48))
-                            .foregroundStyle(primaryColor)
+                            .foregroundStyle(Brand.amber)
                     }
-                    .frame(height: 80)
-                } else {
-                    Image(systemName: "building.2.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(primaryColor)
-                }
 
-                Text(tenant.companyName)
-                    .font(.title2)
-                    .fontWeight(.bold)
+                    Text(tenant.companyName)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
 
-                if let tagline = tenant.tagline {
-                    Text(tagline)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.bottom, 40)
-
-            // Login form
-            VStack(spacing: 16) {
-                TextField("Username", text: $username)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($focusedField, equals: .username)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .password }
-
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .password)
-                    .submitLabel(.go)
-                    .onSubmit { loginAction() }
-
-                Button(action: loginAction) {
-                    if authViewModel.isLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Sign In")
-                            .fontWeight(.semibold)
+                    if let tagline = tenant.tagline {
+                        Text(tagline)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(primaryColor)
-                .controlSize(.large)
-                .disabled(username.isEmpty || password.isEmpty || authViewModel.isLoading)
-            }
-            .padding(.horizontal, 24)
+                .padding(.bottom, 40)
 
-            if let error = authViewModel.error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(.top, 12)
-                    .padding(.horizontal)
-            }
+                // Login form
+                VStack(spacing: 16) {
+                    TextField("Username", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .username)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .password }
 
-            Spacer()
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .password)
+                        .submitLabel(.go)
+                        .onSubmit { loginAction() }
 
-            // Support info
-            VStack(spacing: 4) {
-                if let email = tenant.supportEmail {
-                    Label(email, systemImage: "envelope")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Button(action: loginAction) {
+                        if authViewModel.isLoading {
+                            ProgressView()
+                                .tint(Brand.foreground)
+                        } else {
+                            Text("Sign In")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Brand.foreground)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Brand.amber)
+                    .controlSize(.large)
+                    .disabled(username.isEmpty || password.isEmpty || authViewModel.isLoading)
                 }
-                if let phone = tenant.supportPhone {
-                    Label(phone, systemImage: "phone")
+                .padding(.horizontal, 24)
+
+                if let error = authViewModel.error {
+                    Text(error)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.red)
+                        .padding(.top, 12)
+                        .padding(.horizontal)
                 }
+
+                Spacer()
+
+                // Support info
+                VStack(spacing: 4) {
+                    if let email = tenant.supportEmail {
+                        Label(email, systemImage: "envelope")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    if let phone = tenant.supportPhone {
+                        Label(phone, systemImage: "phone")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+                .padding(.bottom, 24)
             }
-            .padding(.bottom, 24)
         }
         .navigationBarBackButtonHidden(false)
         .toolbar {
@@ -117,6 +118,7 @@ struct LoginView: View {
                     authViewModel.resetToLookup()
                     authViewModel.clearError()
                 }
+                .foregroundStyle(.white)
             }
         }
         .onAppear {

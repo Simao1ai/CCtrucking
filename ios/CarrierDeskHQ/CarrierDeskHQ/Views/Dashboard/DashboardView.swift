@@ -86,7 +86,7 @@ struct DashboardView: View {
                         title: "Open Tickets",
                         value: "\(dashboard.summary.openTickets)",
                         icon: "ticket",
-                        color: .blue
+                        color: Brand.blue
                     )
                     SummaryCard(
                         title: "Outstanding",
@@ -98,7 +98,7 @@ struct DashboardView: View {
                         title: "Documents",
                         value: "\(dashboard.summary.totalDocuments)",
                         icon: "doc.fill",
-                        color: .purple
+                        color: Brand.navy
                     )
                 }
                 .padding(.horizontal)
