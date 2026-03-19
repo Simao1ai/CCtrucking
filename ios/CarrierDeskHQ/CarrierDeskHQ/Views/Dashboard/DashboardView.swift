@@ -6,26 +6,20 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
                 if viewModel.isLoading && viewModel.dashboard == nil {
                     ProgressView("Loading dashboard...")
                 } else if let error = viewModel.error, viewModel.dashboard == nil {
-                    VStack {
-                        Spacer()
-                        ErrorBanner(message: error) {
-                            await viewModel.loadDashboard()
-                        }
-                        Spacer()
+                    ErrorBanner(message: error) {
+                        await viewModel.loadDashboard()
                     }
                 } else if let dashboard = viewModel.dashboard {
                     dashboardContent(dashboard)
                 } else {
-                    VStack {
-                        Spacer()
-                        ErrorBanner(message: "Unable to load dashboard.") {
-                            await viewModel.loadDashboard()
-                        }
-                        Spacer()
+                    ErrorBanner(message: "Unable to load dashboard.") {
+                        await viewModel.loadDashboard()
                     }
                 }
             }
