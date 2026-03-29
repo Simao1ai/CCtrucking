@@ -1542,6 +1542,8 @@ Contact name: ${client.contactName}`
     if (!body.description) body.description = null;
     if (body.dueDate === "") body.dueDate = null;
     if (body.paidDate === "") body.paidDate = null;
+    if (typeof body.dueDate === "string") body.dueDate = new Date(body.dueDate);
+    if (typeof body.paidDate === "string") body.paidDate = new Date(body.paidDate);
     const parsed = insertInvoiceSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const invoice = await storage.createInvoice(parsed.data);
@@ -1551,7 +1553,10 @@ Contact name: ${client.contactName}`
   });
 
   app.patch("/api/invoices/:id", isAuthenticated, isAdmin, async (req, res) => {
-    const invoice = await storage.updateInvoice(param(req, "id"), stripTenantId(req.body));
+    const body = stripTenantId(req.body);
+    if (typeof body.dueDate === "string") body.dueDate = body.dueDate === "" ? null : new Date(body.dueDate);
+    if (typeof body.paidDate === "string") body.paidDate = body.paidDate === "" ? null : new Date(body.paidDate);
+    const invoice = await storage.updateInvoice(param(req, "id"), body);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     await audit(req, "updated", "invoice", invoice.id, `Updated invoice #${invoice.invoiceNumber} — status: ${invoice.status}`);
     res.json(invoice);
