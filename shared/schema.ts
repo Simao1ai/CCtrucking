@@ -687,10 +687,13 @@ export type InsertPlatformAnnouncement = z.infer<typeof insertPlatformAnnounceme
 
 export const platformSmsConfig = pgTable("platform_sms_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: text("provider").notNull().default("twilio"),
   twilioAccountSid: text("twilio_account_sid"),
   twilioAuthToken: text("twilio_auth_token"),
   twilioApiKeySid: text("twilio_api_key_sid"),
   twilioApiKeySecret: text("twilio_api_key_secret"),
+  commshubBaseUrl: text("commshub_base_url"),
+  commshubApiKey: text("commshub_api_key"),
   defaultFromNumber: text("default_from_number"),
   enabled: boolean("enabled").notNull().default(false),
   monthlyBudgetCents: integer("monthly_budget_cents"),

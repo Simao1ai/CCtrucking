@@ -13,7 +13,7 @@ async function getSmsConfig() {
 
 async function getTwilioClient() {
   const config = await getSmsConfig();
-  if (!config?.enabled || !config.twilioAccountSid || !config.twilioAuthToken) {
+  if (!config?.enabled || config.provider !== "twilio" || !config.twilioAccountSid || !config.twilioAuthToken) {
     return null;
   }
 
@@ -24,6 +24,37 @@ async function getTwilioClient() {
   }
 
   return twilioClient;
+}
+
+async function sendViaCommshub(
+  toNumber: string,
+  fromNumber: string,
+  body: string,
+  config: { commshubBaseUrl: string; commshubApiKey: string }
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const baseUrl = config.commshubBaseUrl.replace(/\/+$/, "");
+  const url = `${baseUrl}/api/v1/send`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.commshubApiKey}`,
+    },
+    body: JSON.stringify({
+      to: toNumber,
+      from: fromNumber,
+      message: body,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    return { success: false, error: `CommsHub error (${response.status}): ${errorText}` };
+  }
+
+  const result = await response.json().catch(() => ({}));
+  return { success: true, messageId: result.id || result.messageId || `commshub-${Date.now()}` };
 }
 
 export function resolveMergeTokens(body: string, data: Record<string, string>): string {
@@ -41,7 +72,7 @@ export async function sendSms(
   body: string,
   options?: { campaignId?: string; automationId?: string; clientId?: string }
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const client = await getTwilioClient();
+  const config = await getSmsConfig();
 
   const [msgRecord] = await db.insert(smsMessages).values({
     tenantId,
@@ -54,25 +85,48 @@ export async function sendSms(
     status: "queued",
   }).returning();
 
-  if (!client) {
+  if (!config?.enabled) {
     await db.update(smsMessages)
-      .set({ status: "failed", errorMessage: "SMS not configured - Twilio credentials not set" })
+      .set({ status: "failed", errorMessage: "SMS not configured" })
       .where(eq(smsMessages.id, msgRecord.id));
     return { success: false, error: "SMS service not configured" };
   }
 
   try {
-    const message = await client.messages.create({
-      to: toNumber,
-      from: fromNumber,
-      body: body,
-    });
+    let result: { success: boolean; messageId?: string; error?: string };
 
-    await db.update(smsMessages)
-      .set({ status: "sent", twilioSid: message.sid, sentAt: new Date() })
-      .where(eq(smsMessages.id, msgRecord.id));
+    if (config.provider === "commshub") {
+      if (!config.commshubBaseUrl || !config.commshubApiKey) {
+        throw new Error("CommsHub credentials not configured");
+      }
+      result = await sendViaCommshub(toNumber, fromNumber, body, {
+        commshubBaseUrl: config.commshubBaseUrl,
+        commshubApiKey: config.commshubApiKey,
+      });
+    } else {
+      const client = await getTwilioClient();
+      if (!client) {
+        throw new Error("Twilio credentials not configured");
+      }
+      const message = await client.messages.create({
+        to: toNumber,
+        from: fromNumber,
+        body: body,
+      });
+      result = { success: true, messageId: message.sid };
+    }
 
-    return { success: true, messageId: message.sid };
+    if (result.success) {
+      await db.update(smsMessages)
+        .set({ status: "sent", twilioSid: result.messageId || null, sentAt: new Date() })
+        .where(eq(smsMessages.id, msgRecord.id));
+    } else {
+      await db.update(smsMessages)
+        .set({ status: "failed", errorMessage: result.error })
+        .where(eq(smsMessages.id, msgRecord.id));
+    }
+
+    return result;
   } catch (error: any) {
     await db.update(smsMessages)
       .set({ status: "failed", errorMessage: error.message })

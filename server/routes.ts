@@ -5817,8 +5817,11 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       const [config] = await db.select().from(platformSmsConfig).limit(1);
       if (!config) {
         return res.json({
+          provider: "twilio",
           twilioAccountSid: "",
           twilioAuthToken: "",
+          commshubBaseUrl: "",
+          commshubApiKey: "",
           defaultFromNumber: "",
           enabled: false,
           monthlyBudgetCents: null,
@@ -5827,6 +5830,7 @@ If you cannot read a field clearly, make your best estimate and lower the confid
       res.json({
         ...config,
         twilioAuthToken: config.twilioAuthToken ? "••••••••" : "",
+        commshubApiKey: config.commshubApiKey ? "••••••••" : "",
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -5840,22 +5844,34 @@ If you cannot read a field clearly, make your best estimate and lower the confid
         return res.status(403).json({ message: "Platform admin access required" });
       }
       const [existing] = await db.select().from(platformSmsConfig).limit(1);
-      const { twilioAccountSid, twilioAuthToken, defaultFromNumber, enabled, monthlyBudgetCents } = req.body;
-      const data: any = { twilioAccountSid, defaultFromNumber, enabled: enabled ?? false, monthlyBudgetCents: monthlyBudgetCents ?? null };
+      const { provider, twilioAccountSid, twilioAuthToken, commshubBaseUrl, commshubApiKey, defaultFromNumber, enabled, monthlyBudgetCents } = req.body;
+      const data: any = {
+        provider: provider || "twilio",
+        twilioAccountSid,
+        commshubBaseUrl: commshubBaseUrl || null,
+        defaultFromNumber,
+        enabled: enabled ?? false,
+        monthlyBudgetCents: monthlyBudgetCents ?? null,
+      };
       if (twilioAuthToken === "••••••••" && existing) {
         data.twilioAuthToken = existing.twilioAuthToken;
       } else {
         data.twilioAuthToken = twilioAuthToken || "";
+      }
+      if (commshubApiKey === "••••••••" && existing) {
+        data.commshubApiKey = existing.commshubApiKey;
+      } else {
+        data.commshubApiKey = commshubApiKey || "";
       }
       if (existing) {
         const [updated] = await db.update(platformSmsConfig)
           .set({ ...data, updatedAt: new Date() })
           .where(eq(platformSmsConfig.id, existing.id))
           .returning();
-        res.json({ ...updated, twilioAuthToken: "••••••••" });
+        res.json({ ...updated, twilioAuthToken: "••••••••", commshubApiKey: updated.commshubApiKey ? "••••••••" : "" });
       } else {
         const [created] = await db.insert(platformSmsConfig).values(data).returning();
-        res.json({ ...created, twilioAuthToken: created.twilioAuthToken ? "••••••••" : "" });
+        res.json({ ...created, twilioAuthToken: created.twilioAuthToken ? "••••••••" : "", commshubApiKey: created.commshubApiKey ? "••••••••" : "" });
       }
     } catch (error: any) {
       res.status(500).json({ message: error.message });
