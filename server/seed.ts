@@ -1,8 +1,8 @@
 import { db } from "./db";
-import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings, preparerAssignments } from "@shared/schema";
+import { clients, serviceTickets, documents, invoices, users, serviceItems, recurringTemplates, transactionCategories, customFieldDefinitions, customFieldValues, tenants, tenantBranding, tenantSettings, preparerAssignments, formTemplates } from "@shared/schema";
 import { sql, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { truckingServiceItems, truckingTransactionCategories, truckingRecurringTemplates, truckingSampleClients, truckingCustomFieldDefinitions } from "./industry-packs/trucking-seed-data";
+import { truckingServiceItems, truckingTransactionCategories, truckingRecurringTemplates, truckingSampleClients, truckingCustomFieldDefinitions, truckingOfficialFormTemplates } from "./industry-packs/trucking-seed-data";
 
 async function seedUsers() {
   const existingUsers = await db.select().from(users);
@@ -262,6 +262,7 @@ export async function seedDatabase() {
   await seedRecurringTemplates();
   await seedTransactionCategories();
   await seedCustomFieldDefinitions();
+  await seedOfficialFormTemplates();
 
   const existingClients = await db.select().from(clients);
   if (existingClients.length > 0) {
@@ -469,6 +470,31 @@ async function seedCustomFieldDefinitions() {
     }
   }
   console.log("Trucking custom field definitions seeded.");
+}
+
+async function seedOfficialFormTemplates() {
+  const tenantId = "cc-trucking-tenant-001";
+  const existing = await db.select().from(formTemplates);
+  const tenantForms = existing.filter(f => f.tenantId === tenantId);
+
+  let seeded = 0;
+  for (const template of truckingOfficialFormTemplates) {
+    const exists = tenantForms.find(f => f.name === template.name);
+    if (!exists) {
+      await db.insert(formTemplates).values({
+        name: template.name,
+        description: template.description,
+        content: template.content,
+        fields: template.fields,
+        category: template.category,
+        tenantId,
+      });
+      seeded++;
+    }
+  }
+  if (seeded > 0) {
+    console.log(`Official trucking form templates seeded (${seeded} new).`);
+  }
 }
 
 async function migrateClientDataToCustomFields() {

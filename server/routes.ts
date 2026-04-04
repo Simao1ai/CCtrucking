@@ -5810,27 +5810,33 @@ If you cannot read a field clearly, make your best estimate and lower the confid
   // ─── SMS / Text Campaign Routes ───────────────────────────────────────
   app.get("/api/platform/sms-config", isAuthenticated, async (req, res) => {
     try {
-      const dbUser = (req as any).dbUser;
-      if (!["platform_owner", "platform_admin"].includes(dbUser?.role)) {
+      const userId = (req.session as any).userId;
+      const [dbUser] = userId ? await db.select().from(users).where(eq(users.id, userId)) : [];
+      if (!dbUser || !["platform_owner", "platform_admin"].includes(dbUser.role)) {
         return res.status(403).json({ message: "Platform admin access required" });
       }
       const [config] = await db.select().from(platformSmsConfig).limit(1);
       if (!config) {
         return res.json({
+          id: null,
           provider: "twilio",
           twilioAccountSid: "",
-          twilioAuthToken: "",
           commshubBaseUrl: "",
-          commshubApiKey: "",
           defaultFromNumber: "",
           enabled: false,
           monthlyBudgetCents: null,
         });
       }
       res.json({
-        ...config,
+        id: config.id,
+        provider: config.provider,
+        twilioAccountSid: config.twilioAccountSid,
         twilioAuthToken: config.twilioAuthToken ? "••••••••" : "",
+        commshubBaseUrl: config.commshubBaseUrl,
         commshubApiKey: config.commshubApiKey ? "••••••••" : "",
+        defaultFromNumber: config.defaultFromNumber,
+        enabled: config.enabled,
+        monthlyBudgetCents: config.monthlyBudgetCents,
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -5839,8 +5845,9 @@ If you cannot read a field clearly, make your best estimate and lower the confid
 
   app.put("/api/platform/sms-config", isAuthenticated, async (req, res) => {
     try {
-      const dbUser = (req as any).dbUser;
-      if (!["platform_owner", "platform_admin"].includes(dbUser?.role)) {
+      const userId = (req.session as any).userId;
+      const [dbUser] = userId ? await db.select().from(users).where(eq(users.id, userId)) : [];
+      if (!dbUser || !["platform_owner", "platform_admin"].includes(dbUser.role)) {
         return res.status(403).json({ message: "Platform admin access required" });
       }
       const [existing] = await db.select().from(platformSmsConfig).limit(1);
@@ -5868,10 +5875,26 @@ If you cannot read a field clearly, make your best estimate and lower the confid
           .set({ ...data, updatedAt: new Date() })
           .where(eq(platformSmsConfig.id, existing.id))
           .returning();
-        res.json({ ...updated, twilioAuthToken: "••••••••", commshubApiKey: updated.commshubApiKey ? "••••••••" : "" });
+        const safeResponse = (c: any) => ({
+          id: c.id, provider: c.provider, twilioAccountSid: c.twilioAccountSid,
+          twilioAuthToken: c.twilioAuthToken ? "••••••••" : "",
+          commshubBaseUrl: c.commshubBaseUrl,
+          commshubApiKey: c.commshubApiKey ? "••••••••" : "",
+          defaultFromNumber: c.defaultFromNumber, enabled: c.enabled,
+          monthlyBudgetCents: c.monthlyBudgetCents,
+        });
+        res.json(safeResponse(updated));
       } else {
         const [created] = await db.insert(platformSmsConfig).values(data).returning();
-        res.json({ ...created, twilioAuthToken: created.twilioAuthToken ? "••••••••" : "", commshubApiKey: created.commshubApiKey ? "••••••••" : "" });
+        const safeResponse = (c: any) => ({
+          id: c.id, provider: c.provider, twilioAccountSid: c.twilioAccountSid,
+          twilioAuthToken: c.twilioAuthToken ? "••••••••" : "",
+          commshubBaseUrl: c.commshubBaseUrl,
+          commshubApiKey: c.commshubApiKey ? "••••••••" : "",
+          defaultFromNumber: c.defaultFromNumber, enabled: c.enabled,
+          monthlyBudgetCents: c.monthlyBudgetCents,
+        });
+        res.json(safeResponse(created));
       }
     } catch (error: any) {
       res.status(500).json({ message: error.message });

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const CATEGORIES = ["DOT Compliance", "IFTA Filing", "Tax Forms", "Business Setup", "General"];
+const CATEGORIES = ["FMCSA Federal Forms", "IRS Tax Forms", "DOT Compliance", "IFTA Filing", "Tax Forms", "Business Setup", "General"];
 
 interface FormField {
   id: string;
