@@ -74,6 +74,17 @@ Files: `server/api-v1/mobile-auth.ts`, `server/api-v1/mobile-client.ts`
 - `GET /api/v1/mobile/dashboard/client/:clientId` — single client detail view
 File: `server/api-v1/mobile-dashboard.ts`
 
+### Fleet & Compliance Features
+Five integrated compliance management modules accessible from the Admin sidebar under "Fleet & Compliance":
+
+1. **Drivers / DQF Management** (`/admin/drivers`): Full driver lifecycle with 12-document Driver Qualification File (DQF) tracking per FMCSA §391 requirements. Compliance dashboard with expiring/expired/missing document alerts. Document upload with expiration tracking.
+2. **Vehicles** (`/admin/vehicles`): Fleet vehicle inventory with unit numbers, VINs, inspection scheduling, and maintenance record history. Supports Tractors, Trailers, Straight Trucks, etc.
+3. **Insurance Policies** (`/admin/insurance`): Insurance certificate tracking with policy types (Auto Liability, Cargo, GL, Workers Comp, etc.), expiration alerts, coverage amounts, and agent contact info.
+4. **Compliance Calendar** (`/admin/compliance-calendar`): Color-coded regulatory deadline tracking (UCR, IFTA quarterly, HVUT 2290, MCS-150 biennial). Auto-generation of deadlines from carrier data (DOT number-based MCS-150 scheduling).
+5. **Client Onboarding** (`/admin/onboarding`): 10-step new carrier setup wizard (Company Info → USDOT → Operating Authority → BOC-3 → Insurance → Drug & Alcohol → ELD → UCR → IFTA/IRP → First Driver DQF).
+
+Backend routes: `server/driver-routes.ts`. DB tables: `drivers`, `driver_documents`, `vehicles`, `maintenance_records`, `insurance_policies`, `compliance_deadlines`, `client_onboarding`. All routes enforce tenant isolation via `tenantId` filtering and client ownership validation.
+
 ## External Dependencies
 - **OpenAI**: Used for AI Chat Assistant, AI analysis of tax documents, AI transaction categorization, and AI campaign content generation.
 - **Google Cloud (googleapis)**: Integrated for Google Sheets functionality.

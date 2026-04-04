@@ -30,6 +30,8 @@ import {
   CreditCard,
   KeyRound,
   TrendingUp,
+  Calendar,
+  Car,
   type LucideIcon,
 } from "lucide-react";
 import { useTenant, useTenantIcon } from "@/context/tenant-context";
@@ -83,6 +85,16 @@ const navGroups: NavGroup[] = [
       { title: "Forms", url: "/admin/forms", icon: ClipboardList },
       { title: "Signatures", url: "/admin/signatures", icon: PenLine },
       { title: "Notarizations", url: "/admin/notarizations", icon: Stamp },
+    ],
+  },
+  {
+    label: "Fleet & Compliance",
+    items: [
+      { title: "Drivers / DQF", url: "/admin/drivers", icon: Users },
+      { title: "Vehicles", url: "/admin/vehicles", icon: Car },
+      { title: "Insurance", url: "/admin/insurance", icon: Shield },
+      { title: "Compliance Calendar", url: "/admin/compliance-calendar", icon: Calendar },
+      { title: "Client Onboarding", url: "/admin/onboarding", icon: ClipboardList },
     ],
   },
   {

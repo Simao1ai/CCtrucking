@@ -67,6 +67,11 @@ import PreparerDashboard from "@/pages/preparer/preparer-dashboard";
 import PreparerClientDetail from "@/pages/preparer/preparer-client-detail";
 import PortalBookkeeping from "@/pages/portal/portal-bookkeeping";
 import PlatformHealth from "@/pages/platform-health";
+import AdminDrivers from "@/pages/admin-drivers";
+import AdminVehicles from "@/pages/admin-vehicles";
+import AdminInsurance from "@/pages/admin-insurance";
+import AdminComplianceCalendar from "@/pages/admin-compliance-calendar";
+import AdminOnboarding from "@/pages/admin-onboarding";
 import PlatformEmail from "@/pages/platform-email";
 import PlatformSettingsPage from "@/pages/platform-settings";
 import PlatformSecurityPage from "@/pages/platform-security";
@@ -372,6 +377,21 @@ function App() {
           </Route>
           <Route path="/admin/api-docs">
             <AdminLayout><AdminApiDocs /></AdminLayout>
+          </Route>
+          <Route path="/admin/drivers">
+            <AdminLayout><AdminDrivers /></AdminLayout>
+          </Route>
+          <Route path="/admin/vehicles">
+            <AdminLayout><AdminVehicles /></AdminLayout>
+          </Route>
+          <Route path="/admin/insurance">
+            <AdminLayout><AdminInsurance /></AdminLayout>
+          </Route>
+          <Route path="/admin/compliance-calendar">
+            <AdminLayout><AdminComplianceCalendar /></AdminLayout>
+          </Route>
+          <Route path="/admin/onboarding">
+            <AdminLayout><AdminOnboarding /></AdminLayout>
           </Route>
 
           <Route path="/portal">

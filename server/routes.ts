@@ -28,6 +28,7 @@ import {
 import { startInvoiceScheduler } from "./invoice-scheduler";
 import { startRecurringScheduler } from "./recurring-scheduler";
 import { sendSms, executeCampaign, searchAvailableNumbers, purchaseNumber, resolveMergeTokens, startSmsAutomationScheduler } from "./sms-service";
+import { registerDriverRoutes } from "./driver-routes";
 import { executeEmailCampaign, startEmailAutomationScheduler } from "./email-campaign-service";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -6622,6 +6623,9 @@ Return a JSON object with these fields:
       res.status(500).json({ message: "Failed to generate content. Please try again." });
     }
   });
+
+  // Register feature-specific routes
+  registerDriverRoutes(app);
 
   // Start background schedulers
   startInvoiceScheduler();

@@ -908,6 +908,172 @@ export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
 export type EmailMessage = typeof emailMessages.$inferSelect;
 export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
 
+export const drivers = pgTable("drivers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  cdlNumber: text("cdl_number"),
+  cdlState: text("cdl_state"),
+  cdlClass: text("cdl_class"),
+  cdlExpiration: timestamp("cdl_expiration"),
+  dateOfBirth: timestamp("date_of_birth"),
+  dateOfHire: timestamp("date_of_hire"),
+  status: text("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertDriverSchema = createInsertSchema(drivers).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type Driver = typeof drivers.$inferSelect;
+export type InsertDriver = z.infer<typeof insertDriverSchema>;
+
+export const driverDocuments = pgTable("driver_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").notNull().references(() => drivers.id),
+  documentType: text("document_type").notNull(),
+  status: text("status").notNull().default("missing"),
+  fileName: text("file_name"),
+  fileData: text("file_data"),
+  expirationDate: timestamp("expiration_date"),
+  issuedDate: timestamp("issued_date"),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertDriverDocumentSchema = createInsertSchema(driverDocuments).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type DriverDocument = typeof driverDocuments.$inferSelect;
+export type InsertDriverDocument = z.infer<typeof insertDriverDocumentSchema>;
+
+export const vehicles = pgTable("vehicles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  unitNumber: text("unit_number").notNull(),
+  vin: text("vin"),
+  year: integer("year"),
+  make: text("make"),
+  model: text("model"),
+  vehicleType: text("vehicle_type").notNull().default("power_unit"),
+  licensePlate: text("license_plate"),
+  plateState: text("plate_state"),
+  gvw: integer("gvw"),
+  status: text("status").notNull().default("active"),
+  lastInspectionDate: timestamp("last_inspection_date"),
+  nextInspectionDue: timestamp("next_inspection_due"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertVehicleSchema = createInsertSchema(vehicles).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type Vehicle = typeof vehicles.$inferSelect;
+export type InsertVehicle = z.infer<typeof insertVehicleSchema>;
+
+export const insurancePolicies = pgTable("insurance_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  policyType: text("policy_type").notNull(),
+  carrier: text("carrier").notNull(),
+  policyNumber: text("policy_number"),
+  coverageAmount: text("coverage_amount"),
+  premiumAmount: text("premium_amount"),
+  effectiveDate: timestamp("effective_date"),
+  expirationDate: timestamp("expiration_date"),
+  fileName: text("file_name"),
+  fileData: text("file_data"),
+  status: text("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertInsurancePolicySchema = createInsertSchema(insurancePolicies).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsurancePolicy = typeof insurancePolicies.$inferSelect;
+export type InsertInsurancePolicy = z.infer<typeof insertInsurancePolicySchema>;
+
+export const complianceDeadlines = pgTable("compliance_deadlines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  title: text("title").notNull(),
+  deadlineType: text("deadline_type").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  status: text("status").notNull().default("upcoming"),
+  description: text("description"),
+  linkedEntityType: text("linked_entity_type"),
+  linkedEntityId: varchar("linked_entity_id"),
+  autoGenerated: boolean("auto_generated").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertComplianceDeadlineSchema = createInsertSchema(complianceDeadlines).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type ComplianceDeadline = typeof complianceDeadlines.$inferSelect;
+export type InsertComplianceDeadline = z.infer<typeof insertComplianceDeadlineSchema>;
+
+export const maintenanceRecords = pgTable("maintenance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleId: varchar("vehicle_id").notNull().references(() => vehicles.id),
+  recordType: text("record_type").notNull(),
+  description: text("description").notNull(),
+  serviceDate: timestamp("service_date").notNull(),
+  nextServiceDue: timestamp("next_service_due"),
+  mileage: integer("mileage"),
+  cost: text("cost"),
+  vendor: text("vendor"),
+  workOrderNumber: text("work_order_number"),
+  status: text("status").notNull().default("completed"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertMaintenanceRecordSchema = createInsertSchema(maintenanceRecords).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type MaintenanceRecord = typeof maintenanceRecords.$inferSelect;
+export type InsertMaintenanceRecord = z.infer<typeof insertMaintenanceRecordSchema>;
+
+export const clientOnboarding = pgTable("client_onboarding", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  steps: jsonb("steps").notNull(),
+  currentStep: integer("current_step").notNull().default(1),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+});
+
+export const insertClientOnboardingSchema = createInsertSchema(clientOnboarding).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type ClientOnboarding = typeof clientOnboarding.$inferSelect;
+export type InsertClientOnboarding = z.infer<typeof insertClientOnboardingSchema>;
+
 export const serviceFormMappings = pgTable("service_form_mappings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   serviceType: text("service_type").notNull(),
