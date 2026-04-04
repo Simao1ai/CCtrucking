@@ -23,6 +23,10 @@ const generalFaqs = [
     answer: "Generic CRMs don't understand trucking. CarrierDeskHQ is purpose-built with DOT number tracking, IFTA filing management, compliance deadline calendars, UCR/MCS-150 workflows, trucking-specific document categories, and industry terminology throughout. You won't need to hack together workarounds or maintain side spreadsheets.",
   },
   {
+    question: "Does CarrierDeskHQ replace a TMS?",
+    answer: "No. CarrierDeskHQ is best positioned as a compliance, document, onboarding, and back-office workflow platform rather than a dispatch or telematics system. It complements your TMS by handling the administrative and compliance side of trucking operations.",
+  },
+  {
     question: "Can my clients access the platform?",
     answer: "Yes. Every account includes a dedicated Client Portal where your carrier clients can log in to view their service tickets, download documents, check invoice status, upload files, and communicate with your team. The portal is branded with your company's name and logo.",
   },
@@ -103,7 +107,7 @@ export default function Faqs() {
             <h1 className="text-3xl md:text-4xl font-bold">Frequently Asked Questions</h1>
           </div>
           <p className="text-white/70 max-w-2xl">
-            Everything you need to know about CarrierDeskHQ and how it can help your trucking consulting business.
+            Everything you need to know about CarrierDeskHQ and how it can help your trucking service firm or fleet.
           </p>
         </div>
       </div>
@@ -190,7 +194,7 @@ export default function Faqs() {
               </p>
               <Link href="/contact">
                 <Button data-testid="button-contact-from-faq">
-                  Request a Demo
+                  Book a Demo
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>

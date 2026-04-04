@@ -2,73 +2,111 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Truck, Shield, FileText, Receipt, Clock, CheckCircle, ArrowRight,
-  Phone, Mail, MapPin, Users, BarChart3, Zap, Lock, Globe,
-  ClipboardCheck, Calculator, BookOpen, HeadphonesIcon
+  Truck, Shield, FileText, ArrowRight,
+  Phone, Mail, Users, BarChart3, Zap, Globe,
+  ClipboardCheck, Calculator, CheckCircle, Building2,
+  UserCheck, Car, CalendarCheck, FolderOpen, MessageSquare,
+  ChevronRight, Repeat, Eye, Layers
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
-const features = [
+const serviceFirmFeatures = [
   {
     icon: Users,
-    title: "Client Management",
-    description: "Organize all your carrier clients in one place. Track contact info, DOT/MC numbers, compliance status, and service history.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "DOT & IFTA Compliance",
-    description: "Manage MCS-150 updates, UCR renewals, and quarterly IFTA filings with deadline tracking and automated reminders.",
-  },
-  {
-    icon: Receipt,
-    title: "Invoicing & Payments",
-    description: "Generate professional invoices, track payment status, and send automated reminders. Export to PDF in one click.",
+    title: "Client and Service Management",
+    description: "Track clients, open tickets, manage statuses, assign internal staff, and keep every service tied to the right documents and deadlines.",
   },
   {
     icon: FileText,
-    title: "Document Management",
-    description: "Securely store and organize permits, insurance certificates, BOC-3 filings, and compliance documents per client.",
+    title: "Forms and Document Automation",
+    description: "Map service types to required forms, auto-fill client details, generate paperwork faster, and keep completed forms stored in the right place.",
   },
   {
-    icon: Calculator,
-    title: "Bookkeeping & Tax Prep",
-    description: "Upload bank statements, categorize transactions with AI, generate financial summaries, and prepare tax documents.",
+    icon: MessageSquare,
+    title: "Invoicing and Communication",
+    description: "Send invoices, reminders, welcome messages, and follow-up communications through one operational workflow.",
   },
   {
-    icon: BarChart3,
-    title: "Business Analytics",
-    description: "Track revenue, client growth, employee performance, and service delivery metrics with visual dashboards.",
+    icon: UserCheck,
+    title: "Preparer and Staff Workflows",
+    description: "Give your team clear visibility into assigned tasks, bookkeeping work, compliance preparation, and internal notes.",
   },
 ];
 
-const benefits = [
+const fleetFeatures = [
   {
-    icon: Zap,
-    title: "Built for Trucking",
-    description: "Every feature is purpose-built for the trucking industry. No generic CRMs. No workarounds.",
+    icon: ClipboardCheck,
+    title: "Driver and DQF Management",
+    description: "Track required driver records, monitor expirations, and organize qualification documents for better compliance oversight.",
   },
   {
-    icon: Lock,
-    title: "Secure & Compliant",
-    description: "Enterprise-grade security with encrypted data, role-based access, and full audit logging.",
+    icon: Car,
+    title: "Vehicles, Insurance, and Deadlines",
+    description: "Maintain centralized records for vehicles, policies, and recurring deadlines with alerts and visibility across the team.",
+  },
+  {
+    icon: FolderOpen,
+    title: "Onboarding and Document Workflows",
+    description: "Collect signatures, manage forms, and guide new drivers or new entities through a consistent onboarding process.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Internal Operations Workflow",
+    description: "Use tickets, notes, documents, and statuses to coordinate compliance and admin work across departments.",
+  },
+];
+
+const whyReasons = [
+  {
+    icon: Zap,
+    title: "Vertical-Specific",
+    description: "Built specifically around trucking workflows, not generic CRM templates.",
+  },
+  {
+    icon: Eye,
+    title: "Multi-Role Visibility",
+    description: "Support admins, staff, preparers, clients, and operators with the right access and workflow structure.",
+  },
+  {
+    icon: Repeat,
+    title: "Repeatable Operations",
+    description: "Turn recurring filings, compliance work, and admin processes into standardized workflows.",
+  },
+  {
+    icon: Layers,
+    title: "Better Organization",
+    description: "Keep documents, forms, conversations, statuses, and next steps tied to the right client or record.",
   },
   {
     icon: Globe,
-    title: "Your Brand, Your Platform",
-    description: "White-label ready with custom branding, your own login page, and a dedicated client portal.",
-  },
-  {
-    icon: HeadphonesIcon,
-    title: "Dedicated Support",
-    description: "Our team understands trucking operations. Get help from people who speak your language.",
+    title: "Room to Grow",
+    description: "Support growing service firms and expanding fleets without rebuilding your process from scratch.",
   },
 ];
 
-const stats = [
-  { value: "10,000+", label: "Carriers Managed" },
-  { value: "99.9%", label: "Uptime" },
-  { value: "50%", label: "Less Admin Time" },
-  { value: "3", label: "Portals in One Platform" },
+const homepageFaqs = [
+  {
+    question: "Is CarrierDeskHQ for trucking companies or consultants?",
+    answer: "Both. CarrierDeskHQ supports trucking service firms that manage clients and recurring filings, as well as fleets that need stronger compliance and administrative workflows.",
+  },
+  {
+    question: "Does CarrierDeskHQ replace a TMS?",
+    answer: "No. CarrierDeskHQ is best positioned as a compliance, document, onboarding, and back-office workflow platform rather than a dispatch or telematics system.",
+  },
+  {
+    question: "Can it support multiple staff roles?",
+    answer: "Yes. CarrierDeskHQ is built to support role-based workflows across admins, preparers, clients, and internal teams.",
+  },
+  {
+    question: "Can we use it for recurring compliance services?",
+    answer: "Yes. CarrierDeskHQ is designed to help teams manage recurring deadlines, service workflows, forms, and communication in a more structured way.",
+  },
 ];
 
 export default function Home() {
@@ -77,64 +115,256 @@ export default function Home() {
       <section className="relative py-24 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-[hsl(220,35%,13%)] via-[hsl(220,30%,18%)] to-[hsl(220,25%,22%)] text-white overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(45,100,180,0.15),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(200,120,30,0.08),_transparent_50%)]" />
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="flex flex-col lg:flex-row items-center gap-14">
-            <div className="flex-1 space-y-7">
-              <BrandLogo size="lg" variant="light" showTagline data-testid="img-hero-logo" />
-              <h1 className="text-4xl md:text-5xl lg:text-[3.4rem] font-bold tracking-tight leading-[1.1]">
-                Run Your Trucking Consulting Business{" "}
-                <span className="text-amber-400">From One Platform</span>
-              </h1>
-              <p className="text-lg text-white/70 max-w-xl leading-relaxed">
-                CarrierDeskHQ gives trucking consultants, compliance firms, and carrier service companies the tools to manage clients, filings, invoices, documents, and bookkeeping — all in one place.
-              </p>
-              <div className="flex flex-wrap gap-4 pt-2">
-                <Link href="/contact">
-                  <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold shadow-lg" data-testid="button-get-started">
-                    Request a Demo
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-                <Link href="/faqs">
-                  <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/10" data-testid="button-learn-more">
-                    Learn More
-                  </Button>
-                </Link>
-              </div>
-            </div>
-            <div className="flex-1 grid grid-cols-2 gap-4">
-              {stats.map((stat) => (
-                <div key={stat.label} className="rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm p-6 text-center">
-                  <div className="text-3xl font-bold text-amber-400">{stat.value}</div>
-                  <div className="text-sm text-white/60 mt-1">{stat.label}</div>
-                </div>
-              ))}
-            </div>
+        <div className="max-w-5xl mx-auto relative z-10 text-center">
+          <div className="flex justify-center mb-8">
+            <BrandLogo size="lg" variant="light" showTagline data-testid="img-hero-logo" />
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-[3.4rem] font-bold tracking-tight leading-[1.1] mb-6">
+            The Operating System for Trucking{" "}
+            <span className="text-amber-400">Administration, Compliance, and Client Workflow</span>
+          </h1>
+          <p className="text-lg md:text-xl text-white/70 max-w-3xl mx-auto leading-relaxed mb-10">
+            CarrierDeskHQ helps trucking service firms and fleet operators centralize documents, deadlines, onboarding, forms, communication, and recurring operational work in one platform.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link href="/contact">
+              <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold shadow-lg" data-testid="button-book-demo">
+                Book a Demo
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+            <a href="#how-it-works">
+              <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/10" data-testid="button-see-how">
+                See How It Works
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </a>
           </div>
         </div>
       </section>
 
-      <section className="py-20 px-6 md:px-12 lg:px-24" id="features">
+      <section className="py-20 px-6 md:px-12 lg:px-24" id="how-it-works">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Everything You Need</p>
-            <h2 className="text-3xl md:text-4xl font-bold">One Platform. Every Tool.</h2>
-            <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-lg">
-              Stop juggling spreadsheets, email chains, and disconnected software. CarrierDeskHQ brings your entire operation under one roof.
+            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Choose Your Path</p>
+            <h2 className="text-3xl md:text-4xl font-bold">One Platform. Two Powerful Use Cases.</h2>
+            <p className="text-muted-foreground mt-3 max-w-3xl mx-auto text-lg">
+              Whether you run a trucking service firm serving multiple carrier clients or operate a fleet with growing compliance and administrative complexity, CarrierDeskHQ helps you centralize the work that usually lives across email, spreadsheets, PDFs, text messages, and disconnected systems.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <Card key={feature.title} className="group hover:shadow-md transition-shadow" data-testid={`card-feature-${feature.title.toLowerCase().replace(/\s+/g, '-')}`}>
+          <div className="grid md:grid-cols-2 gap-8">
+            <Card className="relative overflow-hidden border-2 hover:border-amber-500/50 transition-colors group" data-testid="card-path-service-firm">
+              <CardContent className="pt-8 pb-8">
+                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mb-5">
+                  <Building2 className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">For Trucking Service Firms</h3>
+                <p className="text-muted-foreground mb-5 leading-relaxed">
+                  Manage clients, filings, staff workflows, invoicing, documents, and compliance tasks in one place.
+                </p>
+                <a href="#service-firm" className="inline-flex items-center text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
+                  Explore Service Firm Edition
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </a>
+              </CardContent>
+            </Card>
+            <Card className="relative overflow-hidden border-2 hover:border-amber-500/50 transition-colors group" data-testid="card-path-fleet">
+              <CardContent className="pt-8 pb-8">
+                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mb-5">
+                  <Truck className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">For Fleets</h3>
+                <p className="text-muted-foreground mb-5 leading-relaxed">
+                  Centralize driver onboarding, compliance records, insurance tracking, deadlines, and back-office operations.
+                </p>
+                <a href="#fleet" className="inline-flex items-center text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
+                  Explore Fleet Compliance Edition
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </a>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 px-6 md:px-12 lg:px-24 bg-muted/40" id="service-firm">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-14">
+            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Service Firm Edition</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for Trucking Consultants, Compliance Agencies, and Service Firms</h2>
+            <p className="text-muted-foreground max-w-3xl text-lg leading-relaxed">
+              If your team handles DOT filings, IFTA, IRP, UCR, bookkeeping, tax prep, new authority setup, or recurring compliance services for trucking clients, CarrierDeskHQ gives you one place to run the operation.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4 mb-12">
+            <div className="space-y-3">
+              {[
+                "Manage all clients from one centralized workspace",
+                "Create and track service tickets from intake to completion",
+                "Auto-generate forms based on service type",
+                "Organize documents, signatures, and notarizations",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-foreground/80">{item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {[
+                "Assign staff and preparers with visibility into workload",
+                "Send invoices, reminders, and updates without jumping between systems",
+                "Keep recurring compliance work from falling through the cracks",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-foreground/80">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-primary/5 border border-primary/10 p-6 mb-12">
+            <p className="text-lg font-semibold text-center">
+              Stop running your trucking service business through spreadsheets, email, PDFs, and memory.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <div>
+              <h4 className="font-semibold mb-2">Turn operational chaos into a repeatable system</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                CarrierDeskHQ helps your team standardize how work gets opened, assigned, completed, documented, billed, and followed up on.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2">Deliver a better client experience</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Give clients a more professional process with portals, status visibility, digital forms, signatures, reminders, and organized records.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2">Scale without adding unnecessary overhead</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                When workflows, templates, automations, and communication all live in one system, your team can handle more clients with less manual effort.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {serviceFirmFeatures.map((feature) => (
+              <Card key={feature.title} className="group hover:shadow-md transition-shadow" data-testid={`card-sf-${feature.title.toLowerCase().replace(/\s+/g, '-')}`}>
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
                     <feature.icon className="w-6 h-6" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                  <h3 className="text-base font-semibold mb-2">{feature.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <p className="text-lg font-semibold mb-4">Run your trucking service firm with more control, consistency, and scale.</p>
+            <Link href="/contact">
+              <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold" data-testid="button-demo-service">
+                Book a Demo
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 px-6 md:px-12 lg:px-24" id="fleet">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-14">
+            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Fleet Compliance Edition</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for Fleets That Need Better Compliance and Back-Office Control</h2>
+            <p className="text-muted-foreground max-w-3xl text-lg leading-relaxed">
+              CarrierDeskHQ helps trucking companies centralize driver files, onboarding, insurance records, compliance deadlines, documents, signatures, and recurring admin workflows.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4 mb-12">
+            <div className="space-y-3">
+              {[
+                "Manage driver qualification files in one place",
+                "Track expiring documents, policies, and compliance deadlines",
+                "Organize vehicle, insurance, and onboarding records",
+                "Streamline internal administrative handoffs",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-foreground/80">{item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {[
+                "Standardize forms, signatures, and document collection",
+                "Reduce missed deadlines and manual follow-up",
+                "Improve audit readiness and operational visibility",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-foreground/80">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-primary/5 border border-primary/10 p-6 mb-12">
+            <p className="text-lg font-semibold text-center">
+              Replace scattered spreadsheets, folders, and reminders with one compliance and workflow platform.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <div>
+              <h4 className="font-semibold mb-2">Keep compliance visible</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Stay ahead of expiring documents, required filings, onboarding steps, and key deadlines with a centralized operational system.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2">Simplify driver and admin onboarding</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Create a repeatable process for collecting documents, routing tasks, and tracking progress across your internal team.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2">Improve control without adding complexity</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                CarrierDeskHQ helps fleets standardize back-office operations without forcing teams to rely on disconnected tools.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {fleetFeatures.map((feature) => (
+              <Card key={feature.title} className="group hover:shadow-md transition-shadow" data-testid={`card-fleet-${feature.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
+                    <feature.icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-semibold mb-2">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <p className="text-lg font-semibold mb-4">Bring compliance, onboarding, and administrative workflow into one system.</p>
+            <Link href="/contact">
+              <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold" data-testid="button-demo-fleet">
+                Book a Demo
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -142,46 +372,11 @@ export default function Home() {
       <section className="py-20 px-6 md:px-12 lg:px-24 bg-muted/40">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Who It's For</p>
-            <h2 className="text-3xl md:text-4xl font-bold">Built for People Who Serve the Trucking Industry</h2>
-            <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-lg">
-              Whether you manage 10 carriers or 500, CarrierDeskHQ scales with your business.
+            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Built for Real Work</p>
+            <h2 className="text-3xl md:text-4xl font-bold">Designed for the Real Work Behind Trucking Operations</h2>
+            <p className="text-muted-foreground mt-3 max-w-3xl mx-auto text-lg">
+              From DOT compliance and recurring filings to onboarding, bookkeeping, documentation, communication, and deadline tracking, CarrierDeskHQ is built for the administrative side of trucking that keeps businesses moving.
             </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="border-0 shadow-sm" data-testid="card-audience-consultants">
-              <CardContent className="pt-8 pb-8 text-center">
-                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto mb-4">
-                  <Shield className="w-7 h-7" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Trucking Consultants</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Manage multiple carrier clients, track every filing deadline, and give clients their own portal to view progress.
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 shadow-sm" data-testid="card-audience-compliance">
-              <CardContent className="pt-8 pb-8 text-center">
-                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto mb-4">
-                  <ClipboardCheck className="w-7 h-7" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Compliance Firms</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Automate DOT, IFTA, UCR, and MCS-150 workflows. Never miss a deadline with built-in compliance calendars.
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 shadow-sm" data-testid="card-audience-carriers">
-              <CardContent className="pt-8 pb-8 text-center">
-                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto mb-4">
-                  <Truck className="w-7 h-7" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Carrier Service Companies</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Offer your carriers a branded client portal for document uploads, invoice payments, and real-time service updates.
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
@@ -189,33 +384,61 @@ export default function Home() {
       <section className="py-20 px-6 md:px-12 lg:px-24">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">Why CarrierDeskHQ</p>
-            <h2 className="text-3xl md:text-4xl font-bold">Purpose-Built for Trucking Operations</h2>
+            <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">The Difference</p>
+            <h2 className="text-3xl md:text-4xl font-bold">Why Teams Choose CarrierDeskHQ</h2>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {benefits.map((benefit) => (
-              <div key={benefit.title} className="text-center" data-testid={`benefit-${benefit.title.toLowerCase().replace(/\s+/g, '-')}`}>
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
+            {whyReasons.map((reason) => (
+              <div key={reason.title} className="text-center" data-testid={`why-${reason.title.toLowerCase().replace(/\s+/g, '-')}`}>
                 <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 mx-auto mb-4">
-                  <benefit.icon className="w-6 h-6" />
+                  <reason.icon className="w-6 h-6" />
                 </div>
-                <h3 className="font-semibold mb-1">{benefit.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{benefit.description}</p>
+                <h3 className="font-semibold mb-1">{reason.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{reason.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
+      <section className="py-20 px-6 md:px-12 lg:px-24 bg-muted/40">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold">Frequently Asked Questions</h2>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <Accordion type="single" collapsible className="w-full">
+                {homepageFaqs.map((faq, index) => (
+                  <AccordionItem key={index} value={`faq-${index}`}>
+                    <AccordionTrigger data-testid={`faq-home-${index}`}>{faq.question}</AccordionTrigger>
+                    <AccordionContent>
+                      <p className="text-muted-foreground">{faq.answer}</p>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </CardContent>
+          </Card>
+          <div className="text-center mt-6">
+            <Link href="/faqs" className="text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors inline-flex items-center gap-1">
+              See all FAQs
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className="py-20 px-6 md:px-12 lg:px-24 bg-gradient-to-br from-[hsl(220,35%,13%)] via-[hsl(220,30%,18%)] to-[hsl(220,25%,22%)] text-white">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Modernize Your Operations?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Bring Order to Trucking Operations?</h2>
           <p className="text-white/70 mb-8 max-w-2xl mx-auto text-lg">
-            Join trucking consultants and carrier service companies who are saving hours every week with CarrierDeskHQ.
+            See how CarrierDeskHQ can help your team centralize compliance, workflow, and administration.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/contact">
               <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold shadow-lg" data-testid="button-contact-us">
-                Request a Demo
+                Book a Demo
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -236,15 +459,16 @@ export default function Home() {
                 <BrandLogo size="sm" variant="dark" />
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The all-in-one operations platform for trucking consultants and carrier service companies.
+                The operating system for trucking administration, compliance, and client workflow.
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider text-muted-foreground">Platform</h4>
               <div className="space-y-2.5">
-                <Link href="/" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">Features</Link>
+                <a href="#service-firm" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">Service Firms</a>
+                <a href="#fleet" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">Fleet Compliance</a>
                 <Link href="/faqs" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">FAQs</Link>
-                <Link href="/contact" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">Request Demo</Link>
+                <Link href="/contact" className="block text-sm text-foreground/70 hover:text-foreground transition-colors">Book a Demo</Link>
               </div>
             </div>
             <div>
