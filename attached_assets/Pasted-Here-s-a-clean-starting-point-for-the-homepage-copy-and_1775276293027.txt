@@ -1,0 +1,291 @@
+Here’s a clean starting point for the **homepage copy and product positioning** for both lanes.
+
+# CarrierDeskHQ homepage structure
+
+## Hero section
+
+**Headline:**
+**The operating system for trucking administration, compliance, and client workflow**
+
+**Subheadline:**
+CarrierDeskHQ helps trucking service firms and fleet operators centralize documents, deadlines, onboarding, forms, communication, and recurring operational work in one platform.
+
+**Primary CTA:**
+**Book a Demo**
+
+**Secondary CTA:**
+**See How It Works**
+
+---
+
+## Split-path section
+
+**Choose your path**
+
+### Card 1: For Trucking Service Firms
+
+Manage clients, filings, staff workflows, invoicing, documents, and compliance tasks in one place.
+
+**CTA:**
+**Explore Service Firm Edition**
+
+### Card 2: For Fleets
+
+Centralize driver onboarding, compliance records, insurance tracking, deadlines, and back-office operations.
+
+**CTA:**
+**Explore Fleet Compliance Edition**
+
+---
+
+# Version 1: Service Firm Edition copy
+
+## Section headline
+
+**Built for trucking consultants, compliance agencies, and service firms**
+
+## Section subheadline
+
+If your team handles DOT filings, IFTA, IRP, UCR, bookkeeping, tax prep, new authority setup, or recurring compliance services for trucking clients, CarrierDeskHQ gives you one place to run the operation.
+
+## Core value bullets
+
+* Manage all clients from one centralized workspace
+* Create and track service tickets from intake to completion
+* Auto-generate forms based on service type
+* Organize documents, signatures, and notarizations
+* Assign staff and preparers with visibility into workload
+* Send invoices, reminders, and updates without jumping between systems
+* Keep recurring compliance work from falling through the cracks
+
+## Strong positioning line
+
+**Stop running your trucking service business through spreadsheets, email, PDFs, and memory.**
+
+## Benefit section
+
+### Turn operational chaos into a repeatable system
+
+CarrierDeskHQ helps your team standardize how work gets opened, assigned, completed, documented, billed, and followed up on.
+
+### Deliver a better client experience
+
+Give clients a more professional process with portals, status visibility, digital forms, signatures, reminders, and organized records.
+
+### Scale without adding unnecessary overhead
+
+When workflows, templates, automations, and communication all live in one system, your team can handle more clients with less manual effort.
+
+## Feature blocks
+
+### Client and service management
+
+Track clients, open tickets, manage statuses, assign internal staff, and keep every service tied to the right documents and deadlines.
+
+### Forms and document automation
+
+Map service types to required forms, auto-fill client details, generate paperwork faster, and keep completed forms stored in the right place.
+
+### Invoicing and communication
+
+Send invoices, reminders, welcome messages, and follow-up communications through one operational workflow.
+
+### Preparer and staff workflows
+
+Give your team clear visibility into assigned tasks, bookkeeping work, compliance preparation, and internal notes.
+
+## Service firm CTA
+
+**Run your trucking service firm with more control, consistency, and scale.**
+**Book a Demo**
+
+---
+
+# Version 2: Fleet Compliance Edition copy
+
+## Section headline
+
+**Built for fleets that need better compliance and back-office control**
+
+## Section subheadline
+
+CarrierDeskHQ helps trucking companies centralize driver files, onboarding, insurance records, compliance deadlines, documents, signatures, and recurring admin workflows.
+
+## Core value bullets
+
+* Manage driver qualification files in one place
+* Track expiring documents, policies, and compliance deadlines
+* Organize vehicle, insurance, and onboarding records
+* Streamline internal administrative handoffs
+* Standardize forms, signatures, and document collection
+* Reduce missed deadlines and manual follow-up
+* Improve audit readiness and operational visibility
+
+## Strong positioning line
+
+**Replace scattered spreadsheets, folders, and reminders with one compliance and workflow platform.**
+
+## Benefit section
+
+### Keep compliance visible
+
+Stay ahead of expiring documents, required filings, onboarding steps, and key deadlines with a centralized operational system.
+
+### Simplify driver and admin onboarding
+
+Create a repeatable process for collecting documents, routing tasks, and tracking progress across your internal team.
+
+### Improve control without adding complexity
+
+CarrierDeskHQ helps fleets standardize back-office operations without forcing teams to rely on disconnected tools.
+
+## Feature blocks
+
+### Driver and DQF management
+
+Track required driver records, monitor expirations, and organize qualification documents for better compliance oversight.
+
+### Vehicles, insurance, and deadlines
+
+Maintain centralized records for vehicles, policies, and recurring deadlines with alerts and visibility across the team.
+
+### Onboarding and document workflows
+
+Collect signatures, manage forms, and guide new drivers or new entities through a consistent onboarding process.
+
+### Internal operations workflow
+
+Use tickets, notes, documents, and statuses to coordinate compliance and admin work across departments.
+
+## Fleet CTA
+
+**Bring compliance, onboarding, and administrative workflow into one system.**
+**Book a Demo**
+
+---
+
+# Homepage middle section
+
+## Section headline
+
+**One platform. Two powerful use cases.**
+
+## Body copy
+
+Whether you run a trucking service firm serving multiple carrier clients or operate a fleet with growing compliance and administrative complexity, CarrierDeskHQ helps you centralize the work that usually lives across email, spreadsheets, PDFs, text messages, and disconnected systems.
+
+---
+
+# Social proof / trust section
+
+Since you may not have logos or testimonials yet, use a pain-based trust section first.
+
+## Headline
+
+**Designed for the real work behind trucking operations**
+
+## Supporting copy
+
+From DOT compliance and recurring filings to onboarding, bookkeeping, documentation, communication, and deadline tracking, CarrierDeskHQ is built for the administrative side of trucking that keeps businesses moving.
+
+---
+
+# Why CarrierDeskHQ section
+
+## Headline
+
+**Why teams choose CarrierDeskHQ**
+
+### Vertical-specific
+
+Built specifically around trucking workflows, not generic CRM templates.
+
+### Multi-role visibility
+
+Support admins, staff, preparers, clients, and operators with the right access and workflow structure.
+
+### Repeatable operations
+
+Turn recurring filings, compliance work, and admin processes into standardized workflows.
+
+### Better organization
+
+Keep documents, forms, conversations, statuses, and next steps tied to the right client or record.
+
+### Room to grow
+
+Support growing service firms and expanding fleets without rebuilding your process from scratch.
+
+---
+
+# FAQ section
+
+### Is CarrierDeskHQ for trucking companies or consultants?
+
+Both. CarrierDeskHQ supports trucking service firms that manage clients and recurring filings, as well as fleets that need stronger compliance and administrative workflows.
+
+### Does CarrierDeskHQ replace a TMS?
+
+No. CarrierDeskHQ is best positioned as a compliance, document, onboarding, and back-office workflow platform rather than a dispatch or telematics system.
+
+### Can it support multiple staff roles?
+
+Yes. CarrierDeskHQ is built to support role-based workflows across admins, preparers, clients, and internal teams.
+
+### Can we use it for recurring compliance services?
+
+Yes. CarrierDeskHQ is designed to help teams manage recurring deadlines, service workflows, forms, and communication in a more structured way.
+
+---
+
+# Footer CTA
+
+**Ready to bring order to trucking operations?**
+See how CarrierDeskHQ can help your team centralize compliance, workflow, and administration.
+
+**Book a Demo**
+
+---
+
+# Positioning statements
+
+## Master positioning statement
+
+**CarrierDeskHQ is the operating system for trucking administration, compliance, and client workflow.**
+
+## Service firm positioning statement
+
+**CarrierDeskHQ helps trucking consultants, compliance agencies, and service firms manage clients, filings, forms, staff workflows, invoicing, and communication in one platform.**
+
+## Fleet positioning statement
+
+**CarrierDeskHQ helps fleets centralize driver onboarding, compliance tracking, records, deadlines, and back-office workflow in one platform.**
+
+---
+
+# Short tagline options
+
+Here are some stronger tagline options you can test:
+
+* **Run the business behind the trucks**
+* **The back-office operating system for trucking**
+* **Trucking compliance and workflow, centralized**
+* **One platform for trucking admin and compliance**
+* **Built for the operational side of trucking**
+* **Where trucking paperwork and workflow get organized**
+
+---
+
+# My recommendation
+
+If I were choosing the strongest homepage direction, I’d lead with this combo:
+
+**Headline:**
+**The operating system for trucking administration, compliance, and client workflow**
+
+**Subheadline:**
+CarrierDeskHQ helps trucking service firms and fleet operators centralize documents, deadlines, onboarding, forms, communication, and recurring operational work in one platform.
+
+That gives you room to serve both markets without sounding vague.
+
+I can turn this next into a **full homepage wireframe with section-by-section copy in final polished website form**.
